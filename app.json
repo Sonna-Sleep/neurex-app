@@ -1,28 +1,61 @@
 {
   "expo": {
-    "name": "neurex-app",
+    "name": "Neurex",
     "slug": "neurex-app",
-    "version": "1.0.0",
+    "scheme": "neurex",
+    "version": "0.1.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "dark",
     "newArchEnabled": true,
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#000000"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": false,
+      "bundleIdentifier": "tech.neurex.app",
+      "infoPlist": {
+        "NSBluetoothAlwaysUsageDescription": "Neurex uses Bluetooth to sync your sleep data from the headband.",
+        "NSBluetoothPeripheralUsageDescription": "Neurex uses Bluetooth to communicate with your headband.",
+        "UIBackgroundModes": [
+          "bluetooth-central",
+          "fetch",
+          "processing"
+        ]
+      }
     },
     "android": {
+      "package": "tech.neurex.app",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#000000"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.BLUETOOTH",
+        "android.permission.BLUETOOTH_ADMIN",
+        "android.permission.BLUETOOTH_CONNECT",
+        "android.permission.BLUETOOTH_SCAN",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE"
+      ]
     },
+    "plugins": [
+      [
+        "react-native-ble-plx",
+        {
+          "isBackgroundEnabled": true,
+          "modes": ["central"],
+          "bluetoothAlwaysPermission": "Neurex uses Bluetooth to sync your sleep data from the headband."
+        }
+      ],
+      "expo-secure-store"
+    ],
     "web": {
       "favicon": "./assets/favicon.png"
     }
