@@ -1,5 +1,11 @@
-import type { Epoch, Session, SleepStage, StimPulse } from './repos/types';
-import { computeScore } from './score';
+import type {
+  Epoch,
+  JournalTag,
+  Session,
+  SleepStage,
+  StimPulse,
+} from './repos/types';
+import { computeScore, countAwakenings } from './score';
 
 // Build a believable single-night session. 30s epochs, 4 NREM-REM cycles,
 // deep sleep concentrated early, REM growing through the night.
@@ -110,6 +116,34 @@ export function seedMockSession(daysAgo = 0, quality = 1): Session {
     }
   }
 
+  // Stim impact: better quality nights = stronger delta-band boost.
+  // Real values come from the cloud staging pipeline (Modal + YASA + MNE).
+  // For mock seed: scale linearly with quality, plus small jitter.
+  const stimImpactPct = stimPulses.length
+    ? Math.round((10 + 18 * q + (Math.random() * 6 - 3)) * 10) / 10
+    : null;
+
+  // Mock journal tags: alternate between common combos across nights so the
+  // demo UI has variety. Index 0 (most recent) is empty so the user sees
+  // what an un-tagged night looks like.
+  const tagPalettes: JournalTag[][] = [
+    [],
+    ['caffeine'],
+    ['exercise'],
+    ['alcohol', 'late_meal'],
+    ['stress'],
+    ['exercise', 'caffeine'],
+    ['alcohol'],
+    ['traveled'],
+    ['caffeine', 'late_meal'],
+    [],
+    ['stress', 'caffeine'],
+    ['exercise'],
+    ['sick'],
+    ['alcohol', 'stress'],
+  ];
+  const journalTags = tagPalettes[daysAgo % tagPalettes.length] ?? [];
+
   const session: Session = {
     id: 'mock-' + wake.toISOString().slice(0, 10),
     startMs,
@@ -118,9 +152,12 @@ export function seedMockSession(daysAgo = 0, quality = 1): Session {
     tst: tstSec,
     waso: wasoSec,
     efficiency,
+    awakenings: countAwakenings(epochs),
     stageMinutes,
     epochs,
     stimPulses,
+    stimImpactPct,
+    journalTags,
     score: null,
   };
   session.score = computeScore(session);
