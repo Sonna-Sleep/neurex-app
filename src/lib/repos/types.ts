@@ -11,6 +11,17 @@ export type StimPulse = {
   epochIndex: number;
 };
 
+// Closed set of v1 journal chips. Free-form notes deferred to Pro tier.
+export type JournalTag =
+  | 'alcohol'
+  | 'caffeine'
+  | 'exercise'
+  | 'late_meal'
+  | 'stress'
+  | 'sick'
+  | 'traveled'
+  | 'period';
+
 export type Session = {
   id: string;
   startMs: number;
@@ -19,9 +30,19 @@ export type Session = {
   tst: number;
   waso: number;
   efficiency: number;
+  /** Count of distinct wake intrusions after sleep onset. */
+  awakenings: number;
   stageMinutes: Record<SleepStage, number>;
   epochs: Epoch[];
   stimPulses: StimPulse[];
+  /**
+   * % increase in delta-band power (0.5–4 Hz) in 5s post-stim windows
+   * vs matched non-stim NREM baseline epochs the same night.
+   * null until the staging pipeline has produced a value.
+   */
+  stimImpactPct: number | null;
+  journalTags: JournalTag[];
+  /** 0..99, never 100. Capped by design (psychological retention hook). */
   score: number | null;
 };
 

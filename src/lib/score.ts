@@ -1,23 +1,83 @@
-import type { Session } from './repos/types';
+import type { Session, SleepStage } from './repos/types';
 
-// Sleep score 0–100. Components: TST, efficiency, deep%, REM%, WASO.
-// Numbers chosen so a healthy night (7.5h, 92% eff, 22% deep, 22% REM, 15min WASO) ≈ 88.
+// Sleep Score 0..99, capped at 99 by design (the unreachable ceiling drives
+// habit retention). Formula matches docs/superpowers/specs/2026-05-10-neurex-app-
+// lean-mvp-design.md §7 in aleksaspetro/neurex-algorithms (Neurex_app branch).
+//
+// raw_score = 0.40 * sleep_efficiency_norm
+//           + 0.25 * deep_sleep_norm
+//           + 0.15 * rem_sleep_norm
+//           + 0.10 * (1 - awakenings_penalty)
+//           + 0.10 * stim_impact_norm
+// sleep_score = min(99, round(raw_score * 100))
+
+// Default age-expected minutes. Personalized per-user values can override
+// later via a user profile fetch (score_config table in cloud schema).
+const DEFAULT_DEEP_MIN = 90;
+const DEFAULT_REM_MIN = 100;
+// 6+ awakenings = full awakenings penalty.
+const AWAKENINGS_PENALTY_FULL_AT = 6;
+// 30%+ delta-power increase saturates the stim-impact bonus.
+const STIM_IMPACT_SATURATION_PCT = 30;
+// Hard ceiling — never 100 (psychological hook).
+const SCORE_MAX = 99;
+
+const WEIGHTS = {
+  efficiency: 0.4,
+  deep: 0.25,
+  rem: 0.15,
+  awakenings: 0.1,
+  stimImpact: 0.1,
+} as const;
+
 export function computeScore(s: Session): number {
-  const tstHours = s.tst / 3600;
-  const tstPts = clamp01((tstHours - 5) / 2.5) * 30; // 5h → 0, 7.5h → 30
+  const efficiencyNorm = clamp01(s.efficiency);
 
-  const effPts = clamp01((s.efficiency - 0.7) / 0.25) * 25; // 70% → 0, 95% → 25
+  const deepNorm = clamp01(s.stageMinutes.deep / DEFAULT_DEEP_MIN);
+  const remNorm = clamp01(s.stageMinutes.rem / DEFAULT_REM_MIN);
 
-  const deepFrac = (s.stageMinutes.deep * 60) / Math.max(s.tst, 1);
-  const deepPts = clamp01(deepFrac / 0.22) * 20; // 22%+ → full
+  const awakeningsPenalty = clamp01(s.awakenings / AWAKENINGS_PENALTY_FULL_AT);
 
-  const remFrac = (s.stageMinutes.rem * 60) / Math.max(s.tst, 1);
-  const remPts = clamp01(remFrac / 0.22) * 20;
+  // stimImpactPct is null until the staging pipeline has run for this night.
+  // Treat null as "no bonus yet" — don't crash, don't punish.
+  const stimImpactNorm =
+    s.stimImpactPct == null
+      ? 0
+      : clamp01(s.stimImpactPct / STIM_IMPACT_SATURATION_PCT);
 
-  const wasoPenalty = clamp01((s.waso / 60 - 30) / 60) * 5; // 30→90min → 0..5
-  const wasoPts = 5 - wasoPenalty;
+  const raw =
+    WEIGHTS.efficiency * efficiencyNorm +
+    WEIGHTS.deep * deepNorm +
+    WEIGHTS.rem * remNorm +
+    WEIGHTS.awakenings * (1 - awakeningsPenalty) +
+    WEIGHTS.stimImpact * stimImpactNorm;
 
-  return Math.round(tstPts + effPts + deepPts + remPts + wasoPts);
+  return Math.min(SCORE_MAX, Math.round(raw * 100));
+}
+
+// Derive the awakenings count from a session's epochs:
+// each contiguous run of wake epochs after sleep onset = one awakening.
+// The trailing wake (morning waking up) is excluded — it's the user getting
+// out of bed, not a sleep intrusion.
+export function countAwakenings(epochs: Session['epochs']): number {
+  const onsetIdx = epochs.findIndex((e) => e.stage !== 'wake');
+  if (onsetIdx < 0) return 0;
+
+  let count = 0;
+  let inWake = false;
+  for (let i = onsetIdx; i < epochs.length; i++) {
+    if (epochs[i].stage === 'wake') {
+      if (!inWake) {
+        count++;
+        inWake = true;
+      }
+    } else {
+      inWake = false;
+    }
+  }
+  const lastStage: SleepStage | undefined = epochs[epochs.length - 1]?.stage;
+  if (lastStage === 'wake' && count > 0) count -= 1;
+  return count;
 }
 
 function clamp01(x: number) {
