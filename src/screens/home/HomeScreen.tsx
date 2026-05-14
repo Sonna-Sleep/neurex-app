@@ -17,7 +17,9 @@ import { colors, layout, spacing } from '../../theme/tokens';
 import { deviceRepo, sessionRepo, type Session, type Device } from '../../lib/repos';
 import { TimeSlept } from './components/TimeSlept';
 import { StageBreakdown } from './components/StageBreakdown';
-import { Hypnogram } from './components/Hypnogram';
+import { SleepStrip } from './components/SleepStrip';
+import { StimImpactCard } from './components/StimImpactCard';
+// Hypnogram is Pro-only (spec §4). Kept in the codebase, gated when paywall lands.
 
 export function HomeScreen() {
   const [session, setSession] = useState<Session | null>(null);
@@ -78,11 +80,14 @@ function Results({ session }: { session: Session }) {
   return (
     <View style={styles.results}>
       <TimeSlept tstSec={session.tst} score={session.score ?? 0} />
-      <Hypnogram
+      <SleepStrip
         epochs={session.epochs}
-        stimPulses={session.stimPulses}
         startMs={session.startMs}
         endMs={session.endMs}
+      />
+      <StimImpactCard
+        stimCount={session.stimPulses.length}
+        stimImpactPct={session.stimImpactPct}
       />
       <StageBreakdown stageMinutes={session.stageMinutes} />
     </View>
