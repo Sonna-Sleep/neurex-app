@@ -9,6 +9,9 @@
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
     "smoke:auth": "ts-node --transpile-only scripts/smoke-auth.ts",
+    "smoke:rls": "ts-node --transpile-only scripts/smoke-rls.ts",
+    "db:push": "supabase db push --linked",
+    "db:types": "supabase gen types typescript --linked --schema public > src/types/database.ts",
     "prebuild": "expo prebuild"
   },
   "dependencies": {
