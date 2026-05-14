@@ -32,7 +32,7 @@ function parseTokensFromUrl(url: string) {
  * Wires Supabase auth state into the session store and handles the deep-link
  * return after an email magic-link or OAuth provider redirect.
  *
- * - When iOS opens the app via `neurex://auth/callback#access_token=...`, we
+ * - When iOS opens the app via `neurex://auth-callback#access_token=...`, we
  *   parse the tokens and call `setSession`. Supabase fires `SIGNED_IN`.
  * - The auth state listener pushes the user into the zustand store, which
  *   navigates the user past the auth screen automatically.

@@ -2,158 +2,139 @@ import React, { useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import Svg, { Line, Rect, Text as SvgText } from 'react-native-svg';
 
-import { Eyebrow, Secondary } from '../../../theme/typography';
-import { colors, spacing, stageColors, radii } from '../../../theme/tokens';
-import type { Epoch, SleepStage, StimPulse } from '../../../lib/repos';
+import { colors, stageColors } from '../../../theme/tokens';
+import type { Epoch, SleepStage } from '../../../lib/repos';
 
 type Props = {
   epochs: Epoch[];
-  stimPulses: StimPulse[];
   startMs: number;
   endMs: number;
 };
 
 const HEIGHT = 220;
-const PADDING_TOP = 28; // space for axis labels
-const PADDING_BOTTOM = 0;
-const LANES: SleepStage[] = ['wake', 'rem', 'light', 'deep'];
+const PADDING_TOP = 8;
+const PADDING_BOTTOM = 22; // space for the bottom time axis
+const LANES: SleepStage[] = ['wake', 'light', 'rem', 'deep'];
+// Hour labels nearer than this (in px) to either chart edge are dropped so
+// they don't collide with the bed/wake labels anchored at the edges.
+const EDGE_CLEARANCE_PX = 56;
 
-export function Hypnogram({ epochs, stimPulses, startMs, endMs }: Props) {
+export function Hypnogram({ epochs, startMs, endMs }: Props) {
   const [width, setWidth] = useState(0);
   const drawH = HEIGHT - PADDING_TOP - PADDING_BOTTOM;
   const totalMs = endMs - startMs || 1;
 
-  // Stage levels: deep at bottom (highest "value"), wake at top.
-  const laneY = (stage: SleepStage) => {
-    const idx = LANES.indexOf(stage);
-    return PADDING_TOP + (drawH * idx) / (LANES.length - 1);
-  };
+  // Each stage occupies a horizontal band; wake on top, deep at the bottom.
+  const SLOT_H = drawH / LANES.length;
+  const BAND_H = 20;
+  const laneTop = (stage: SleepStage) =>
+    PADDING_TOP + LANES.indexOf(stage) * SLOT_H + (SLOT_H - BAND_H) / 2;
+  const laneCenter = (stage: SleepStage) => laneTop(stage) + BAND_H / 2;
   const baselineY = PADDING_TOP + drawH;
+  const axisY = baselineY + 15;
 
   // Collapse epochs into contiguous runs of the same stage.
   const runs = useMemo(() => collapseRuns(epochs), [epochs]);
   const ticks = useMemo(() => axisTicks(startMs, endMs), [startMs, endMs]);
 
   return (
-    <View style={styles.wrap}>
-      <View
-        style={styles.chart}
-        onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
-      >
-        {width > 0 && (
-          <Svg width={width} height={HEIGHT}>
-            {/* Vertical hour gridlines + labels */}
-            {ticks.map((tick) => {
-              const x = ((tick.ms - startMs) / totalMs) * width;
-              return (
-                <React.Fragment key={tick.ms}>
-                  <Line
-                    x1={x}
-                    x2={x}
-                    y1={PADDING_TOP - 6}
-                    y2={baselineY}
-                    stroke={colors.borderSubtle}
-                    strokeWidth={1}
-                    opacity={0.6}
-                  />
-                  <SvgText
-                    x={x}
-                    y={PADDING_TOP - 12}
-                    fontSize={11}
-                    fill={colors.textTertiary}
-                    textAnchor="middle"
-                    fontWeight="500"
-                  >
-                    {tick.label}
-                  </SvgText>
-                </React.Fragment>
-              );
-            })}
-
-            {/* Filled stepped stage rectangles */}
-            {runs.map((run, i) => {
-              const x1 = ((run.startMs - startMs) / totalMs) * width;
-              const x2 =
-                ((run.startMs + run.durationMs - startMs) / totalMs) * width;
-              const y = laneY(run.stage);
-              return (
-                <Rect
-                  key={i}
-                  x={x1}
-                  y={y}
-                  width={Math.max(x2 - x1, 0.5)}
-                  height={baselineY - y}
-                  fill={stageColors[run.stage]}
-                />
-              );
-            })}
-          </Svg>
-        )}
-      </View>
-
-      {/* Bedtime / waketime chips */}
-      <View style={styles.timeRow}>
-        <View style={styles.timeChip}>
-          <Secondary style={styles.timeText}>{fmt(startMs)}</Secondary>
-        </View>
-        <View style={styles.timeChip}>
-          <Secondary style={styles.timeText}>{fmt(endMs)}</Secondary>
-        </View>
-      </View>
-
-      {/* Boost (stim pulses) */}
-      <View style={styles.boost}>
-        <Eyebrow>boost</Eyebrow>
-        <BoostTicks
-          stimPulses={stimPulses}
-          startMs={startMs}
-          endMs={endMs}
-        />
-      </View>
-    </View>
-  );
-}
-
-function BoostTicks({
-  stimPulses,
-  startMs,
-  endMs,
-}: {
-  stimPulses: StimPulse[];
-  startMs: number;
-  endMs: number;
-}) {
-  const [w, setW] = useState(0);
-  const totalMs = endMs - startMs || 1;
-  const H = 28;
-  return (
     <View
-      style={styles.boostTrack}
-      onLayout={(e) => setW(e.nativeEvent.layout.width)}
+      style={styles.chart}
+      onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
     >
-      {w > 0 && (
-        <Svg width={w} height={H}>
-          <Line
-            x1={0}
-            x2={w}
-            y1={H - 1}
-            y2={H - 1}
-            stroke={colors.borderSubtle}
-            strokeWidth={1}
-          />
-          {stimPulses.map((p, i) => {
-            const x = ((p.tMs - startMs) / totalMs) * w;
+      {width > 0 && (
+        <Svg width={width} height={HEIGHT}>
+          {/* Vertical hour gridlines */}
+          {ticks.map((tick) => {
+            const x = ((tick.ms - startMs) / totalMs) * width;
             return (
-              <Rect
-                key={i}
-                x={x}
-                y={4}
-                width={1.5}
-                height={H - 8}
-                fill={colors.textSecondary}
+              <Line
+                key={tick.ms}
+                x1={x}
+                x2={x}
+                y1={PADDING_TOP}
+                y2={baselineY}
+                stroke={colors.borderSubtle}
+                strokeWidth={1}
+                opacity={0.6}
               />
             );
           })}
+
+          {/* Stepped stage bands with connectors between level changes */}
+          {runs.map((run, i) => {
+            const x1 = ((run.startMs - startMs) / totalMs) * width;
+            const x2 =
+              ((run.startMs + run.durationMs - startMs) / totalMs) * width;
+            const next = runs[i + 1];
+            return (
+              <React.Fragment key={i}>
+                <Rect
+                  x={x1}
+                  y={laneTop(run.stage)}
+                  width={Math.max(x2 - x1, 0.75)}
+                  height={BAND_H}
+                  rx={2}
+                  fill={stageColors[run.stage]}
+                />
+                {next && (
+                  <Line
+                    x1={x2}
+                    x2={x2}
+                    y1={laneCenter(run.stage)}
+                    y2={laneCenter(next.stage)}
+                    stroke={colors.textSecondary}
+                    strokeWidth={1.5}
+                    opacity={0.5}
+                  />
+                )}
+              </React.Fragment>
+            );
+          })}
+
+          {/* Bottom time axis: bedtime + waketime at the edges, hours between */}
+          <SvgText
+            x={0}
+            y={axisY}
+            fontSize={11}
+            fill={colors.textSecondary}
+            textAnchor="start"
+            fontWeight="600"
+          >
+            {fmt(startMs)}
+          </SvgText>
+          <SvgText
+            x={width}
+            y={axisY}
+            fontSize={11}
+            fill={colors.textSecondary}
+            textAnchor="end"
+            fontWeight="600"
+          >
+            {fmt(endMs)}
+          </SvgText>
+          {ticks
+            .map((tick) => ({
+              tick,
+              x: ((tick.ms - startMs) / totalMs) * width,
+            }))
+            .filter(
+              ({ x }) =>
+                x > EDGE_CLEARANCE_PX && x < width - EDGE_CLEARANCE_PX,
+            )
+            .map(({ tick, x }) => (
+              <SvgText
+                key={tick.ms}
+                x={x}
+                y={axisY}
+                fontSize={11}
+                fill={colors.textTertiary}
+                textAnchor="middle"
+                fontWeight="500"
+              >
+                {tick.label}
+              </SvgText>
+            ))}
         </Svg>
       )}
     </View>
@@ -202,35 +183,8 @@ function fmt(ms: number) {
 }
 
 const styles = StyleSheet.create({
-  wrap: {
-    gap: spacing.md,
-  },
   chart: {
     width: '100%',
     height: HEIGHT,
-  },
-  timeRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: -spacing.sm,
-  },
-  timeChip: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: radii.small,
-    backgroundColor: colors.bgSurface,
-  },
-  timeText: {
-    color: colors.textPrimary,
-    fontSize: 12,
-    letterSpacing: 0.4,
-  },
-  boost: {
-    gap: spacing.sm,
-    marginTop: spacing.md,
-  },
-  boostTrack: {
-    width: '100%',
-    height: 28,
   },
 });

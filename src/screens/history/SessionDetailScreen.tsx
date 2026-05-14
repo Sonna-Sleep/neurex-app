@@ -6,7 +6,7 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Body, Eyebrow, SerifHeadline } from '../../theme/typography';
 import { colors, layout, spacing } from '../../theme/tokens';
 import { sessionRepo, type Session } from '../../lib/repos';
-import { TimeSlept } from '../home/components/TimeSlept';
+import { NightSummary } from '../home/components/NightSummary';
 import { Hypnogram } from '../home/components/Hypnogram';
 import { StageBreakdown } from '../home/components/StageBreakdown';
 import type { HistoryStackParamList } from '../../navigation/types';
@@ -44,14 +44,13 @@ export function SessionDetailScreen({ navigation, route }: Props) {
       >
         {session ? (
           <View style={styles.results}>
-            <TimeSlept
+            <NightSummary
               tstSec={session.tst}
               score={session.score ?? 0}
               label={formatNight(session.endMs)}
             />
             <Hypnogram
               epochs={session.epochs}
-              stimPulses={session.stimPulses}
               startMs={session.startMs}
               endMs={session.endMs}
             />

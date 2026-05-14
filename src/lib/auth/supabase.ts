@@ -23,3 +23,7 @@ export function getSupabase(): SupabaseClient | null {
 
 export const isSupabaseConfigured = () =>
   Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
+
+// Must exactly match a redirect URL allowlisted in the Supabase dashboard
+// (Authentication → URL Configuration). The project uses the hyphen form.
+export const AUTH_REDIRECT_URL = 'neurex://auth-callback';

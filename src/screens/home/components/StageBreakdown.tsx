@@ -9,8 +9,8 @@ type Props = { stageMinutes: Record<SleepStage, number> };
 
 const ORDER: { key: SleepStage; label: string }[] = [
   { key: 'wake', label: 'Awake' },
-  { key: 'rem', label: 'REM' },
   { key: 'light', label: 'Light' },
+  { key: 'rem', label: 'REM' },
   { key: 'deep', label: 'Deep' },
 ];
 

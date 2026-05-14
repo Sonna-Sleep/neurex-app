@@ -10,14 +10,17 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import * as WebBrowser from 'expo-web-browser';
-import * as Linking from 'expo-linking';
 
 import { Button } from '../../components/Button';
 import { GoogleLogo } from '../../components/GoogleLogo';
 import { SerifDisplay, Body, Eyebrow } from '../../theme/typography';
 import { colors, fonts, layout, radii, spacing } from '../../theme/tokens';
 import { useSession } from '../../state/session';
-import { isSupabaseConfigured, getSupabase } from '../../lib/auth/supabase';
+import {
+  isSupabaseConfigured,
+  getSupabase,
+  AUTH_REDIRECT_URL,
+} from '../../lib/auth/supabase';
 import type { OnboardingStackParamList } from '../../navigation/types';
 
 WebBrowser.maybeCompleteAuthSession();
@@ -53,7 +56,7 @@ export function Auth({ navigation }: Props) {
     }
     try {
       setBusy(true);
-      const redirectTo = Linking.createURL('auth/callback');
+      const redirectTo = AUTH_REDIRECT_URL;
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
@@ -111,7 +114,7 @@ export function Auth({ navigation }: Props) {
     }
     try {
       setBusy(true);
-      const redirectTo = Linking.createURL('auth/callback');
+      const redirectTo = AUTH_REDIRECT_URL;
       const { error } = await supabase.auth.signInWithOtp({
         email: trimmed,
         options: {

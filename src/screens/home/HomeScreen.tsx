@@ -15,11 +15,10 @@ import { StatusPill } from '../../components/StatusPill';
 import { SerifHeadline, Body, Eyebrow } from '../../theme/typography';
 import { colors, layout, spacing } from '../../theme/tokens';
 import { deviceRepo, sessionRepo, type Session, type Device } from '../../lib/repos';
-import { TimeSlept } from './components/TimeSlept';
+import { NightSummary } from './components/NightSummary';
 import { StageBreakdown } from './components/StageBreakdown';
-import { SleepStrip } from './components/SleepStrip';
+import { Hypnogram } from './components/Hypnogram';
 import { StimImpactCard } from './components/StimImpactCard';
-// Hypnogram is Pro-only (spec §4). Kept in the codebase, gated when paywall lands.
 
 export function HomeScreen() {
   const [session, setSession] = useState<Session | null>(null);
@@ -79,17 +78,17 @@ export function HomeScreen() {
 function Results({ session }: { session: Session }) {
   return (
     <View style={styles.results}>
-      <TimeSlept tstSec={session.tst} score={session.score ?? 0} />
-      <SleepStrip
+      <NightSummary tstSec={session.tst} score={session.score ?? 0} />
+      <Hypnogram
         epochs={session.epochs}
         startMs={session.startMs}
         endMs={session.endMs}
       />
+      <StageBreakdown stageMinutes={session.stageMinutes} />
       <StimImpactCard
         stimCount={session.stimPulses.length}
         stimImpactPct={session.stimImpactPct}
       />
-      <StageBreakdown stageMinutes={session.stageMinutes} />
     </View>
   );
 }
