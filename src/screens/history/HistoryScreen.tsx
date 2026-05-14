@@ -1,6 +1,13 @@
-import React, { useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import {
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import {
   SerifHeadline,
@@ -11,21 +18,32 @@ import {
 } from '../../theme/typography';
 import { colors, layout, spacing, stageOpacity } from '../../theme/tokens';
 import { sessionRepo, type Session, type SleepStage } from '../../lib/repos';
+import type { HistoryStackParamList } from '../../navigation/types';
 
 const STAGE_ORDER: SleepStage[] = ['deep', 'rem', 'light', 'wake'];
 
-export function HistoryScreen() {
+type Props = NativeStackScreenProps<HistoryStackParamList, 'HistoryList'>;
+
+export function HistoryScreen({ navigation }: Props) {
   const [sessions, setSessions] = useState<Session[] | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const load = useCallback(async () => {
+    setSessions(await sessionRepo.list());
+  }, []);
 
   useEffect(() => {
-    let alive = true;
-    sessionRepo.list().then((s) => {
-      if (alive) setSessions(s);
-    });
-    return () => {
-      alive = false;
-    };
-  }, []);
+    load().catch(() => undefined);
+  }, [load]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await load();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [load]);
 
   if (!sessions) {
     return <SafeAreaView style={styles.container} edges={['top']} />;
@@ -54,6 +72,13 @@ export function HistoryScreen() {
       <ScrollView
         contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.textSecondary}
+          />
+        }
       >
         <View style={styles.header}>
           <Eyebrow>history · {sessions.length} nights</Eyebrow>
@@ -62,7 +87,13 @@ export function HistoryScreen() {
 
         <View style={styles.list}>
           {sessions.map((s) => (
-            <Row key={s.id} session={s} />
+            <Row
+              key={s.id}
+              session={s}
+              onPress={() =>
+                navigation.navigate('SessionDetail', { sessionId: s.id })
+              }
+            />
           ))}
         </View>
       </ScrollView>
@@ -70,13 +101,22 @@ export function HistoryScreen() {
   );
 }
 
-function Row({ session }: { session: Session }) {
+function Row({
+  session,
+  onPress,
+}: {
+  session: Session;
+  onPress: () => void;
+}) {
   const total =
     STAGE_ORDER.reduce((acc, k) => acc + session.stageMinutes[k], 0) || 1;
   const tstH = Math.floor(session.tst / 3600);
   const tstM = Math.floor((session.tst % 3600) / 60);
   return (
-    <View style={styles.row}>
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+    >
       <View style={styles.rowTop}>
         <View>
           <Eyebrow>{formatDate(session.endMs)}</Eyebrow>
@@ -102,7 +142,7 @@ function Row({ session }: { session: Session }) {
           );
         })}
       </View>
-    </View>
+    </Pressable>
   );
 }
 
@@ -148,6 +188,9 @@ const styles = StyleSheet.create({
     paddingTop: spacing.md,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle,
+  },
+  rowPressed: {
+    opacity: 0.6,
   },
   rowTop: {
     flexDirection: 'row',

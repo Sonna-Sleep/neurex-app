@@ -7,6 +7,7 @@ import { SerifHeadline, Body, Eyebrow } from '../../theme/typography';
 import { colors, layout, spacing } from '../../theme/tokens';
 import { useSession } from '../../state/session';
 import { deviceRepo, type Device } from '../../lib/repos';
+import appConfig from '../../../app.json';
 
 export function AccountScreen() {
   const user = useSession((s) => s.user);
@@ -43,6 +44,10 @@ export function AccountScreen() {
 
         <Section eyebrow="legal">
           <Body style={styles.muted}>privacy policy · terms · about</Body>
+        </Section>
+
+        <Section eyebrow="app">
+          <Body style={styles.muted}>version {appConfig.expo.version}</Body>
         </Section>
 
         <View style={styles.actions}>

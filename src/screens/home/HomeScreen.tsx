@@ -1,5 +1,11 @@
-import React, { useEffect, useState } from 'react';
-import { Image, ScrollView, StyleSheet, View } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import {
+  Image,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  View,
+} from 'react-native';
 
 const HEADBAND = require('../../../assets/images/headband.png');
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -16,20 +22,29 @@ import { Hypnogram } from './components/Hypnogram';
 export function HomeScreen() {
   const [session, setSession] = useState<Session | null>(null);
   const [device, setDevice] = useState<Device | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const load = useCallback(async () => {
+    const [s, d] = await Promise.all([
+      sessionRepo.latest(),
+      deviceRepo.current(),
+    ]);
+    setSession(s);
+    setDevice(d);
+  }, []);
 
   useEffect(() => {
-    let alive = true;
-    Promise.all([sessionRepo.latest(), deviceRepo.current()]).then(
-      ([s, d]) => {
-        if (!alive) return;
-        setSession(s);
-        setDevice(d);
-      },
-    );
-    return () => {
-      alive = false;
-    };
-  }, []);
+    load().catch(() => undefined);
+  }, [load]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await load();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [load]);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -41,6 +56,13 @@ export function HomeScreen() {
       <ScrollView
         contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.textSecondary}
+          />
+        }
       >
         {session ? (
           <Results session={session} />

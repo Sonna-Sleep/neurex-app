@@ -7,14 +7,17 @@ import { colors, spacing, systemFontFamily } from '../../../theme/tokens';
 type Props = {
   tstSec: number;
   score: number;
+  label?: string;
 };
 
-export function TimeSlept({ tstSec, score }: Props) {
+export function TimeSlept({ tstSec, score, label = 'last night' }: Props) {
   const h = Math.floor(tstSec / 3600);
   const m = Math.floor((tstSec % 3600) / 60);
   return (
     <View style={styles.wrap}>
-      <Eyebrow>last night · score {score}</Eyebrow>
+      <Eyebrow>
+        {label} · score {score}
+      </Eyebrow>
       <Text style={styles.hero} allowFontScaling={false}>
         <Text style={styles.big}>{h}</Text>
         <Text style={styles.unit}>h </Text>

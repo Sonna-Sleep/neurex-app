@@ -9,9 +9,14 @@ export type OnboardingStackParamList = {
   NotificationsPermission: undefined;
 };
 
+export type HistoryStackParamList = {
+  HistoryList: undefined;
+  SessionDetail: { sessionId: string };
+};
+
 export type TabParamList = {
   Home: undefined;
-  History: undefined;
+  History: NavigatorScreenParams<HistoryStackParamList>;
   Account: undefined;
 };
 

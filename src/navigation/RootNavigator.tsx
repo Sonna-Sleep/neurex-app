@@ -25,6 +25,9 @@ const navTheme = {
 
 export function RootNavigator() {
   const onboardingComplete = useSession((s) => s.onboardingComplete);
+  const hydrated = useSession((s) => s.hydrated);
+
+  if (!hydrated) return null;
 
   return (
     <NavigationContainer theme={navTheme}>

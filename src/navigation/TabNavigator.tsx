@@ -3,7 +3,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { StyleSheet, Text } from 'react-native';
 
 import { HomeScreen } from '../screens/home/HomeScreen';
-import { HistoryScreen } from '../screens/history/HistoryScreen';
+import { HistoryNavigator } from './HistoryNavigator';
 import { AccountScreen } from '../screens/account/AccountScreen';
 import { TabIcon } from '../components/TabIcon';
 import { colors, fonts } from '../theme/tokens';
@@ -53,7 +53,7 @@ export function TabNavigator() {
       />
       <Tab.Screen
         name="History"
-        component={HistoryScreen}
+        component={HistoryNavigator}
         options={{
           tabBarIcon: ({ focused }) => (
             <TabIcon name="history" color={tabIconColor(focused)} />
