@@ -11,17 +11,6 @@ export type StimPulse = {
   epochIndex: number;
 };
 
-// Closed set of v1 journal chips. Free-form notes deferred to Pro tier.
-export type JournalTag =
-  | 'alcohol'
-  | 'caffeine'
-  | 'exercise'
-  | 'late_meal'
-  | 'stress'
-  | 'sick'
-  | 'traveled'
-  | 'period';
-
 export type Session = {
   id: string;
   startMs: number;
@@ -41,7 +30,6 @@ export type Session = {
    * null until the staging pipeline has produced a value.
    */
   stimImpactPct: number | null;
-  journalTags: JournalTag[];
   /** 0..99, never 100. Capped by design (psychological retention hook). */
   score: number | null;
 };
