@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, View, ActivityIndicator } from 'react-native';
 import { colors, radii, spacing, typeScale } from '../theme/tokens';
 import { Text } from 'react-native';
 
-type Variant = 'primary' | 'ghost' | 'destructive';
+type Variant = 'primary' | 'ghost';
 
 type Props = {
   label: string;
@@ -35,7 +35,6 @@ export function Button({
         fullWidth && styles.fullWidth,
         variant === 'primary' && styles.primary,
         variant === 'ghost' && styles.ghost,
-        variant === 'destructive' && styles.destructive,
         pressed && !isDisabled && styles.pressed,
         isDisabled && styles.disabled,
       ]}
@@ -53,7 +52,6 @@ export function Button({
                 styles.label,
                 variant === 'primary' && styles.labelPrimary,
                 variant === 'ghost' && styles.labelGhost,
-                variant === 'destructive' && styles.labelDestructive,
               ]}
             >
               {label}
@@ -84,11 +82,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.borderSubtle,
   },
-  destructive: {
-    backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-  },
   pressed: {
     opacity: 0.7,
   },
@@ -110,9 +103,6 @@ const styles = StyleSheet.create({
     color: colors.ctaText,
   },
   labelGhost: {
-    color: colors.textPrimary,
-  },
-  labelDestructive: {
     color: colors.textPrimary,
   },
 });

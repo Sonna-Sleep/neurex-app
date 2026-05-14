@@ -50,5 +50,6 @@ export interface SessionRepo {
 
 export interface DeviceRepo {
   current(): Promise<Device | null>;
+  pair(serial: string): void;
   unpair(): Promise<void>;
 }

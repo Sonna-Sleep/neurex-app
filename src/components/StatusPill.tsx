@@ -4,11 +4,10 @@ import { colors, radii, spacing, fonts } from '../theme/tokens';
 
 type Props = {
   battery: number | null;
-  unsynced?: boolean;
   onPress?: () => void;
 };
 
-export function StatusPill({ battery, unsynced, onPress }: Props) {
+export function StatusPill({ battery, onPress }: Props) {
   const isLow = battery !== null && battery < 15;
   const label = battery !== null ? `${battery}%` : '—';
 
@@ -23,7 +22,6 @@ export function StatusPill({ battery, unsynced, onPress }: Props) {
       <Text style={[styles.label, isLow && { color: colors.warning }]}>
         {label}
       </Text>
-      {unsynced ? <View style={styles.unsyncedDot} /> : null}
     </Pressable>
   );
 }
@@ -51,12 +49,5 @@ const styles = StyleSheet.create({
     fontSize: 12,
     letterSpacing: 0.4,
     color: colors.textPrimary,
-  },
-  unsyncedDot: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: colors.textTertiary,
-    marginLeft: spacing.xs,
   },
 });

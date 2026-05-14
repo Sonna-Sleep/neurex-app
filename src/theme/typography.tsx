@@ -6,14 +6,6 @@ type TypographyProps = TextProps & {
   children: React.ReactNode;
 };
 
-export function SerifHero({ style, children, ...rest }: TypographyProps) {
-  return (
-    <Text {...rest} style={[styles.serifHero, style]}>
-      {children}
-    </Text>
-  );
-}
-
 export function SerifDisplay({ style, children, ...rest }: TypographyProps) {
   return (
     <Text {...rest} style={[styles.serifDisplay, style]}>
@@ -55,7 +47,6 @@ export function Secondary({ style, children, ...rest }: TypographyProps) {
 }
 
 const styles = StyleSheet.create({
-  serifHero: typeScale.serifHero,
   serifDisplay: typeScale.serifDisplay,
   serifHeadline: typeScale.serifHeadline,
   eyebrow: typeScale.sansEyebrow,

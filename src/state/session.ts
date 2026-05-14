@@ -40,7 +40,7 @@ export const useSession = create<SessionState>()(
         })),
 
       setPaired: (serial) => {
-        if (serial) deviceRepo.setPaired(serial);
+        if (serial) deviceRepo.pair(serial);
         set({ pairedSerial: serial });
       },
 
@@ -73,7 +73,7 @@ export const useSession = create<SessionState>()(
         };
       },
       onRehydrateStorage: () => (state) => {
-        if (state?.pairedSerial) deviceRepo.setPaired(state.pairedSerial);
+        if (state?.pairedSerial) deviceRepo.pair(state.pairedSerial);
         useSession.setState({ hydrated: true });
       },
     },

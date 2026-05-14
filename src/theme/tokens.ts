@@ -47,14 +47,6 @@ export const fonts = {
 } as const;
 
 export const typeScale = {
-  serifHero: {
-    fontFamily: systemFontFamily,
-    fontSize: 64,
-    lineHeight: 68,
-    letterSpacing: -1.5,
-    fontWeight: '300' as const,
-    color: colors.textPrimary,
-  },
   serifDisplay: {
     fontFamily: systemFontFamily,
     fontSize: 36,

@@ -7,7 +7,6 @@ import { View } from 'react-native';
 
 import { colors } from './theme/tokens';
 import { RootNavigator } from './navigation/RootNavigator';
-import { getDb } from './lib/db/schema';
 import { useAuthListener } from './lib/auth/useAuthListener';
 import { useSession } from './state/session';
 
@@ -16,10 +15,6 @@ SplashScreen.preventAutoHideAsync().catch(() => undefined);
 export default function App() {
   useAuthListener();
   const hydrated = useSession((s) => s.hydrated);
-
-  useEffect(() => {
-    getDb().catch(() => undefined);
-  }, []);
 
   useEffect(() => {
     if (hydrated) SplashScreen.hideAsync().catch(() => undefined);
