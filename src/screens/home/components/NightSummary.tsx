@@ -15,7 +15,7 @@ export function NightSummary({ tstSec, score, label = 'last night' }: Props) {
   const m = Math.floor((tstSec % 3600) / 60);
   return (
     <View style={styles.wrap}>
-      <Secondary style={styles.label}>{label} · sleep score</Secondary>
+      <Secondary style={styles.label}>{label}</Secondary>
       <Text style={styles.score} allowFontScaling={false}>
         {score}
       </Text>

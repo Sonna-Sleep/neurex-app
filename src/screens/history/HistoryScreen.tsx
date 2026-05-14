@@ -121,7 +121,7 @@ function Row({
         <View>
           <Eyebrow>{formatDate(session.endMs)}</Eyebrow>
           <Secondary style={styles.meta}>
-            {tstH}h {tstM}m · {Math.round(session.efficiency * 100)}%
+            {tstH}h {tstM}m
           </Secondary>
         </View>
         <SerifDisplay>{session.score ?? 0}</SerifDisplay>
