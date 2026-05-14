@@ -68,8 +68,15 @@ export function HistoryScreen({ navigation }: Props) {
     );
   }
 
-  const avg =
-    sessions.reduce((s, x) => s + (x.score ?? 0), 0) / sessions.length;
+  // Average only over scored nights — an unprocessed night (score null)
+  // shouldn't drag the average toward zero.
+  const scored = sessions.filter((s) => s.score != null);
+  const avg = scored.length
+    ? Math.round(
+        scored.reduce((sum, x) => sum + (x.score as number), 0) /
+          scored.length,
+      )
+    : null;
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -86,7 +93,7 @@ export function HistoryScreen({ navigation }: Props) {
       >
         <View style={styles.header}>
           <Eyebrow>history · {sessions.length} nights</Eyebrow>
-          <SerifDisplay>{Math.round(avg)} avg</SerifDisplay>
+          <SerifDisplay>{avg ?? '—'} avg</SerifDisplay>
         </View>
 
         <View style={styles.list}>
@@ -128,7 +135,7 @@ function Row({
             {tstH}h {tstM}m
           </Secondary>
         </View>
-        <SerifDisplay>{session.score ?? 0}</SerifDisplay>
+        <SerifDisplay>{session.score ?? '—'}</SerifDisplay>
       </View>
       <View style={styles.bar}>
         {STAGE_ORDER.map((stage) => {

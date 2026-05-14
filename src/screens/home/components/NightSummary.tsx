@@ -6,7 +6,8 @@ import { colors, spacing, systemFontFamily } from '../../../theme/tokens';
 
 type Props = {
   tstSec: number;
-  score: number;
+  // null until the cloud pipeline has scored the night.
+  score: number | null;
   label?: string;
 };
 
@@ -17,7 +18,7 @@ export function NightSummary({ tstSec, score, label = 'last night' }: Props) {
     <View style={styles.wrap}>
       <Secondary style={styles.label}>{label}</Secondary>
       <Text style={styles.score} allowFontScaling={false}>
-        {score}
+        {score ?? '—'}
       </Text>
       <Secondary style={styles.label}>
         {h}h {m}min asleep

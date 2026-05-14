@@ -82,7 +82,7 @@ export function HomeScreen() {
 function Results({ session }: { session: Session }) {
   return (
     <View style={styles.results}>
-      <NightSummary tstSec={session.tst} score={session.score ?? 0} />
+      <NightSummary tstSec={session.tst} score={session.score} />
       <Hypnogram
         epochs={session.epochs}
         startMs={session.startMs}

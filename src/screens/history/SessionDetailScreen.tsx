@@ -46,7 +46,7 @@ export function SessionDetailScreen({ navigation, route }: Props) {
           <View style={styles.results}>
             <NightSummary
               tstSec={session.tst}
-              score={session.score ?? 0}
+              score={session.score}
               label={formatNight(session.endMs)}
             />
             <Hypnogram
