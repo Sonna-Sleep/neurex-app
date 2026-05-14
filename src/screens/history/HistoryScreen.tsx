@@ -18,6 +18,7 @@ import {
 } from '../../theme/typography';
 import { colors, layout, spacing, stageOpacity } from '../../theme/tokens';
 import { sessionRepo, type Session, type SleepStage } from '../../lib/repos';
+import { useSession } from '../../state/session';
 import type { HistoryStackParamList } from '../../navigation/types';
 
 const STAGE_ORDER: SleepStage[] = ['deep', 'rem', 'light', 'wake'];
@@ -27,14 +28,17 @@ type Props = NativeStackScreenProps<HistoryStackParamList, 'HistoryList'>;
 export function HistoryScreen({ navigation }: Props) {
   const [sessions, setSessions] = useState<Session[] | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const authReady = useSession((s) => s.authReady);
 
   const load = useCallback(async () => {
     setSessions(await sessionRepo.list());
   }, []);
 
+  // Re-runs when auth settles, so a cold start that queried as anonymous
+  // re-fetches once the Supabase session is restored.
   useEffect(() => {
     load().catch(() => undefined);
-  }, [load]);
+  }, [load, authReady]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);

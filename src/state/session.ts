@@ -18,6 +18,9 @@ type SessionState = {
   pairedSerial: string | null;
   onboardingComplete: boolean;
   hydrated: boolean;
+  // True once the Supabase session check has completed — screens wait for
+  // this before querying so they don't run as anonymous on a cold start.
+  authReady: boolean;
   setAuth: (user: User | null) => void;
   setPaired: (serial: string | null) => void;
   completeOnboarding: () => void;
@@ -32,6 +35,7 @@ export const useSession = create<SessionState>()(
       pairedSerial: null,
       onboardingComplete: false,
       hydrated: false,
+      authReady: false,
 
       setAuth: (user) =>
         set(() => ({

@@ -42,7 +42,11 @@ export function useAuthListener() {
 
   useEffect(() => {
     const supabase = getSupabase();
-    if (!supabase) return;
+    if (!supabase) {
+      // No backend configured — nothing to wait for.
+      useSession.setState({ authReady: true });
+      return;
+    }
 
     let mounted = true;
 
@@ -50,6 +54,8 @@ export function useAuthListener() {
       if (!mounted) return;
       const u = data.session?.user;
       if (u) setAuth({ id: u.id, email: u.email ?? null, name: null });
+      // Auth is now settled — screens can safely query Supabase.
+      useSession.setState({ authReady: true });
     });
 
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {

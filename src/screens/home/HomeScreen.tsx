@@ -15,6 +15,7 @@ import { StatusPill } from '../../components/StatusPill';
 import { SerifHeadline, Body, Eyebrow } from '../../theme/typography';
 import { colors, layout, spacing } from '../../theme/tokens';
 import { deviceRepo, sessionRepo, type Session, type Device } from '../../lib/repos';
+import { useSession } from '../../state/session';
 import { NightSummary } from './components/NightSummary';
 import { StageBreakdown } from './components/StageBreakdown';
 import { Hypnogram } from './components/Hypnogram';
@@ -24,6 +25,7 @@ export function HomeScreen() {
   const [session, setSession] = useState<Session | null>(null);
   const [device, setDevice] = useState<Device | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const authReady = useSession((s) => s.authReady);
 
   const load = useCallback(async () => {
     const [s, d] = await Promise.all([
@@ -34,9 +36,11 @@ export function HomeScreen() {
     setDevice(d);
   }, []);
 
+  // Re-runs when auth settles, so a cold start that queried as anonymous
+  // re-fetches once the Supabase session is restored.
   useEffect(() => {
     load().catch(() => undefined);
-  }, [load]);
+  }, [load, authReady]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
