@@ -8,6 +8,7 @@ import { colors, layout, spacing } from '../../theme/tokens';
 import { useSession } from '../../state/session';
 import { deviceRepo, type Device } from '../../lib/repos';
 import appConfig from '../../../app.json';
+import { DebugSection } from './DebugSection';
 
 export function AccountScreen() {
   const user = useSession((s) => s.user);
@@ -49,6 +50,8 @@ export function AccountScreen() {
         <Section eyebrow="app">
           <Body style={styles.muted}>version {appConfig.expo.version}</Body>
         </Section>
+
+        <DebugSection />
 
         <View style={styles.actions}>
           <Button label="log out" variant="ghost" onPress={signOut} />

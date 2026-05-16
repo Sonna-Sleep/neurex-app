@@ -21,10 +21,15 @@ type SessionState = {
   // True once the Supabase session check has completed — screens wait for
   // this before querying so they don't run as anonymous on a cold start.
   authReady: boolean;
+  // Set right after a successful Modal upload, cleared when the resulting
+  // session row is fetched (or the user dismisses). Drives the Home screen's
+  // "Processing…" card. Transient — not persisted.
+  processingSessionId: string | null;
   setAuth: (user: User | null) => void;
   setPaired: (serial: string | null) => void;
   completeOnboarding: () => void;
   signOut: () => void;
+  setProcessingSessionId: (id: string | null) => void;
 };
 
 export const useSession = create<SessionState>()(
@@ -36,6 +41,7 @@ export const useSession = create<SessionState>()(
       onboardingComplete: false,
       hydrated: false,
       authReady: false,
+      processingSessionId: null,
 
       setAuth: (user) =>
         set(() => ({
@@ -57,8 +63,11 @@ export const useSession = create<SessionState>()(
           user: null,
           pairedSerial: null,
           onboardingComplete: false,
+          processingSessionId: null,
         });
       },
+
+      setProcessingSessionId: (id) => set({ processingSessionId: id }),
     }),
     {
       name: 'neurex-session',

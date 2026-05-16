@@ -20,12 +20,14 @@ import { NightSummary } from './components/NightSummary';
 import { StageBreakdown } from './components/StageBreakdown';
 import { Hypnogram } from './components/Hypnogram';
 import { StimImpactCard } from './components/StimImpactCard';
+import { ProcessingCard } from './components/ProcessingCard';
 
 export function HomeScreen() {
   const [session, setSession] = useState<Session | null>(null);
   const [device, setDevice] = useState<Device | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const authReady = useSession((s) => s.authReady);
+  const processingSessionId = useSession((s) => s.processingSessionId);
 
   const load = useCallback(async () => {
     const [s, d] = await Promise.all([
@@ -37,10 +39,12 @@ export function HomeScreen() {
   }, []);
 
   // Re-runs when auth settles, so a cold start that queried as anonymous
-  // re-fetches once the Supabase session is restored.
+  // re-fetches once the Supabase session is restored. Also refetches when
+  // a processing job finishes so the new session row replaces the
+  // ProcessingCard.
   useEffect(() => {
     load().catch(() => undefined);
-  }, [load, authReady]);
+  }, [load, authReady, processingSessionId]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -69,7 +73,12 @@ export function HomeScreen() {
           />
         }
       >
-        {session ? (
+        {processingSessionId ? (
+          <ProcessingCard
+            sessionId={processingSessionId}
+            onReady={() => load().catch(() => undefined)}
+          />
+        ) : session ? (
           <Results session={session} />
         ) : (
           <EmptyState hasDevice={!!device} />
