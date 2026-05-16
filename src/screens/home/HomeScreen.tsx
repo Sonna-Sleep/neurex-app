@@ -89,15 +89,26 @@ export function HomeScreen() {
 }
 
 function Results({ session }: { session: Session }) {
+  // `tib` is the recording duration in minutes; pass it so the night summary
+  // can say "21 min recorded — not analyzed yet" until staging produces tst.
+  const isAnalyzed = session.score !== null;
   return (
     <View style={styles.results}>
-      <NightSummary tstSec={session.tst} score={session.score} />
-      <Hypnogram
-        epochs={session.epochs}
-        startMs={session.startMs}
-        endMs={session.endMs}
+      <NightSummary
+        tstMin={session.tst}
+        score={session.score}
+        recordingMinutes={session.tib}
       />
-      <StageBreakdown stageMinutes={session.stageMinutes} />
+      {isAnalyzed ? (
+        <>
+          <Hypnogram
+            epochs={session.epochs}
+            startMs={session.startMs}
+            endMs={session.endMs}
+          />
+          <StageBreakdown stageMinutes={session.stageMinutes} />
+        </>
+      ) : null}
       <StimImpactCard
         stimCount={session.stimPulses.length}
         stimImpactPct={session.stimImpactPct}

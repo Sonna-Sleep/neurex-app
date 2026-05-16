@@ -45,16 +45,21 @@ export function SessionDetailScreen({ navigation, route }: Props) {
         {session ? (
           <View style={styles.results}>
             <NightSummary
-              tstSec={session.tst}
+              tstMin={session.tst}
               score={session.score}
+              recordingMinutes={session.tib}
               label={formatNight(session.endMs)}
             />
-            <Hypnogram
-              epochs={session.epochs}
-              startMs={session.startMs}
-              endMs={session.endMs}
-            />
-            <StageBreakdown stageMinutes={session.stageMinutes} />
+            {session.score !== null && (
+              <>
+                <Hypnogram
+                  epochs={session.epochs}
+                  startMs={session.startMs}
+                  endMs={session.endMs}
+                />
+                <StageBreakdown stageMinutes={session.stageMinutes} />
+              </>
+            )}
           </View>
         ) : loaded ? (
           <View style={styles.empty}>

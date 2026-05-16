@@ -15,12 +15,16 @@ export type Session = {
   id: string;
   startMs: number;
   endMs: number;
+  /** Time-in-bed, minutes. Always available — derived from recording bounds. */
   tib: number;
-  tst: number;
-  waso: number;
-  efficiency: number;
-  /** Count of distinct wake intrusions after sleep onset. */
-  awakenings: number;
+  /** Total-sleep-time, minutes. null until the staging pipeline has produced a value. */
+  tst: number | null;
+  /** Wake-after-sleep-onset, minutes. null until staging. */
+  waso: number | null;
+  /** Sleep efficiency, percent (0..100). null until staging. */
+  efficiency: number | null;
+  /** Count of distinct wake intrusions after sleep onset. null until staging. */
+  awakenings: number | null;
   stageMinutes: Record<SleepStage, number>;
   epochs: Epoch[];
   stimPulses: StimPulse[];

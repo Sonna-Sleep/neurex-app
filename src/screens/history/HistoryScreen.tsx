@@ -121,8 +121,9 @@ function Row({
 }) {
   const total =
     STAGE_ORDER.reduce((acc, k) => acc + session.stageMinutes[k], 0) || 1;
-  const tstH = Math.floor(session.tst / 3600);
-  const tstM = Math.floor((session.tst % 3600) / 60);
+  const tstLabel = session.tst != null
+    ? `${Math.floor(session.tst / 60)}h ${Math.floor(session.tst % 60)}m`
+    : 'not analyzed';
   return (
     <Pressable
       onPress={onPress}
@@ -132,7 +133,7 @@ function Row({
         <View>
           <Eyebrow>{formatDate(session.endMs)}</Eyebrow>
           <Secondary style={styles.meta}>
-            {tstH}h {tstM}m
+            {tstLabel}
           </Secondary>
         </View>
         <SerifDisplay>{session.score ?? '—'}</SerifDisplay>
