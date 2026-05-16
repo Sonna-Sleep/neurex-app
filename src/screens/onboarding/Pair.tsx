@@ -10,7 +10,7 @@ import { Card } from '../../components/Card';
 import { SerifDisplay, Body, Eyebrow } from '../../theme/typography';
 import { colors, layout, spacing } from '../../theme/tokens';
 import { useSession } from '../../state/session';
-import { pairFlowStub, FoundDevice } from '../../lib/ble/stub';
+import { bleClient, type FoundDevice } from '../../lib/ble';
 import type { OnboardingStackParamList } from '../../navigation/types';
 
 type Props = NativeStackScreenProps<OnboardingStackParamList, 'Pair'>;
@@ -23,7 +23,7 @@ export function Pair({ navigation }: Props) {
   const [device, setDevice] = useState<FoundDevice | null>(null);
 
   useEffect(() => {
-    const stop = pairFlowStub.scan((found) => {
+    const stop = bleClient.scan((found) => {
       setDevice(found);
       setState('found');
     });
@@ -33,7 +33,11 @@ export function Pair({ navigation }: Props) {
   const confirm = async () => {
     if (!device) return;
     setState('pairing');
-    await pairFlowStub.pair(device.serial);
+    // Pairing happens implicitly on first connect — we connect once here to
+    // confirm the device is reachable, then drop the connection. Real flows
+    // (overnight pull) will connect again when needed.
+    const connection = await bleClient.connect(device.deviceId);
+    await connection.disconnect();
     setPaired(device.serial);
     setState('paired');
     setTimeout(() => navigation.navigate('HowItWorks'), 700);
