@@ -5,6 +5,12 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as SplashScreen from 'expo-splash-screen';
 import { View } from 'react-native';
 
+// Side-effect import: constructs the singleton BleManager at module-load
+// time so iOS state preservation/restoration works on a cold background
+// start (e.g. when a paired headband advertises while the app is
+// suspended). Must happen before React renders. See src/lib/ble/manager.ts.
+import './lib/ble';
+
 import { colors } from './theme/tokens';
 import { RootNavigator } from './navigation/RootNavigator';
 import { useAuthListener } from './lib/auth/useAuthListener';
