@@ -64,8 +64,10 @@ export function HomeScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.topBar}>
-        <Logo height={28} />
-        <StatusPill battery={device?.battery ?? null} />
+        <Logo height={32} />
+        <View style={styles.topBarRight}>
+          <StatusPill battery={device?.battery ?? null} />
+        </View>
       </View>
 
       <ScrollView
@@ -151,13 +153,23 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.bgPrimary,
   },
+  // Oura-style top bar: logo dead-center of the screen, status pill
+  // floating on the right. Center is true center (the pill is absolutely
+  // positioned so it doesn't shift the logo off-axis).
   topBar: {
     paddingHorizontal: layout.screenPadding,
     paddingTop: spacing.md,
     paddingBottom: spacing.md,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
+  },
+  topBarRight: {
+    position: 'absolute',
+    right: layout.screenPadding,
+    top: 0,
+    bottom: 0,
+    justifyContent: 'center',
   },
   scroll: {
     flexGrow: 1,
