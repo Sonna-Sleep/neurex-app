@@ -13,14 +13,10 @@ import * as WebBrowser from 'expo-web-browser';
 
 import { Button } from '../../components/Button';
 import { GoogleLogo } from '../../components/GoogleLogo';
-import { SerifDisplay, Body, Eyebrow } from '../../theme/typography';
+import { SerifDisplay, Eyebrow } from '../../theme/typography';
 import { colors, fonts, layout, radii, spacing } from '../../theme/tokens';
 import { useSession } from '../../state/session';
-import {
-  isSupabaseConfigured,
-  getSupabase,
-  AUTH_REDIRECT_URL,
-} from '../../lib/auth/supabase';
+import { getSupabase, AUTH_REDIRECT_URL } from '../../lib/auth/supabase';
 import type { OnboardingStackParamList } from '../../navigation/types';
 
 WebBrowser.maybeCompleteAuthSession();
@@ -33,7 +29,6 @@ export function Auth({ navigation }: Props) {
   const [email, setEmail] = useState('');
   const [busy, setBusy] = useState(false);
   const [showEmail, setShowEmail] = useState(false);
-  const supabaseReady = isSupabaseConfigured();
 
   // When the user comes back from the email magic link, the auth listener
   // updates the session store. Navigate to the Pair step automatically.
@@ -98,7 +93,10 @@ export function Auth({ navigation }: Props) {
         navigation.navigate('Pair');
       }
     } catch (e: any) {
-      Alert.alert('Google sign-in failed', e?.message ?? 'Please try again.');
+      Alert.alert(
+        "Couldn't sign in with Google",
+        e?.message ?? 'Check your network and try again.',
+      );
     } finally {
       setBusy(false);
     }
@@ -125,7 +123,10 @@ export function Auth({ navigation }: Props) {
       if (error) throw error;
       navigation.navigate('EmailSent', { email: trimmed });
     } catch (e: any) {
-      Alert.alert('Sign in failed', e?.message ?? 'Please try again.');
+      Alert.alert(
+        "Couldn't send the sign-in link",
+        e?.message ?? 'Check your email address and try again.',
+      );
     } finally {
       setBusy(false);
     }
@@ -141,12 +142,6 @@ export function Auth({ navigation }: Props) {
           <SerifDisplay style={styles.headline}>
             Create your account
           </SerifDisplay>
-          {!supabaseReady ? (
-            <Body style={styles.notice}>
-              Auth is in stub mode — add Supabase keys to .env to enable real
-              sign-in.
-            </Body>
-          ) : null}
 
           <View style={styles.actions}>
             <Button
@@ -204,10 +199,6 @@ const styles = StyleSheet.create({
   },
   headline: {
     marginBottom: spacing.md,
-    textAlign: 'center',
-  },
-  notice: {
-    color: colors.textTertiary,
     textAlign: 'center',
   },
   actions: {

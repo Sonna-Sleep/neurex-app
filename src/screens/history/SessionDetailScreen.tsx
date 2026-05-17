@@ -6,6 +6,7 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Body, Eyebrow, SerifHeadline } from '../../theme/typography';
 import { colors, layout, spacing } from '../../theme/tokens';
 import { sessionRepo, type Session } from '../../lib/repos';
+import { Skeleton } from '../../components/Skeleton';
 import { NightSummary } from '../home/components/NightSummary';
 import { Hypnogram } from '../home/components/Hypnogram';
 import { StageBreakdown } from '../home/components/StageBreakdown';
@@ -65,10 +66,15 @@ export function SessionDetailScreen({ navigation, route }: Props) {
           <View style={styles.empty}>
             <Eyebrow>not found</Eyebrow>
             <SerifHeadline style={styles.emptyHeadline}>
-              This night isn't available
+              This night couldn't be loaded
             </SerifHeadline>
+            <Body style={styles.emptyBody}>
+              Try again, or go back to History.
+            </Body>
           </View>
-        ) : null}
+        ) : (
+          <Skeleton.Card />
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -112,6 +118,10 @@ const styles = StyleSheet.create({
     paddingTop: spacing.xxxl,
   },
   emptyHeadline: {
+    textAlign: 'center',
+  },
+  emptyBody: {
+    color: colors.textSecondary,
     textAlign: 'center',
   },
 });

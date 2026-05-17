@@ -66,7 +66,7 @@ export function Pair({ navigation }: Props) {
           {state === 'scanning' ? (
             <View style={styles.row}>
               <ActivityIndicator color={colors.textSecondary} />
-              <Body style={styles.cardText}>scanning…</Body>
+              <Body style={styles.cardText}>Searching for your headband…</Body>
             </View>
           ) : null}
 
@@ -80,13 +80,13 @@ export function Pair({ navigation }: Props) {
           {state === 'pairing' ? (
             <View style={styles.row}>
               <ActivityIndicator color={colors.textSecondary} />
-              <Body style={styles.cardText}>pairing…</Body>
+              <Body style={styles.cardText}>Connecting…</Body>
             </View>
           ) : null}
 
           {state === 'paired' ? (
             <View style={styles.foundCol}>
-              <Eyebrow>paired</Eyebrow>
+              <Eyebrow>connected</Eyebrow>
               <Body style={styles.deviceSerial}>{device?.serial}</Body>
             </View>
           ) : null}

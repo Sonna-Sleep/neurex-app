@@ -137,7 +137,7 @@ function Row({
     STAGE_ORDER.reduce((acc, k) => acc + session.stageMinutes[k], 0) || 1;
   const tstLabel = session.tst != null
     ? `${Math.floor(session.tst / 60)}h ${Math.floor(session.tst % 60)}m`
-    : 'not analyzed';
+    : 'Still analyzing — usually under a minute';
   return (
     <Pressable
       onPress={onPress}
