@@ -16,6 +16,7 @@ import { SerifHeadline, Body, Eyebrow } from '../../theme/typography';
 import { colors, layout, spacing } from '../../theme/tokens';
 import { deviceRepo, sessionRepo, type Session, type Device } from '../../lib/repos';
 import { useSession } from '../../state/session';
+import { Skeleton } from '../../components/Skeleton';
 import { NightSummary } from './components/NightSummary';
 import { StageBreakdown } from './components/StageBreakdown';
 import { Hypnogram } from './components/Hypnogram';
@@ -26,6 +27,10 @@ export function HomeScreen() {
   const [session, setSession] = useState<Session | null>(null);
   const [device, setDevice] = useState<Device | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  // Distinguishes "we haven't tried fetching yet" (show Skeleton) from
+  // "we tried and got nothing" (show EmptyState — the genuine first-night
+  // CTA). Without this flag both states look identical.
+  const [loaded, setLoaded] = useState(false);
   const authReady = useSession((s) => s.authReady);
   const processingSessionId = useSession((s) => s.processingSessionId);
 
@@ -36,6 +41,7 @@ export function HomeScreen() {
     ]);
     setSession(s);
     setDevice(d);
+    setLoaded(true);
   }, []);
 
   // Re-runs when auth settles, so a cold start that queried as anonymous
@@ -80,6 +86,8 @@ export function HomeScreen() {
           />
         ) : session ? (
           <Results session={session} />
+        ) : !loaded ? (
+          <Skeleton.Card />
         ) : (
           <EmptyState hasDevice={!!device} />
         )}

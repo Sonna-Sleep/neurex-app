@@ -16,7 +16,8 @@ import {
   Eyebrow,
   Secondary,
 } from '../../theme/typography';
-import { colors, layout, spacing, stageOpacity } from '../../theme/tokens';
+import { colors, layout, spacing, stageColors, stageOpacity } from '../../theme/tokens';
+import { Skeleton } from '../../components/Skeleton';
 import { sessionRepo, type Session, type SleepStage } from '../../lib/repos';
 import { useSession } from '../../state/session';
 import type { HistoryStackParamList } from '../../navigation/types';
@@ -50,7 +51,20 @@ export function HistoryScreen({ navigation }: Props) {
   }, [load]);
 
   if (!sessions) {
-    return <SafeAreaView style={styles.container} edges={['top']} />;
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.scroll}>
+          <View style={styles.header}>
+            <Eyebrow>history</Eyebrow>
+          </View>
+          <View style={styles.list}>
+            <Skeleton.Row />
+            <Skeleton.Row />
+            <Skeleton.Row />
+          </View>
+        </View>
+      </SafeAreaView>
+    );
   }
 
   if (sessions.length === 0) {
@@ -147,7 +161,11 @@ function Row({
               key={stage}
               style={{
                 flex,
-                backgroundColor: colors.textPrimary,
+                // Stage-colored bars (matching the Hypnogram palette) plus
+                // stageOpacity gives both stage identity AND depth ordering.
+                // Replaces the previous all-white bars that wasted the
+                // vivid blue/lavender/grey palette defined in tokens.
+                backgroundColor: stageColors[stage],
                 opacity: stageOpacity[stage],
               }}
             />

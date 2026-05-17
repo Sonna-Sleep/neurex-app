@@ -2,7 +2,7 @@ import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { Secondary } from '../../../theme/typography';
-import { colors, spacing, systemFontFamily } from '../../../theme/tokens';
+import { colors, spacing, typeScale } from '../../../theme/tokens';
 
 type Props = {
   /** Minutes asleep. null until the staging pipeline runs. */
@@ -54,12 +54,5 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: colors.textSecondary,
   },
-  score: {
-    fontSize: 104,
-    fontWeight: '300',
-    letterSpacing: -4,
-    lineHeight: 108,
-    color: colors.textPrimary,
-    fontFamily: systemFontFamily,
-  },
+  score: typeScale.serifHero,
 });

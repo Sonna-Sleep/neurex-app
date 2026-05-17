@@ -7,6 +7,7 @@ import {
   radii,
   spacing,
   systemFontFamily,
+  typeScale,
 } from '../../../theme/tokens';
 
 type Props = {
@@ -81,20 +82,11 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
     alignItems: 'flex-start',
   },
-  statNum: {
-    fontFamily: systemFontFamily,
-    fontSize: 44,
-    fontWeight: '300',
-    letterSpacing: -1,
-    lineHeight: 48,
-    color: colors.textPrimary,
-  },
+  statNum: typeScale.statNumber,
+  // Same metrics as statNum but muted color — keeps the visual rhythm
+  // identical when the value is still being computed.
   statNumPending: {
-    fontFamily: systemFontFamily,
-    fontSize: 44,
-    fontWeight: '300',
-    letterSpacing: -1,
-    lineHeight: 48,
+    ...typeScale.statNumber,
     color: colors.textTertiary,
   },
   plus: {

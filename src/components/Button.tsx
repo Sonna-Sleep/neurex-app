@@ -1,5 +1,7 @@
 import React from 'react';
 import { Pressable, StyleSheet, View, ActivityIndicator } from 'react-native';
+import * as Haptics from 'expo-haptics';
+
 import { colors, radii, spacing, typeScale } from '../theme/tokens';
 import { Text } from 'react-native';
 
@@ -26,9 +28,20 @@ export function Button({
 }: Props) {
   const isDisabled = disabled || loading;
 
+  // Haptic FIRES BEFORE onPress runs so the tactile cue lands at the same
+  // moment as the visual press feedback — feels snappier than triggering
+  // haptic in onPress where any async work in the handler delays it.
+  // Haptics.impactAsync is a no-op on platforms that lack haptic hardware
+  // (Android without vibrator, web), so no platform guard needed.
+  const handlePress = () => {
+    if (isDisabled) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
+    onPress();
+  };
+
   return (
     <Pressable
-      onPress={onPress}
+      onPress={handlePress}
       disabled={isDisabled}
       style={({ pressed }) => [
         styles.base,
@@ -84,6 +97,10 @@ const styles = StyleSheet.create({
   },
   pressed: {
     opacity: 0.7,
+    // Subtle scale-down on press gives the button a "physical" press feel
+    // that pure-opacity changes lack. 0.98 is the Oura/Whoop sweet spot —
+    // perceptible but not janky.
+    transform: [{ scale: 0.98 }],
   },
   disabled: {
     opacity: 0.4,

@@ -92,6 +92,26 @@ export const typeScale = {
     lineHeight: 20,
     fontWeight: '600' as const,
   },
+  // Hero score display (Home: 0-99 sleep score). Tightly-tracked, thin
+  // weight, oversized — the visual centerpiece of the dashboard.
+  serifHero: {
+    fontFamily: systemFontFamily,
+    fontSize: 104,
+    fontWeight: '300' as const,
+    letterSpacing: -4,
+    lineHeight: 108,
+    color: colors.textPrimary,
+  },
+  // Stat numbers (StimImpactCard, future cards). Smaller than hero but
+  // still display-grade. Uses the same thin/tracked feel for consistency.
+  statNumber: {
+    fontFamily: systemFontFamily,
+    fontSize: 44,
+    fontWeight: '300' as const,
+    letterSpacing: -1,
+    lineHeight: 48,
+    color: colors.textPrimary,
+  },
 } as const;
 
 export const spacing = {
