@@ -64,7 +64,7 @@ export function HomeScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.topBar}>
-        <Logo height={22} />
+        <Logo height={28} />
         <StatusPill battery={device?.battery ?? null} />
       </View>
 
