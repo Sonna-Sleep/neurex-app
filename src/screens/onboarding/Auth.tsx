@@ -178,6 +178,16 @@ export function Auth({ navigation }: Props) {
                 onPress={() => setShowEmail(true)}
               />
             )}
+
+            {/* TEMP dev bypass — remove before shipping. Lets us reach the
+                Pair/BLE flow without touching real auth. */}
+            {__DEV__ ? (
+              <Button
+                label="skip auth (dev)"
+                variant="ghost"
+                onPress={() => continueWithMockUser('dev-skip', null)}
+              />
+            ) : null}
           </View>
         </View>
       </KeyboardAvoidingView>

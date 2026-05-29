@@ -22,6 +22,8 @@ import { StageBreakdown } from './components/StageBreakdown';
 import { Hypnogram } from './components/Hypnogram';
 import { StimImpactCard } from './components/StimImpactCard';
 import { ProcessingCard } from './components/ProcessingCard';
+import { RecordingCard } from './components/RecordingCard';
+import { ConnectDeviceCard } from './components/ConnectDeviceCard';
 
 export function HomeScreen() {
   const [session, setSession] = useState<Session | null>(null);
@@ -33,6 +35,8 @@ export function HomeScreen() {
   const [loaded, setLoaded] = useState(false);
   const authReady = useSession((s) => s.authReady);
   const processingSessionId = useSession((s) => s.processingSessionId);
+  const streaming = useSession((s) => s.streaming);
+  const pairedDeviceId = useSession((s) => s.pairedDeviceId);
 
   const load = useCallback(async () => {
     const [s, d] = await Promise.all([
@@ -81,6 +85,17 @@ export function HomeScreen() {
           />
         }
       >
+        {/*
+          Streaming + paired-but-idle cards live above the historical results.
+          Even mid-recording the user can still glance at last night's
+          summary, so we render both stacked rather than swapping them.
+        */}
+        {(streaming || pairedDeviceId) && !processingSessionId ? (
+          <RecordingCard />
+        ) : !pairedDeviceId && !processingSessionId ? (
+          <ConnectDeviceCard />
+        ) : null}
+
         {processingSessionId ? (
           <ProcessingCard
             sessionId={processingSessionId}

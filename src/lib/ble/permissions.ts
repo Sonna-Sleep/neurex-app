@@ -3,7 +3,8 @@
 // (silent BLE failures are an App Store rejection trigger — Apple wants
 // users informed when a permission is missing).
 
-import { Linking, Platform } from 'react-native';
+import { Linking, PermissionsAndroid, Platform } from 'react-native';
+import type { Permission } from 'react-native';
 import type { BleManager } from 'react-native-ble-plx';
 
 export type BleAvailability =
@@ -37,6 +38,37 @@ export async function checkBleAvailability(
     default:
       return { state: 'unknown' };
   }
+}
+
+/**
+ * Android 12+ (API 31) requires runtime grants for BLUETOOTH_SCAN and
+ * BLUETOOTH_CONNECT. Older Android (≤ 11) needs ACCESS_FINE_LOCATION because
+ * BLE scan results can leak location. iOS handles permission prompts inside
+ * react-native-ble-plx via the Info.plist strings, so this is a no-op there.
+ *
+ * Returns true when all required runtime permissions are granted. The caller
+ * (Pair screen) should refuse to start scanning when this returns false and
+ * surface a "open settings" button via openSettingsForBluetooth().
+ */
+export async function requestAndroidBlePermissions(): Promise<boolean> {
+  if (Platform.OS !== 'android') return true;
+  const apiLevel =
+    typeof Platform.Version === 'number'
+      ? Platform.Version
+      : parseInt(String(Platform.Version), 10);
+
+  const required: Permission[] =
+    apiLevel >= 31
+      ? [
+          PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
+          PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
+        ]
+      : [PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION];
+
+  const granted = await PermissionsAndroid.requestMultiple(required);
+  return required.every(
+    (p) => granted[p] === PermissionsAndroid.RESULTS.GRANTED,
+  );
 }
 
 /**
