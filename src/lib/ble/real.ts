@@ -235,15 +235,28 @@ export const realBleClient: BleClient = {
       if (__DEV__) console.warn('[ble/real] scan called with no BleManager');
       return () => {};
     }
-    manager.startDeviceScan([NEUREX_SERVICE_UUID], null, (error, device) => {
+    // Scan ALL advertisers (UUID filter passed as null) and match by name
+    // client-side. Reason: the firmware's 31-byte advertising packet can't
+    // hold the 128-bit service UUID alongside the "Neurex-EEG" name and
+    // flags (would overflow by 2 B). Until the firmware moves the UUID
+    // into a scan response, OS-level UUID filtering returns nothing.
+    //
+    // Client-side matching still excludes earbuds/phones/watches/etc —
+    // the user only sees Neurex headbands in the Pair UI.
+    const seen = new Set<string>();
+    manager.startDeviceScan(null, null, (error, device) => {
       if (error) {
         if (__DEV__) console.warn('[ble/real] scan error:', error);
         return;
       }
       if (!device) return;
+      const name = device.name ?? device.localName;
+      if (!name || !name.startsWith('Neurex-EEG')) return;
+      if (seen.has(device.id)) return; // dedupe rapid re-discoveries
+      seen.add(device.id);
       onFound({
         deviceId: device.id,
-        serial: device.name ?? device.localName ?? device.id,
+        serial: name,
         rssi: device.rssi ?? -127,
       });
     });
