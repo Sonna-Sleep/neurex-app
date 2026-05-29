@@ -243,7 +243,9 @@ export const realBleClient: BleClient = {
     //
     // Client-side matching still excludes earbuds/phones/watches/etc —
     // the user only sees Neurex headbands in the Pair UI.
-    const seen = new Set<string>();
+    //
+    // No dedupe here: every advertisement fires onFound so the UI can
+    // refresh RSSI for ranking when multiple headbands are in range.
     manager.startDeviceScan(null, null, (error, device) => {
       if (error) {
         if (__DEV__) console.warn('[ble/real] scan error:', error);
@@ -252,8 +254,6 @@ export const realBleClient: BleClient = {
       if (!device) return;
       const name = device.name ?? device.localName;
       if (!name || !name.startsWith('Neurex-EEG')) return;
-      if (seen.has(device.id)) return; // dedupe rapid re-discoveries
-      seen.add(device.id);
       onFound({
         deviceId: device.id,
         serial: name,
