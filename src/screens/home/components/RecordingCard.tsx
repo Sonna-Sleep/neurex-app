@@ -4,7 +4,7 @@
 // upload pipeline once the user stops.
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, StyleSheet, Text, View } from 'react-native';
 
 import { Button } from '../../../components/Button';
 import { Card } from '../../../components/Card';
@@ -14,12 +14,15 @@ import { useSession } from '../../../state/session';
 import { startSession, stopSession } from '../../../lib/ble/streamController';
 import { uploadRecording } from '../../../lib/upload/uploadRecording';
 import { EEG_SAMPLE_RATE_HZ } from '../../../lib/ble/constants';
+import { SignalPreview } from './SignalPreview';
 
 export function RecordingCard() {
   const streaming = useSession((s) => s.streaming);
   const pairedDeviceId = useSession((s) => s.pairedDeviceId);
   const pairedSerial = useSession((s) => s.pairedSerial);
+  const setPaired = useSession((s) => s.setPaired);
   const setProcessingSessionId = useSession((s) => s.setProcessingSessionId);
+  const deviceBattery = useSession((s) => s.deviceBattery);
 
   const [busy, setBusy] = useState<'idle' | 'starting' | 'stopping'>('idle');
   const [error, setError] = useState<string | null>(null);
@@ -47,6 +50,21 @@ export function RecordingCard() {
       setBusy('idle');
     }
   }, [pairedDeviceId]);
+
+  const onUnpair = useCallback(() => {
+    Alert.alert(
+      'Forget this headband?',
+      `${pairedSerial ?? 'The paired headband'} will be removed. You can pair again from Home.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Forget',
+          style: 'destructive',
+          onPress: () => setPaired(null),
+        },
+      ],
+    );
+  }, [pairedSerial, setPaired]);
 
   const onStop = useCallback(async () => {
     setBusy('stopping');
@@ -99,6 +117,10 @@ export function RecordingCard() {
               hint={`target ${EEG_SAMPLE_RATE_HZ}`}
             />
             <Stat label="drops" value={`${streaming.drops}`} hint={`${lossPct}%`} />
+            <Stat
+              label="battery"
+              value={deviceBattery !== null ? `${deviceBattery}%` : '—'}
+            />
           </View>
 
           {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -131,6 +153,8 @@ export function RecordingCard() {
           onPress={onStart}
           loading={busy === 'starting'}
         />
+        {pairedDeviceId ? <SignalPreview deviceId={pairedDeviceId} /> : null}
+        <Button label="unpair" variant="ghost" onPress={onUnpair} />
       </Card>
     </View>
   );

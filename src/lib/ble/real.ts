@@ -19,7 +19,10 @@ import { File, Directory, Paths } from 'expo-file-system';
 import type { Subscription } from 'react-native-ble-plx';
 
 import { getBleManager } from './manager';
+import { useSession } from '../../state/session';
 import {
+  BATTERY_LEVEL_CHAR_UUID,
+  BATTERY_SERVICE_UUID,
   BYTES_PER_FRAME,
   CH_EOG_L,
   CH_EOG_R,
@@ -45,6 +48,8 @@ import type {
   EegSample,
   FoundDevice,
   ParsedPacket,
+  PreviewCallbacks,
+  PreviewHandle,
   StreamCallbacks,
   StreamHandle,
   StreamStats,
@@ -276,6 +281,39 @@ export const realBleClient: BleClient = {
     });
     await device.discoverAllServicesAndCharacteristics();
 
+    // Subscribe to the standard Battery Service. Firmware notifies every
+    // ~5 s; we mirror straight into the Zustand session store so the
+    // StatusPill and RecordingCard tick live without prop drilling. Read
+    // once upfront so the UI shows a value before the first notify lands.
+    const pushBattery = (b64?: string | null) => {
+      if (!b64) return;
+      const bin =
+        typeof (globalThis as { atob?: (s: string) => string }).atob === 'function'
+          ? (globalThis as { atob: (s: string) => string }).atob(b64)
+          : '';
+      if (bin.length === 0) return;
+      const pct = bin.charCodeAt(0);
+      if (pct >= 0 && pct <= 100) useSession.getState().setDeviceBattery(pct);
+    };
+    device
+      .readCharacteristicForService(BATTERY_SERVICE_UUID, BATTERY_LEVEL_CHAR_UUID)
+      .then((c) => pushBattery(c?.value))
+      .catch((e) => {
+        if (__DEV__) console.warn('[ble/real] battery read failed:', e);
+      });
+    const batterySub = manager.monitorCharacteristicForDevice(
+      deviceId,
+      BATTERY_SERVICE_UUID,
+      BATTERY_LEVEL_CHAR_UUID,
+      (error, characteristic) => {
+        if (error) {
+          if (__DEV__) console.warn('[ble/real] battery monitor:', error);
+          return;
+        }
+        pushBattery(characteristic?.value);
+      },
+    );
+
     return {
       deviceId,
 
@@ -383,7 +421,53 @@ export const realBleClient: BleClient = {
         };
       },
 
+      async startPreview(cb: PreviewCallbacks): Promise<PreviewHandle> {
+        let stopped = false;
+        let generation = 0;
+        let lastSeq: number | null = null;
+        const sub = manager.monitorCharacteristicForDevice(
+          deviceId,
+          NEUREX_SERVICE_UUID,
+          NEUREX_EEG_NOTIFY_UUID,
+          (error, characteristic) => {
+            if (stopped) return;
+            if (error) {
+              cb.onError?.(error as unknown as Error);
+              return;
+            }
+            const b64 = characteristic?.value;
+            if (!b64) return;
+            const bytes = b64ToBytes(b64);
+            const result = parsePacket(bytes, generation);
+            if (!result.ok) return;
+            const pkt = result.packet;
+            if (lastSeq !== null && pkt.seq < lastSeq) {
+              generation++;
+              pkt.generation = generation;
+            }
+            lastSeq = pkt.seq;
+            cb.onPacket(pkt);
+          },
+        );
+        return {
+          async stop(): Promise<void> {
+            stopped = true;
+            try {
+              sub.remove();
+            } catch {
+              /* ignore */
+            }
+          },
+        };
+      },
+
       async disconnect() {
+        try {
+          batterySub.remove();
+        } catch {
+          /* ignore */
+        }
+        useSession.getState().setDeviceBattery(null);
         await manager.cancelDeviceConnection(deviceId).catch(() => undefined);
       },
     };

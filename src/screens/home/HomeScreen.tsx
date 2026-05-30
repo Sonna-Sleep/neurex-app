@@ -37,6 +37,7 @@ export function HomeScreen() {
   const processingSessionId = useSession((s) => s.processingSessionId);
   const streaming = useSession((s) => s.streaming);
   const pairedDeviceId = useSession((s) => s.pairedDeviceId);
+  const deviceBattery = useSession((s) => s.deviceBattery);
 
   const load = useCallback(async () => {
     const [s, d] = await Promise.all([
@@ -70,7 +71,9 @@ export function HomeScreen() {
       <View style={styles.topBar}>
         <Logo height={32} />
         <View style={styles.topBarRight}>
-          <StatusPill battery={device?.battery ?? null} />
+          {/* Live BLE battery wins; falls back to the persisted repo value
+              (e.g. last-known on cold start before a connection is made). */}
+          <StatusPill battery={deviceBattery ?? device?.battery ?? null} />
         </View>
       </View>
 

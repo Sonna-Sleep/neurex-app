@@ -62,10 +62,27 @@ export type StreamHandle = {
   stop(): Promise<StreamStats>;
 };
 
+/** Lightweight preview handle — same notify stream as startStream but
+ * NO file I/O. Used by the Home signal-quality preview before a real
+ * recording starts. */
+export type PreviewHandle = {
+  stop(): Promise<void>;
+};
+
+export type PreviewCallbacks = {
+  /** Fired for each well-formed packet. Stats are not aggregated. */
+  onPacket: (packet: ParsedPacket) => void;
+  /** Fatal stream error. */
+  onError?: (err: Error) => void;
+};
+
 export type ConnectedDevice = {
   deviceId: string;
   /** Subscribe to the notify characteristic and start writing samples to disk. */
   startStream(sessionId: string, cb: StreamCallbacks): Promise<StreamHandle>;
+  /** Subscribe to the notify characteristic for live signal preview.
+   * Does NOT write to disk — caller drives whatever UI/analysis it wants. */
+  startPreview(cb: PreviewCallbacks): Promise<PreviewHandle>;
   disconnect(): Promise<void>;
 };
 

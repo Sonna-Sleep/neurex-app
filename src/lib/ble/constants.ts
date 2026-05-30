@@ -23,6 +23,12 @@ export const NEUREX_DEVICE_LOCAL_NAME = 'Neurex-EEG';
 // Phase B will fill this in once firmware Plan 02 Section A lands.
 export const NEUREX_ACK_WRITE_UUID: string | null = null;
 
+// Standard Bluetooth SIG-assigned UUIDs for the Battery Service. The
+// firmware exposes a single Battery Level characteristic (0-100, uint8)
+// with READ + NOTIFY. ble-plx requires the 128-bit form for monitor.
+export const BATTERY_SERVICE_UUID = '0000180f-0000-1000-8000-00805f9b34fb';
+export const BATTERY_LEVEL_CHAR_UUID = '00002a19-0000-1000-8000-00805f9b34fb';
+
 /**
  * iOS Core Bluetooth state-preservation identifier. Used as the
  * `restoreStateIdentifier` option when constructing BleManager.

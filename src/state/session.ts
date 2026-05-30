@@ -45,6 +45,9 @@ type SessionState = {
   processingSessionId: string | null;
   // Live stream state for the in-progress recording. null when idle. Transient.
   streaming: Streaming | null;
+  // Live battery % from the paired headband (notified via BLE Battery Service).
+  // null while disconnected or before the first notify. Transient.
+  deviceBattery: number | null;
   setAuth: (user: User | null) => void;
   setPaired: (serial: string | null, deviceId?: string | null) => void;
   completeOnboarding: () => void;
@@ -52,6 +55,7 @@ type SessionState = {
   setProcessingSessionId: (id: string | null) => void;
   setStreaming: (s: Streaming | null) => void;
   patchStreaming: (patch: Partial<Streaming>) => void;
+  setDeviceBattery: (pct: number | null) => void;
 };
 
 export const useSession = create<SessionState>()(
@@ -66,6 +70,7 @@ export const useSession = create<SessionState>()(
       authReady: false,
       processingSessionId: null,
       streaming: null,
+      deviceBattery: null,
 
       setAuth: (user) =>
         set(() => ({
@@ -82,6 +87,9 @@ export const useSession = create<SessionState>()(
           ...(deviceId !== undefined || serial === null
             ? { pairedDeviceId: serial === null ? null : deviceId ?? null }
             : {}),
+          // Forget last-known battery when unpairing so the StatusPill
+          // doesn't keep showing a stale percent for a device that's gone.
+          ...(serial === null ? { deviceBattery: null } : {}),
         });
       },
 
@@ -97,6 +105,7 @@ export const useSession = create<SessionState>()(
           onboardingComplete: false,
           processingSessionId: null,
           streaming: null,
+          deviceBattery: null,
         });
       },
 
@@ -108,6 +117,8 @@ export const useSession = create<SessionState>()(
         set((state) =>
           state.streaming ? { streaming: { ...state.streaming, ...patch } } : {},
         ),
+
+      setDeviceBattery: (pct) => set({ deviceBattery: pct }),
     }),
     {
       name: 'neurex-session',
