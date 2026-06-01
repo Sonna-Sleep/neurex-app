@@ -1,10 +1,16 @@
 // Live-recording card on Home. Shows the in-progress stream when one is
 // active, otherwise renders a "Start session" CTA when a device is paired.
-// Owns the start/stop orchestration via streamController + triggers the
-// upload pipeline once the user stops.
+// Owns the start/stop orchestration via streamController.
+//
+// 2026-06-01: LOCAL-ONLY recording for the Android full-night test. On stop
+// the raw EEG.BIN / EOG.BIN stay on the phone (no cloud upload); the user
+// gets a "share recording" button to pull the files off in the morning
+// (Drive / email / USB). Cloud upload was removed from this flow.
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, StyleSheet, Text, View } from 'react-native';
+import * as Sharing from 'expo-sharing';
+import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 
 import { Button } from '../../../components/Button';
 import { Card } from '../../../components/Card';
@@ -12,20 +18,28 @@ import { Body, Eyebrow, SerifHeadline, Secondary } from '../../../theme/typograp
 import { colors, spacing, typeScale } from '../../../theme/tokens';
 import { useSession } from '../../../state/session';
 import { startSession, stopSession } from '../../../lib/ble/streamController';
-import { uploadRecording } from '../../../lib/upload/uploadRecording';
 import { EEG_SAMPLE_RATE_HZ } from '../../../lib/ble/constants';
 import { SignalPreview } from './SignalPreview';
+
+// Holds the just-finished local recording so the UI can offer a share button.
+type SavedRecording = {
+  sessionId: string;
+  eegUri: string;
+  eogUri: string;
+  samples: number;
+  durationSec: number;
+};
 
 export function RecordingCard() {
   const streaming = useSession((s) => s.streaming);
   const pairedDeviceId = useSession((s) => s.pairedDeviceId);
   const pairedSerial = useSession((s) => s.pairedSerial);
   const setPaired = useSession((s) => s.setPaired);
-  const setProcessingSessionId = useSession((s) => s.setProcessingSessionId);
   const deviceBattery = useSession((s) => s.deviceBattery);
 
   const [busy, setBusy] = useState<'idle' | 'starting' | 'stopping'>('idle');
   const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState<SavedRecording | null>(null);
   // Re-render once per second so the elapsed timer ticks even when no
   // packet arrives. Reading Date.now() inside render gives us live time.
   const [, setTick] = useState(0);
@@ -33,6 +47,18 @@ export function RecordingCard() {
     if (!streaming) return;
     const t = setInterval(() => setTick((n) => n + 1), 1000);
     return () => clearInterval(t);
+  }, [streaming]);
+
+  // Keep the screen/CPU awake for the whole recording so Android doesn't
+  // suspend JS + BLE mid-night. Released when the session ends. (Belt-and-
+  // suspenders with the user keeping the phone plugged in / on.)
+  useEffect(() => {
+    if (!streaming) return;
+    const tag = 'neurex-recording';
+    activateKeepAwakeAsync(tag).catch(() => undefined);
+    return () => {
+      deactivateKeepAwake(tag).catch(() => undefined);
+    };
   }, [streaming]);
 
   const onStart = useCallback(async () => {
@@ -72,21 +98,43 @@ export function RecordingCard() {
     try {
       const result = await stopSession();
       if (!result) return;
-      // Kick the upload. The Modal endpoint returns a server-assigned
-      // session_id; we route the Home screen to its Processing state via
-      // setProcessingSessionId so the user sees "Analyzing your night".
-      const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const upload = await uploadRecording({
-        eeg: { uri: result.eegUri, name: `${stamp}_EEG.BIN` },
-        eog: { uri: result.eogUri, name: `${stamp}_EOG.BIN` },
+      // LOCAL-ONLY: no cloud upload. The raw EEG.BIN / EOG.BIN are already
+      // written to the phone (documentDirectory/sessions/<id>/) and persist
+      // across app restarts — safe for an overnight. Surface a share button
+      // so the files can be pulled off in the morning.
+      const elapsedSec =
+        streaming != null
+          ? Math.max(0, Math.floor((Date.now() - streaming.startedAtMs) / 1000))
+          : 0;
+      setSaved({
+        sessionId: result.sessionId,
+        eegUri: result.eegUri,
+        eogUri: result.eogUri,
+        samples: result.stats.samples,
+        durationSec: elapsedSec,
       });
-      setProcessingSessionId(upload.sessionId);
     } catch (e) {
       setError((e as Error).message);
     } finally {
       setBusy('idle');
     }
-  }, [setProcessingSessionId]);
+  }, [streaming]);
+
+  const onShare = useCallback(async (uri: string) => {
+    try {
+      if (!(await Sharing.isAvailableAsync())) {
+        setError('Sharing is not available on this device.');
+        return;
+      }
+      // Share one file at a time (Android share sheet → Drive / email / USB).
+      await Sharing.shareAsync(uri, {
+        mimeType: 'application/octet-stream',
+        dialogTitle: 'Export recording',
+      });
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }, []);
 
   // ── Active recording ─────────────────────────────────────────────────────
   if (streaming) {
@@ -130,6 +178,41 @@ export function RecordingCard() {
             variant="ghost"
             onPress={onStop}
             loading={busy === 'stopping'}
+          />
+        </Card>
+      </View>
+    );
+  }
+
+  // ── Just-finished local recording (saved on phone, offer share) ─────────
+  if (saved) {
+    const mins = Math.floor(saved.durationSec / 60);
+    const secs = saved.durationSec % 60;
+    return (
+      <View style={styles.wrap}>
+        <Eyebrow>recording · saved on phone</Eyebrow>
+        <Card style={styles.card}>
+          <SerifHeadline>Saved to this phone</SerifHeadline>
+          <Body style={styles.subtext}>
+            {saved.samples.toLocaleString()} samples
+            {saved.durationSec > 0 ? ` · ${mins}m ${secs}s` : ''}. Raw EEG/EOG
+            are stored on the device. Share them to Drive, email, or USB to pull
+            the night off in the morning.
+          </Body>
+          {error ? <Text style={styles.error}>{error}</Text> : null}
+          <Button label="share EEG.BIN" onPress={() => onShare(saved.eegUri)} />
+          <Button
+            label="share EOG.BIN"
+            variant="ghost"
+            onPress={() => onShare(saved.eogUri)}
+          />
+          <Button
+            label="done"
+            variant="ghost"
+            onPress={() => {
+              setSaved(null);
+              setError(null);
+            }}
           />
         </Card>
       </View>

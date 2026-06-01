@@ -82,6 +82,7 @@ export async function startSession(deviceId: string): Promise<{ sessionId: strin
 
 export type StopResult = {
   sessionId: string;
+  sessionDir: string;
   eegUri: string;
   eogUri: string;
   stats: StreamStats;
@@ -100,6 +101,7 @@ export async function stopSession(): Promise<StopResult | null> {
 
   return {
     sessionId: session.sessionId,
+    sessionDir: session.handle.sessionDir,
     eegUri: session.handle.eegUri,
     eogUri: session.handle.eogUri,
     stats,
