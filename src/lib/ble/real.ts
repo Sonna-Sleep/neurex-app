@@ -29,6 +29,8 @@ import {
   CH_FPZ,
   EEG_SAMPLE_INTERVAL_MS,
   EEG_UV_PER_LSB,
+  NEUREX_ACK_INTERVAL_MS,
+  NEUREX_ACK_WRITE_UUID,
   NEUREX_EEG_NOTIFY_UUID,
   NEUREX_SERVICE_UUID,
   PACKET_END_HI,
@@ -91,6 +93,83 @@ function manualAtob(b64: string): string {
 function i24be(bytes: Uint8Array, offset: number): number {
   const v = (bytes[offset] << 16) | (bytes[offset + 1] << 8) | bytes[offset + 2];
   return v & 0x800000 ? v - 0x1000000 : v;
+}
+
+// ble-plx writes characteristic values as base64. The ACK payload is 2 bytes
+// {gen, seq}; encode without pulling in a Buffer polyfill.
+function bytesToB64(bytes: Uint8Array): string {
+  const g = globalThis as { btoa?: (s: string) => string };
+  let bin = '';
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  if (typeof g.btoa === 'function') return g.btoa(bin);
+  return manualBtoa(bytes);
+}
+
+function manualBtoa(bytes: Uint8Array): string {
+  let out = '';
+  for (let i = 0; i < bytes.length; i += 3) {
+    const b0 = bytes[i];
+    const b1 = i + 1 < bytes.length ? bytes[i + 1] : 0;
+    const b2 = i + 2 < bytes.length ? bytes[i + 2] : 0;
+    const triple = (b0 << 16) | (b1 << 8) | b2;
+    out += B64_ALPHABET[(triple >> 18) & 0x3f];
+    out += B64_ALPHABET[(triple >> 12) & 0x3f];
+    out += i + 1 < bytes.length ? B64_ALPHABET[(triple >> 6) & 0x3f] : '=';
+    out += i + 2 < bytes.length ? B64_ALPHABET[triple & 0x3f] : '=';
+  }
+  return out;
+}
+
+// ── ACK contiguous-frontier tracker (Plan 02) ───────────────────────────────
+//
+// Mirrors the Recorder contig logic in tools/capture/ble_stream_recv.py. The
+// firmware frees ring/flash slots only up to the (gen, seq) we ACK, and ONLY
+// the last *contiguous* packet may be ACKed — ACKing past a gap would free
+// packets we never stitched, defeating the replay-on-reconnect guarantee.
+//
+// gen is the receiver's observed generation: bumped on every 0xFF→0x00 seq
+// transition, exactly as the firmware producer bumps it. contig advances only
+// on an exact +1 from the current frontier; a gap parks it until the missing
+// packet arrives (via firmware replay), then it walks forward again.
+class ContigTracker {
+  private lastSeq: number | null = null;
+  private obsGen = 0;
+  private contigGen = 0;
+  private contigSeq = 0;
+  private valid = false;
+  private dirty = false;
+
+  // Feed every VALID packet's seq (checksum + markers already verified).
+  feed(seq: number): void {
+    if (this.lastSeq !== null && this.lastSeq === 0xff && seq === 0x00) {
+      this.obsGen = (this.obsGen + 1) & 0xff;
+    }
+    this.lastSeq = seq;
+
+    if (!this.valid) {
+      this.contigGen = this.obsGen;
+      this.contigSeq = seq;
+      this.valid = true;
+      this.dirty = true;
+      return;
+    }
+    const expectedSeq = (this.contigSeq + 1) & 0xff;
+    const expectedGen =
+      this.contigSeq === 0xff ? (this.contigGen + 1) & 0xff : this.contigGen;
+    if (seq === expectedSeq && this.obsGen === expectedGen) {
+      this.contigGen = expectedGen;
+      this.contigSeq = expectedSeq;
+      this.dirty = true;
+    }
+  }
+
+  // Returns the 2-byte {gen, seq} ACK payload if the frontier advanced since
+  // the last call, else null (so the ACK loop can debounce idle writes).
+  takeAck(): Uint8Array | null {
+    if (!this.valid || !this.dirty) return null;
+    this.dirty = false;
+    return new Uint8Array([this.contigGen, this.contigSeq]);
+  }
 }
 
 function u32be(bytes: Uint8Array, offset: number): number {
@@ -241,13 +320,13 @@ export const realBleClient: BleClient = {
       return () => {};
     }
     // Scan ALL advertisers (UUID filter passed as null) and match by name
-    // client-side. Reason: the firmware's 31-byte advertising packet can't
-    // hold the 128-bit service UUID alongside the "Neurex-EEG" name and
-    // flags (would overflow by 2 B). Until the firmware moves the UUID
-    // into a scan response, OS-level UUID filtering returns nothing.
-    //
-    // Client-side matching still excludes earbuds/phones/watches/etc —
-    // the user only sees Neurex headbands in the Pair UI.
+    // client-side. The 128-bit service UUID doesn't fit the 31-byte
+    // advertising packet alongside the "Neurex-EEG" name + flags, so the
+    // firmware puts the UUID in the SCAN RESPONSE instead (so iOS background
+    // discovery still works). Android foreground scanning here matches the
+    // name in the advertising packet — simpler than a two-packet UUID filter
+    // and still excludes earbuds/phones/watches/etc, so the user only sees
+    // Neurex headbands in the Pair UI.
     //
     // No dedupe here: every advertisement fires onFound so the UI can
     // refresh RSSI for ranking when multiple headbands are in range.
@@ -340,6 +419,33 @@ export const realBleClient: BleClient = {
         let stopped = false;
         let subscription: Subscription | null = null;
 
+        // Plan 02 ACK: track the contiguous frontier and write it to the
+        // firmware every NEUREX_ACK_INTERVAL_MS so the device frees only
+        // delivered packets and replays the rest on reconnect.
+        const contig = new ContigTracker();
+        let ackInFlight = false;
+        const ackTimer = setInterval(() => {
+          if (stopped || ackInFlight) return;
+          const payload = contig.takeAck();
+          if (!payload) return;
+          ackInFlight = true;
+          manager
+            .writeCharacteristicWithoutResponseForDevice(
+              deviceId,
+              NEUREX_SERVICE_UUID,
+              NEUREX_ACK_WRITE_UUID,
+              bytesToB64(payload),
+            )
+            .catch((e) => {
+              // Transient (mid-disconnect). The frontier stays put; next
+              // advance re-marks dirty and we retry on the following tick.
+              if (__DEV__) console.warn('[ble/real] ack write failed:', e);
+            })
+            .finally(() => {
+              ackInFlight = false;
+            });
+        }, NEUREX_ACK_INTERVAL_MS);
+
         const onValue = (
           error: unknown,
           characteristic: { value?: string | null } | null,
@@ -377,6 +483,10 @@ export const realBleClient: BleClient = {
           stats.packets++;
           stats.samples += SAMPLES_PER_PACKET;
 
+          // Advance the ACK frontier (only over in-order packets — the
+          // tracker parks on a gap until firmware replay fills it).
+          contig.feed(pkt.seq);
+
           try {
             eeg.appendChunk(encodePacketEeg(pkt));
             eog.appendChunk(encodePacketEog(pkt));
@@ -401,6 +511,7 @@ export const realBleClient: BleClient = {
           async stop(): Promise<StreamStats> {
             if (stopped) return stats;
             stopped = true;
+            clearInterval(ackTimer);
             try {
               subscription?.remove();
             } catch {

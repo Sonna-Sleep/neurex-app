@@ -20,8 +20,17 @@ export const NEUREX_EEG_NOTIFY_UUID = '6e6b0000-1000-8000-0078-65726e6b0002';
 // the name as a human-readable fallback for the "found device" display.
 export const NEUREX_DEVICE_LOCAL_NAME = 'Neurex-EEG';
 
-// Phase B will fill this in once firmware Plan 02 Section A lands.
-export const NEUREX_ACK_WRITE_UUID: string | null = null;
+// Plan 02 ACK characteristic (write-no-response, 2 bytes {gen, seq}). The
+// phone writes its last contiguous (generation, seq) frontier here so the
+// firmware ring/flash tiers only free packets we've actually stitched in
+// order — this is what makes a full overnight survive BLE disconnects.
+// Same 6e6b… family as the service/notify UUIDs; firmware UUID is 6e6b0003.
+export const NEUREX_ACK_WRITE_UUID = '6e6b0000-1000-8000-0078-65726e6b0003';
+
+// How often the ACK loop writes the contiguous frontier. Firmware just needs
+// SOMETHING periodic to drain the ring, not a per-packet ACK. Matches
+// ACK_INTERVAL_S in tools/capture/ble_stream_recv.py.
+export const NEUREX_ACK_INTERVAL_MS = 250;
 
 // Standard Bluetooth SIG-assigned UUIDs for the Battery Service. The
 // firmware exposes a single Battery Level characteristic (0-100, uint8)
