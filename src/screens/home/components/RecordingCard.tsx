@@ -145,15 +145,26 @@ export function RecordingCard() {
       streaming.packets + streaming.drops > 0
         ? Math.round((streaming.drops / (streaming.packets + streaming.drops)) * 100)
         : 0;
+    const connLabel =
+      streaming.connection === 'connected'
+        ? 'connected'
+        : streaming.connection === 'reconnecting'
+          ? 'reconnecting…'
+          : 'connection lost';
+    const isReconnecting = streaming.connection === 'reconnecting';
     return (
       <View style={styles.wrap}>
-        <Eyebrow>recording · {streaming.connection}</Eyebrow>
+        <Eyebrow>recording · {connLabel}</Eyebrow>
         <Card style={styles.card}>
           <View style={styles.row}>
             <ActivityIndicator color={colors.textSecondary} />
             <View style={styles.titleCol}>
               <SerifHeadline>Streaming from {pairedSerial ?? 'headband'}</SerifHeadline>
-              <Body style={styles.subtext}>{formatElapsed(elapsedSec)} elapsed</Body>
+              <Body style={styles.subtext}>
+                {isReconnecting
+                  ? 'Reconnecting to your headband…'
+                  : `${formatElapsed(elapsedSec)} elapsed`}
+              </Body>
             </View>
           </View>
 
