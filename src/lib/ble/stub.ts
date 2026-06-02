@@ -84,7 +84,7 @@ export const stubBleClient: BleClient = {
     return {
       deviceId,
 
-      async startStream(sessionId, cb: StreamCallbacks): Promise<StreamHandle> {
+      async startStream(sessionId, cb: StreamCallbacks, _opts?: import('./types').StreamResumeOpts): Promise<StreamHandle> {
         const sessionsDir = new Directory(Paths.document, 'sessions');
         if (!sessionsDir.exists) sessionsDir.create({ intermediates: true });
         const sessionDir = new Directory(sessionsDir, sessionId);
@@ -97,8 +97,10 @@ export const stubBleClient: BleClient = {
           packets: 0,
           samples: 0,
           drops: 0,
+          dupSkips: 0,
           lastSeq: null,
           generation: 0,
+          lastBaseMs: null,
         };
         const startedAt = Date.now();
         let stopped = false;

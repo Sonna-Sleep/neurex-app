@@ -399,6 +399,7 @@ export const realBleClient: BleClient = {
       async startStream(
         sessionId: string,
         cb: StreamCallbacks,
+        opts?: import('./types').StreamResumeOpts,
       ): Promise<StreamHandle> {
         // Per-session directory under documents.
         const sessionsDir = new Directory(Paths.document, 'sessions');
@@ -413,8 +414,10 @@ export const realBleClient: BleClient = {
           packets: 0,
           samples: 0,
           drops: 0,
+          dupSkips: 0,
           lastSeq: null,
           generation: 0,
+          lastBaseMs: opts?.resumeFromBaseMs ?? null,
         };
         let stopped = false;
         let subscription: Subscription | null = null;
@@ -467,6 +470,15 @@ export const realBleClient: BleClient = {
           }
           const pkt = result.packet;
 
+          // Resume dedup: firmware replays un-ACKed packets on reconnect.
+          // Drop any whose baseMs we've already written so files stay
+          // monotonic. baseMs is uint32 ms-since-boot — no overnight wrap.
+          if (stats.lastBaseMs !== null && pkt.baseMs <= stats.lastBaseMs) {
+            stats.dupSkips++;
+            cb.onPacket?.(pkt, stats);
+            return;
+          }
+
           // Detect seq wrap → generation bump.
           if (stats.lastSeq !== null) {
             const gap = (pkt.seq - stats.lastSeq - 1) & 0xff;
@@ -482,6 +494,7 @@ export const realBleClient: BleClient = {
           stats.lastSeq = pkt.seq;
           stats.packets++;
           stats.samples += SAMPLES_PER_PACKET;
+          stats.lastBaseMs = pkt.baseMs;
 
           // Advance the ACK frontier (only over in-order packets — the
           // tracker parks on a gap until firmware replay fills it).

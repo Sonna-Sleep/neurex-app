@@ -38,8 +38,10 @@ export async function startSession(deviceId: string): Promise<{ sessionId: strin
     packets: 0,
     samples: 0,
     drops: 0,
+    dupSkips: 0,
     lastSeq: null,
     generation: 0,
+    lastBaseMs: null,
   };
 
   const handle = await device.startStream(sessionId, {

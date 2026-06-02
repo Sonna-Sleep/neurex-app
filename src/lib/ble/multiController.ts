@@ -79,8 +79,10 @@ export async function multiStart(deviceId: string, serial: string): Promise<void
     packets: 0,
     samples: 0,
     drops: 0,
+    dupSkips: 0,
     lastSeq: null,
     generation: 0,
+    lastBaseMs: null,
   };
 
   const handle = await device.startStream(sessionId, {

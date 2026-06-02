@@ -38,8 +38,12 @@ export type StreamStats = {
   samples: number;
   /** Packets dropped due to bad markers / bad checksum / seq gap. */
   drops: number;
+  /** Packets skipped as duplicates on resume (baseMs <= lastBaseMs). */
+  dupSkips: number;
   lastSeq: number | null;
   generation: number;
+  /** Highest packet baseMs written so far — used to dedup on resume. null until first write. */
+  lastBaseMs: number | null;
 };
 
 export type StreamCallbacks = {
@@ -76,10 +80,19 @@ export type PreviewCallbacks = {
   onError?: (err: Error) => void;
 };
 
+export type StreamResumeOpts = {
+  /** On reconnect, drop replayed packets with baseMs <= this value. */
+  resumeFromBaseMs?: number | null;
+};
+
 export type ConnectedDevice = {
   deviceId: string;
   /** Subscribe to the notify characteristic and start writing samples to disk. */
-  startStream(sessionId: string, cb: StreamCallbacks): Promise<StreamHandle>;
+  startStream(
+    sessionId: string,
+    cb: StreamCallbacks,
+    opts?: StreamResumeOpts,
+  ): Promise<StreamHandle>;
   /** Subscribe to the notify characteristic for live signal preview.
    * Does NOT write to disk — caller drives whatever UI/analysis it wants. */
   startPreview(cb: PreviewCallbacks): Promise<PreviewHandle>;
