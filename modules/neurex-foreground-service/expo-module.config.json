@@ -1,0 +1,9 @@
+{
+  "platforms": ["apple", "android", "web"],
+  "apple": {
+    "modules": ["NeurexForegroundServiceModule"]
+  },
+  "android": {
+    "modules": ["expo.modules.neurexforegroundservice.NeurexForegroundServiceModule"]
+  }
+}
