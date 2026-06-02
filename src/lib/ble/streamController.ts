@@ -123,7 +123,9 @@ function registerDisconnectWatch(): void {
   session.disconnectSub = manager.onDeviceDisconnected(session.deviceId, () => {
     if (!active || active.sessionId !== session.sessionId) return;
     if (active.userStopped || active.reconnecting) return;
-    void reconnectLoop();
+    reconnectLoop().catch((e) => {
+      if (__DEV__) console.warn('[stream] reconnect loop crashed', e);
+    });
   });
 }
 
@@ -135,16 +137,32 @@ async function reconnectLoop(): Promise<void> {
   let attempt = 0;
   while (active && !active.userStopped) {
     attempt++;
+    // Snapshot session identity BEFORE any await — stopSession() can null
+    // `active` while we're parked on connect()/startStream().
+    const sessionId = active.sessionId;
+    const deviceId = active.deviceId;
+    const cb = active.cb;
+    const resumeFromBaseMs = active.statsRef.current.lastBaseMs ?? null;
     try {
       // Tear down the dead stream handle before re-subscribing so we don't
       // leak the old characteristic monitor / ACK timer.
       await active.handle.stop().catch(() => undefined);
 
-      const device = await bleClient.connect(active.deviceId);
-      const resumeFromBaseMs = active.statsRef.current.lastBaseMs ?? null;
-      const handle = await device.startStream(active.sessionId, active.cb, {
-        resumeFromBaseMs,
-      });
+      const device = await bleClient.connect(deviceId);
+      // The user may have stopped (or a newer session started) while connect
+      // was in flight — if so, tear down this fresh connection and bail so we
+      // don't orphan a BLE link + battery monitor past stopSession().
+      if (!active || active.userStopped || active.sessionId !== sessionId) {
+        await device.disconnect().catch(() => undefined);
+        return;
+      }
+
+      const handle = await device.startStream(sessionId, cb, { resumeFromBaseMs });
+      if (!active || active.userStopped || active.sessionId !== sessionId) {
+        await handle.stop().catch(() => undefined);
+        await device.disconnect().catch(() => undefined);
+        return;
+      }
 
       active.device = device;
       active.handle = handle;
