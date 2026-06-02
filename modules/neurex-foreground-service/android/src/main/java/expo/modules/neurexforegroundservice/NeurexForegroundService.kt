@@ -36,9 +36,12 @@ class NeurexForegroundService : Service() {
         startInForeground(title, body)
       }
     }
-    // START_STICKY: if the OS kills us under memory pressure, recreate the
-    // service. The JS reconnect watchdog re-establishes the BLE stream.
-    return START_STICKY
+    // START_NOT_STICKY: if the OS kills the process, the RN/JS runtime is gone
+    // and nothing would be writing to disk — a recreated service would show a
+    // "Recording…" notification over a dead recording. Better to stay down than
+    // to lie. (The foreground service + a plugged-in phone overnight is what
+    // prevents the kill in the first place.)
+    return START_NOT_STICKY
   }
 
   private fun startInForeground(title: String, body: String) {
@@ -74,20 +77,25 @@ class NeurexForegroundService : Service() {
   }
 
   private fun buildNotification(title: String, body: String): Notification {
-    // Tapping the notification re-opens the app's launcher activity.
-    val launchIntent = packageManager.getLaunchIntentForPackage(packageName)
-    val contentIntent = PendingIntent.getActivity(
-      this,
-      0,
-      launchIntent,
-      PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-    )
     val builder = Notification.Builder(this, CHANNEL_ID)
       .setContentTitle(title)
       .setContentText(body)
       .setSmallIcon(applicationInfo.icon)
       .setOngoing(true)
-      .setContentIntent(contentIntent)
+    // Tapping the notification re-opens the app's launcher activity. But
+    // getLaunchIntentForPackage can return null, and PendingIntent.getActivity
+    // with a null intent throws — which would crash before startForeground
+    // completes (ANR risk). Only attach the tap action when we have an intent.
+    val launchIntent = packageManager.getLaunchIntentForPackage(packageName)
+    if (launchIntent != null) {
+      val contentIntent = PendingIntent.getActivity(
+        this,
+        0,
+        launchIntent,
+        PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+      )
+      builder.setContentIntent(contentIntent)
+    }
     return builder.build()
   }
 

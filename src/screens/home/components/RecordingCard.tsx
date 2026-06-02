@@ -185,7 +185,7 @@ export function RecordingCard() {
           {error ? <Text style={styles.error}>{error}</Text> : null}
 
           <Button
-            label={busy === 'stopping' ? 'uploading…' : 'stop session'}
+            label={busy === 'stopping' ? 'saving…' : 'stop session'}
             variant="ghost"
             onPress={onStop}
             loading={busy === 'stopping'}
