@@ -23,11 +23,37 @@ import { EEG_SAMPLE_RATE_HZ, EEG_UV_PER_LSB } from '../../../lib/ble/constants';
 const WINDOW_SAMPLES = EEG_SAMPLE_RATE_HZ * 2;
 // ADS1299 clip rail at gain 24, ±4.5 V ref → ±187 mV → ±187000 µV.
 const RAIL_UV = (4.5 / 24) * 1e6;
-// Display dimensions for the SVG plot.
-const PLOT_WIDTH = 320;
-const PLOT_HEIGHT = 80;
-// Vertical scale: ±50 µV is a comfortable EEG window; clip anything beyond.
-const PLOT_RANGE_UV = 50;
+// Display dimensions for the SVG plot. Taller + full-width for a readable wave.
+const PLOT_WIDTH = 320;          // fallback; real width comes from onLayout
+const PLOT_HEIGHT = 150;
+// Display-only smoothing window (samples). A centered moving average over
+// ~13 samples (~50 ms) removes the high-frequency jaggies so the underlying
+// rhythm reads as one clean oscillating wave. THIS IS COSMETIC — it only
+// affects the on-screen preview; the recorded EEG.BIN is always raw/unfiltered.
+const SMOOTH_WIN = 13;
+// Minimum vertical half-range (µV) so a quiet signal doesn't auto-scale into
+// magnified noise. The plot auto-scales above this to fill the height.
+const MIN_HALF_RANGE_UV = 12;
+
+// Centered moving-average smoother for the display wave only.
+function smoothWave(arr: number[], win: number): number[] {
+  const n = arr.length;
+  if (n < win) return arr;
+  const half = Math.floor(win / 2);
+  const out = new Array<number>(n);
+  for (let i = 0; i < n; i++) {
+    let s = 0;
+    let c = 0;
+    for (let j = i - half; j <= i + half; j++) {
+      if (j >= 0 && j < n) {
+        s += arr[j];
+        c++;
+      }
+    }
+    out[i] = s / c;
+  }
+  return out;
+}
 
 type PreviewState = 'idle' | 'connecting' | 'streaming' | 'error';
 
@@ -41,6 +67,8 @@ export function SignalPreview({ deviceId }: Props) {
   const [samples, setSamples] = useState<number[]>([]);
   const [railPct, setRailPct] = useState(0);
   const [humStrength, setHumStrength] = useState(0);
+  // Plot width measured from layout so the wave fills the card edge-to-edge.
+  const [plotW, setPlotW] = useState(PLOT_WIDTH);
 
   const deviceRef = useRef<ConnectedDevice | null>(null);
   const handleRef = useRef<PreviewHandle | null>(null);
@@ -153,14 +181,26 @@ export function SignalPreview({ deviceId }: Props) {
     );
   }
 
-  // streaming or error — render plot + indicators
-  const points = samples
+  // streaming or error — render plot + indicators.
+  // Display pipeline (cosmetic only): smooth → center on mean → auto-scale to
+  // fill the plot height so the oscillation reads as one clean, spacious wave.
+  const wave = smoothWave(samples, SMOOTH_WIN);
+  let mean = 0;
+  for (const v of wave) mean += v;
+  mean = wave.length ? mean / wave.length : 0;
+  let halfRange = MIN_HALF_RANGE_UV;
+  for (const v of wave) {
+    const d = Math.abs(v - mean);
+    if (d > halfRange) halfRange = d;
+  }
+  halfRange *= 1.15; // headroom so peaks don't touch the edges
+  const pad = 8;     // vertical padding inside the plot
+  const usableH = PLOT_HEIGHT - pad * 2;
+  const points = wave
     .map((uV, i) => {
-      const x = (i / Math.max(1, samples.length - 1)) * PLOT_WIDTH;
-      const clamped = Math.max(-PLOT_RANGE_UV, Math.min(PLOT_RANGE_UV, uV));
-      const y =
-        PLOT_HEIGHT / 2 -
-        (clamped / PLOT_RANGE_UV) * (PLOT_HEIGHT / 2);
+      const x = (i / Math.max(1, wave.length - 1)) * plotW;
+      const norm = (uV - mean) / halfRange; // -1..1
+      const y = PLOT_HEIGHT / 2 - norm * (usableH / 2);
       return `${x.toFixed(1)},${y.toFixed(1)}`;
     })
     .join(' ');
@@ -190,22 +230,38 @@ export function SignalPreview({ deviceId }: Props) {
         <Eyebrow>signal preview · fpz</Eyebrow>
         <Secondary style={styles.subtext}>{samples.length} samples</Secondary>
       </View>
-      <View style={styles.plotWrap}>
-        <Svg width={PLOT_WIDTH} height={PLOT_HEIGHT}>
+      <View
+        style={styles.plotWrap}
+        onLayout={(e) => {
+          const w = Math.round(e.nativeEvent.layout.width);
+          if (w > 0 && w !== plotW) setPlotW(w);
+        }}
+      >
+        <Svg width={plotW} height={PLOT_HEIGHT}>
           <Rect
             x={0}
             y={0}
-            width={PLOT_WIDTH}
+            width={plotW}
             height={PLOT_HEIGHT}
             fill={colors.bgSurface}
-            rx={4}
+            rx={6}
           />
-          {samples.length > 1 ? (
+          {/* horizontal midline for reference */}
+          <Polyline
+            points={`0,${PLOT_HEIGHT / 2} ${plotW},${PLOT_HEIGHT / 2}`}
+            fill="none"
+            stroke={colors.textSecondary}
+            strokeWidth={0.5}
+            opacity={0.25}
+          />
+          {wave.length > 1 ? (
             <Polyline
               points={points}
               fill="none"
               stroke={colors.textPrimary}
-              strokeWidth={1.2}
+              strokeWidth={2}
+              strokeLinejoin="round"
+              strokeLinecap="round"
             />
           ) : null}
         </Svg>
@@ -253,7 +309,7 @@ const styles = StyleSheet.create({
     alignItems: 'baseline',
   },
   plotWrap: {
-    alignItems: 'center',
+    alignSelf: 'stretch',
     paddingVertical: spacing.xs,
     borderRadius: radii.small,
   },

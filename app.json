@@ -66,6 +66,12 @@
         "projectId": "fe1a23fd-e318-40fe-82d4-a1c332761c7d"
       }
     },
-    "owner": "aleksas2006"
+    "owner": "aleksas2006",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/fe1a23fd-e318-40fe-82d4-a1c332761c7d"
+    }
   }
 }

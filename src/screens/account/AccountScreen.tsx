@@ -9,6 +9,7 @@ import { useSession } from '../../state/session';
 import { deviceRepo, type Device } from '../../lib/repos';
 import appConfig from '../../../app.json';
 import { DebugSection } from './DebugSection';
+import { DualRecordSection } from './DualRecordSection';
 
 export function AccountScreen() {
   const user = useSession((s) => s.user);
@@ -50,6 +51,8 @@ export function AccountScreen() {
         <Section eyebrow="app">
           <Body style={styles.muted}>version {appConfig.expo.version}</Body>
         </Section>
+
+        <DualRecordSection />
 
         <DebugSection />
 
