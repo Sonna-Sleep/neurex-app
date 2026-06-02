@@ -1,5 +1,12 @@
-import { NativeModule, requireNativeModule } from 'expo';
+import { requireOptionalNativeModule } from 'expo';
 
-declare class NeurexForegroundServiceModule extends NativeModule<{}> {}
+export type NeurexForegroundServiceModule = {
+  start(title: string, body: string): void;
+  stop(): void;
+};
 
-export default requireNativeModule<NeurexForegroundServiceModule>('NeurexForegroundService');
+// requireOptionalNativeModule returns null when the native module isn't
+// present (iOS — module is Android-only; Expo Go; web). Callers must guard.
+export default requireOptionalNativeModule<NeurexForegroundServiceModule>(
+  'NeurexForegroundService',
+);
