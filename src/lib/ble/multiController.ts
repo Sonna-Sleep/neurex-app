@@ -12,6 +12,7 @@
 
 import { bleClient } from './index';
 import { getBleManager } from './manager';
+import { startForegroundService, stopForegroundService } from './foregroundService';
 import type { ConnectedDevice, StreamHandle, StreamStats } from './types';
 
 export type MultiSlot = {
@@ -129,6 +130,11 @@ export async function multiStart(deviceId: string, serial: string): Promise<void
     latest,
     statsTimer,
   });
+
+  // Keep the process alive overnight (screen off / backgrounded) once the first
+  // headband is recording — mirrors the single-device path. Stopped in
+  // multiStop when the last headband stops.
+  if (slots.size === 1) startForegroundService();
 }
 
 export async function multiStop(deviceId: string): Promise<MultiStopResult | null> {
@@ -139,6 +145,10 @@ export async function multiStop(deviceId: string): Promise<MultiStopResult | nul
   clearInterval(slot.statsTimer);
   const stats = await slot.handle.stop();
   await slot.device.disconnect().catch(() => undefined);
+
+  // Last headband stopped → release the foreground service (after its files are
+  // flushed/closed above).
+  if (slots.size === 0) stopForegroundService();
 
   return {
     serial: slot.serial,
