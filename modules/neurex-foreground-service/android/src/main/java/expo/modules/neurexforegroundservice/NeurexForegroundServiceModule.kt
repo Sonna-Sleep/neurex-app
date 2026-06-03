@@ -21,6 +21,11 @@ class NeurexForegroundServiceModule : Module() {
       } else {
         context.startService(intent)
       }
+      // Force a Unit return. startService/startForegroundService return
+      // ComponentName?, which would otherwise make this an Any?-returning
+      // Function and turn the bare `return@Function` guard above into a K2
+      // "return type mismatch" compile error.
+      Unit
     }
 
     Function("stop") {
@@ -29,6 +34,7 @@ class NeurexForegroundServiceModule : Module() {
         action = NeurexForegroundService.ACTION_STOP
       }
       context.startService(intent)
+      Unit // keep this a Unit-returning Function (see note in "start")
     }
   }
 }
