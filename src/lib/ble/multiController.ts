@@ -11,6 +11,7 @@
 // This is a stopgap until the iOS app — keep it simple, no shared state.
 
 import { bleClient } from './index';
+import { getBleManager } from './manager';
 import type { ConnectedDevice, StreamHandle, StreamStats } from './types';
 
 export type MultiSlot = {
@@ -75,6 +76,19 @@ export async function multiStart(deviceId: string, serial: string): Promise<void
   const sessionId = genSessionId(serial);
   const device = await bleClient.connect(deviceId);
 
+  // DUAL-RECORD FIX (2026-06-03): each headband's firmware pins a 7.5 ms
+  // connection interval, and one phone radio can't serve two of them at once —
+  // the 2nd link gets starved and receives zero notifications. Ask the central
+  // for BALANCED priority (~30 ms) so the controller can interleave both links.
+  // The firmware requests its interval once (no re-assert), so this central
+  // relaxation sticks. Single-device recording (streamController) never calls
+  // this, so its full-rate 7.5 ms path is unaffected.
+  try {
+    await getBleManager()?.requestConnectionPriorityForDevice(deviceId, 0 /* Balanced */);
+  } catch (e) {
+    if (__DEV__) console.warn('[multi] requestConnectionPriority failed:', deviceId, e);
+  }
+
   let latest: StreamStats = {
     packets: 0,
     samples: 0,
@@ -92,8 +106,10 @@ export async function multiStart(deviceId: string, serial: string): Promise<void
     onDrop: (_reason, stats) => {
       latest = stats;
     },
-    onError: () => {
-      // Best-effort: keep the slot; the file already on disk is preserved.
+    onError: (err) => {
+      // Surface it (was silently swallowed). The file already on disk is
+      // preserved; this just makes a failing 2nd link visible in the logs.
+      if (__DEV__) console.warn('[multi] stream error:', deviceId, err.message);
     },
   });
 
