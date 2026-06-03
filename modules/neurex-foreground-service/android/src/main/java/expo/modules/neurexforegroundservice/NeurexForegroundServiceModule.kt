@@ -9,32 +9,37 @@ class NeurexForegroundServiceModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("NeurexForegroundService")
 
+    // NOTE: these bodies use `if (context != null) { ... }` rather than an
+    // elvis `?: return@Function` guard ON PURPOSE. The Expo Function DSL types
+    // the body's expected return as Any?, so a bare `return@Function` (which
+    // returns Unit) is a K2 "return type mismatch: expected Any?, actual Unit"
+    // compile error. An if-without-else is always Unit and needs no early
+    // return, so it sidesteps the issue entirely.
+
     Function("start") { title: String, body: String ->
-      val context = appContext.reactContext ?: return@Function
-      val intent = Intent(context, NeurexForegroundService::class.java).apply {
-        action = NeurexForegroundService.ACTION_START
-        putExtra(NeurexForegroundService.EXTRA_TITLE, title)
-        putExtra(NeurexForegroundService.EXTRA_BODY, body)
+      val context = appContext.reactContext
+      if (context != null) {
+        val intent = Intent(context, NeurexForegroundService::class.java).apply {
+          action = NeurexForegroundService.ACTION_START
+          putExtra(NeurexForegroundService.EXTRA_TITLE, title)
+          putExtra(NeurexForegroundService.EXTRA_BODY, body)
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+          context.startForegroundService(intent)
+        } else {
+          context.startService(intent)
+        }
       }
-      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-        context.startForegroundService(intent)
-      } else {
-        context.startService(intent)
-      }
-      // Force a Unit return. startService/startForegroundService return
-      // ComponentName?, which would otherwise make this an Any?-returning
-      // Function and turn the bare `return@Function` guard above into a K2
-      // "return type mismatch" compile error.
-      Unit
     }
 
     Function("stop") {
-      val context = appContext.reactContext ?: return@Function
-      val intent = Intent(context, NeurexForegroundService::class.java).apply {
-        action = NeurexForegroundService.ACTION_STOP
+      val context = appContext.reactContext
+      if (context != null) {
+        val intent = Intent(context, NeurexForegroundService::class.java).apply {
+          action = NeurexForegroundService.ACTION_STOP
+        }
+        context.startService(intent)
       }
-      context.startService(intent)
-      Unit // keep this a Unit-returning Function (see note in "start")
     }
   }
 }
