@@ -56,20 +56,25 @@ export const EEG_UV_PER_LSB = (4.5 / Math.pow(2, 23) / 24) * 1e6;
 // Nominal sample rate from the firmware ADS1299 driver (4 ms per sample).
 export const EEG_SAMPLE_RATE_HZ = 250;
 export const EEG_SAMPLE_INTERVAL_MS = 4;
-export const SAMPLES_PER_PACKET = 4;
+// 2026-06-03: 8 samples/packet (was 4). Full 250 SPS, but HALF the notification
+// rate (~31/s vs 62.5/s) — far less native→JS bridge load, which is what let
+// two headbands stall under dual full-rate. Must match the firmware BLE build's
+// -DSAMPLES_PER_PACKET=8 EXACTLY (it derives PACKET_TOTAL_SIZE the same way).
+export const SAMPLES_PER_PACKET = 8;
 
-// ── Packet layout (118 bytes per notification) ──────────────────────────────
+// ── Packet layout (226 bytes per notification) ──────────────────────────────
 //   [0]    0xAB           start hi
 //   [1]    0xCD           start lo
-//   [2]    seq            uint8, wraps every 256 (~4.1 s at 62.5 packets/s)
+//   [2]    seq            uint8, wraps every 256 (~8.2 s at 31 packets/s)
 //   [3..6] timestamp_ms   uint32 big-endian, ms since boot of first sample
-//   [7..114]              4 × 27-byte frames:
+//   [7..222]              8 × 27-byte frames:
 //                           3 bytes status
 //                           8 channels × 3 bytes int24 big-endian
-//   [115]  checksum       sum(bytes[2..114]) & 0xFF
-//   [116]  0xDC           end hi
-//   [117]  0xBA           end lo
-export const PACKET_SIZE = 118;
+//   [223]  checksum       sum(bytes[2..222]) & 0xFF
+//   [224]  0xDC           end hi
+//   [225]  0xBA           end lo
+//   size = 10 (header+checksum+end) + 8 × 27 = 226.
+export const PACKET_SIZE = 226;
 export const PACKET_START_HI = 0xab;
 export const PACKET_START_LO = 0xcd;
 export const PACKET_END_HI = 0xdc;
@@ -79,7 +84,7 @@ export const PKT_IDX_TS = 3;
 // First sample's channel data starts after start[2] + seq[1] + ts[4] + status[3] = byte 10.
 export const PKT_IDX_DATA = 10;
 export const BYTES_PER_FRAME = 27;
-export const PKT_IDX_CHECKSUM = 115;
+export const PKT_IDX_CHECKSUM = 223; // 7 (header) + 8 × 27 (samples)
 
 // Channel layout (sleep-mask wiring): Fpz = CH1, EOG-L = CH2, EOG-R = CH3.
 export const CH_FPZ = 0;
