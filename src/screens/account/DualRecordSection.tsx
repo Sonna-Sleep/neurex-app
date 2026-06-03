@@ -21,8 +21,10 @@ import {
   multiStop,
   multiSnapshot,
   multiActiveCount,
+  multiActiveSessionIds,
   type MultiStopResult,
 } from '../../lib/ble/multiController';
+import { listRecoverableSessions, type RecoveredSession } from '../../lib/ble/recovery';
 
 const SCAN_MS = 12000;
 const KEEP_AWAKE_TAG = 'neurex-dual-record';
@@ -35,6 +37,7 @@ export function DualRecordSection() {
   const [devices, setDevices] = useState<Record<string, FoundDevice>>({});
   const [active, setActive] = useState<ActiveView[]>([]);
   const [saved, setSaved] = useState<MultiStopResult[]>([]);
+  const [recovered, setRecovered] = useState<RecoveredSession[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const stopScanRef = useRef<(() => void) | null>(null);
@@ -45,6 +48,18 @@ export function DualRecordSection() {
     const t = setInterval(() => setActive(multiSnapshot()), 1000);
     return () => clearInterval(t);
   }, [open]);
+
+  // Safety net: surface any orphaned session (a disconnect/crash left a partial
+  // file the normal stop flow never showed). Re-scan on open and on start/stop.
+  useEffect(() => {
+    if (!open) {
+      setRecovered([]);
+      return;
+    }
+    const exclude = new Set<string>(multiActiveSessionIds());
+    for (const s of saved) exclude.add(s.sessionId);
+    setRecovered(listRecoverableSessions(exclude));
+  }, [open, saved, active.length]);
 
   // Keep-awake whenever at least one device is recording.
   useEffect(() => {
@@ -198,6 +213,26 @@ export function DualRecordSection() {
                     variant="ghost"
                     onPress={() => onShare(s.eogUri)}
                   />
+                </View>
+              </View>
+            ))}
+          </View>
+        ) : null}
+
+        {/* Recovered from a dropped/crashed session (safety net) */}
+        {recovered.length > 0 ? (
+          <View style={styles.savedBlock}>
+            <Eyebrow>recovered · from a dropped session — share to pull off</Eyebrow>
+            {recovered.map((s) => (
+              <View key={s.sessionId} style={styles.savedRow}>
+                <Body style={styles.deviceName}>
+                  {s.serial} · {s.samples.toLocaleString()} samples
+                </Body>
+                <View style={styles.shareRow}>
+                  <Button label="share EEG" onPress={() => onShare(s.eegUri)} />
+                  {s.eogUri ? (
+                    <Button label="EOG" variant="ghost" onPress={() => onShare(s.eogUri!)} />
+                  ) : null}
                 </View>
               </View>
             ))}

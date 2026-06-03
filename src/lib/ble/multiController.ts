@@ -47,6 +47,12 @@ export function multiIsActive(deviceId: string): boolean {
   return slots.has(deviceId);
 }
 
+// Session IDs currently recording — used to exclude live sessions from the
+// orphaned-session recovery scan (see recovery.ts).
+export function multiActiveSessionIds(): Set<string> {
+  return new Set(Array.from(slots.values()).map((s) => s.sessionId));
+}
+
 export function multiSnapshot(): {
   deviceId: string;
   serial: string;
