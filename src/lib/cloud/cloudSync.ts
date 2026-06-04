@@ -74,16 +74,6 @@ async function currentUserId(): Promise<string> {
   return data.user.id;
 }
 
-/** Slice a flat sample stream into segment-sized Uint8Arrays on sample bounds. */
-export function planSegments(total: number, stream: Stream): Array<[number, number]> {
-  const step = segmentBytes(stream);
-  const spans: Array<[number, number]> = [];
-  for (let off = 0; off < total; off += step) {
-    spans.push([off, Math.min(off + step, total)]);
-  }
-  return spans.length ? spans : [[0, 0]];
-}
-
 export type SegmentUploadResult = { stream: Stream; uploaded: number };
 
 /**
@@ -100,22 +90,29 @@ export async function uploadFileAsSegments(
   if (!supabase) throw new NotAuthedError();
   if (!file.exists) return { stream, uploaded: 0 };
 
-  const bytes = await file.bytes();
-  const spans = planSegments(bytes.length, stream);
-  let uploaded = 0;
-
-  for (let i = 0; i < spans.length; i++) {
-    const [start, end] = spans[i];
-    if (end <= start) continue;
-    const chunk = bytes.subarray(start, end);
-    const path = `${prefix}/segments/${stream}/${segName(i)}`;
-    const { error } = await supabase.storage
-      .from(RECORDINGS_BUCKET)
-      .upload(path, chunk, { contentType: 'application/octet-stream', upsert: true });
-    if (error) throw new Error(`segment upload failed (${path}): ${error.message}`);
-    uploaded += 1;
+  // Memory-safe: read one segment-sized chunk at a time through a file handle
+  // (readBytes advances the offset), so an 8-hour night (tens of MB) never sits
+  // in RAM as a single buffer — the old `await file.bytes()` would OOM the JS
+  // engine overnight. Ordered cloud concatenation reproduces the file exactly
+  // regardless of where chunk boundaries fall.
+  const step = segmentBytes(stream);
+  const handle = file.open();
+  let index = 0;
+  try {
+    for (;;) {
+      const chunk = handle.readBytes(step);
+      if (chunk.length === 0) break; // EOF
+      const path = `${prefix}/segments/${stream}/${segName(index)}`;
+      const { error } = await supabase.storage
+        .from(RECORDINGS_BUCKET)
+        .upload(path, chunk, { contentType: 'application/octet-stream', upsert: true });
+      if (error) throw new Error(`segment upload failed (${path}): ${error.message}`);
+      index += 1;
+    }
+  } finally {
+    handle.close();
   }
-  return { stream, uploaded };
+  return { stream, uploaded: index };
 }
 
 export type FinalizeInput = {
