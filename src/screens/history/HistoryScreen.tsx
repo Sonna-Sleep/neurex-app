@@ -145,6 +145,10 @@ function Row({
       : 'Still analyzing — usually under a minute';
   // date · timestamp · length (the per-account organization the user asked for)
   const meta = `${formatTime(session.startMs)} · ${formatLen(session.tib)}`;
+  // Dual-record nights carry the headband tag in their storage folder
+  // (date_time_len_TAG); surface it so two devices on one account are tellable
+  // apart at a glance. null for legacy/uuid-only prefixes.
+  const device = sourceTag(session.storagePrefix);
   const canDownload = Boolean(session.storagePrefix);
 
   const onDownload = useCallback(async () => {
@@ -172,7 +176,10 @@ function Row({
       >
         <View style={styles.rowTop}>
           <View>
-            <Eyebrow>{formatDate(session.startMs)}</Eyebrow>
+            <Eyebrow>
+              {formatDate(session.startMs)}
+              {device ? ` · ${device}` : ''}
+            </Eyebrow>
             <Secondary style={styles.meta}>{meta}</Secondary>
             <Secondary style={styles.meta}>{tstLabel}</Secondary>
           </View>
@@ -211,6 +218,17 @@ function Row({
       ) : null}
     </View>
   );
+}
+
+/** Headband tag from a readable storage prefix ({uid}/date_time_len_TAG).
+ * Returns null for legacy uuid-only prefixes so single recordings stay clean. */
+function sourceTag(prefix: string | null): string | null {
+  if (!prefix) return null;
+  const label = prefix.split('/').pop() ?? '';
+  const parts = label.split('_');
+  if (parts.length < 4) return null; // not the date_time_len_tag shape
+  const tag = parts[parts.length - 1];
+  return tag || null;
 }
 
 function formatDate(ms: number) {
