@@ -7,7 +7,7 @@
 // gets a "share recording" button to pull the files off in the morning
 // (Drive / email / USB). Cloud upload was removed from this flow.
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, StyleSheet, Text, View } from 'react-native';
 import * as Sharing from 'expo-sharing';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
@@ -19,6 +19,8 @@ import { colors, spacing, typeScale } from '../../../theme/tokens';
 import { useSession } from '../../../state/session';
 import { startSession, stopSession } from '../../../lib/ble/streamController';
 import { EEG_SAMPLE_RATE_HZ } from '../../../lib/ble/constants';
+import { transmitSession, subscribeToResult } from '../../../lib/cloud/cloudSync';
+import type { Session } from '../../../lib/repos/types';
 import { SignalPreview } from './SignalPreview';
 
 // Holds the just-finished local recording so the UI can offer a share button.
@@ -40,6 +42,11 @@ export function RecordingCard() {
   const [busy, setBusy] = useState<'idle' | 'starting' | 'stopping'>('idle');
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState<SavedRecording | null>(null);
+  // Cloud sync of the just-finished recording (transmit → analyze → summary).
+  const [sync, setSync] = useState<'idle' | 'uploading' | 'analyzing' | 'done' | 'error'>('idle');
+  const [summary, setSummary] = useState<Session | null>(null);
+  const unsubRef = useRef<(() => void) | null>(null);
+  useEffect(() => () => unsubRef.current?.(), []);
   // Re-render once per second so the elapsed timer ticks even when no
   // packet arrives. Reading Date.now() inside render gives us live time.
   const [, setTick] = useState(0);
@@ -136,6 +143,33 @@ export function RecordingCard() {
     }
   }, []);
 
+  // Ship the just-finished recording to the cloud: upload as segments, finalize
+  // (→ webhook → YASA), delete the local copy, then live-subscribe for the
+  // summary. On failure the local files are kept (transmitSession throws before
+  // deleting), so nothing is lost.
+  const onSyncToCloud = useCallback(async () => {
+    if (!saved || sync === 'uploading' || sync === 'analyzing' || sync === 'done') return;
+    setError(null);
+    setSummary(null);
+    setSync('uploading');
+    try {
+      await transmitSession({
+        sessionId: saved.sessionId,
+        startMs: 0,
+        endMs: saved.durationSec * 1000,
+      });
+      setSync('analyzing');
+      unsubRef.current?.();
+      unsubRef.current = subscribeToResult(saved.sessionId, (s) => {
+        setSummary(s);
+        setSync('done');
+      });
+    } catch (e) {
+      setSync('error');
+      setError((e as Error).message);
+    }
+  }, [saved, sync]);
+
   // ── Active recording ─────────────────────────────────────────────────────
   if (streaming) {
     const elapsedSec = Math.max(0, Math.floor((Date.now() - streaming.startedAtMs) / 1000));
@@ -211,18 +245,43 @@ export function RecordingCard() {
             the night off in the morning.
           </Body>
           {error ? <Text style={styles.error}>{error}</Text> : null}
-          <Button label="share EEG.BIN" onPress={() => onShare(saved.eegUri)} />
+          {sync === 'done' && summary ? (
+            <View style={styles.stats}>
+              <Stat label="score" value={summary.score != null ? `${summary.score}` : '—'} />
+              <Stat label="deep" value={`${Math.round(summary.stageMinutes?.deep ?? 0)}m`} />
+              <Stat label="rem" value={`${Math.round(summary.stageMinutes?.rem ?? 0)}m`} />
+              <Stat label="light" value={`${Math.round(summary.stageMinutes?.light ?? 0)}m`} />
+            </View>
+          ) : null}
+
           <Button
-            label="share EOG.BIN"
-            variant="ghost"
-            onPress={() => onShare(saved.eogUri)}
+            label={
+              sync === 'uploading'
+                ? 'uploading to cloud…'
+                : sync === 'analyzing'
+                  ? 'analyzing in cloud…'
+                  : sync === 'done'
+                    ? 'synced ✓'
+                    : sync === 'error'
+                      ? 'retry cloud sync'
+                      : 'sync to cloud'
+            }
+            onPress={onSyncToCloud}
+            loading={sync === 'uploading' || sync === 'analyzing'}
           />
+
+          <Button label="share EEG.BIN" variant="ghost" onPress={() => onShare(saved.eegUri)} />
+          <Button label="share EOG.BIN" variant="ghost" onPress={() => onShare(saved.eogUri)} />
           <Button
             label="done"
             variant="ghost"
             onPress={() => {
+              unsubRef.current?.();
+              unsubRef.current = null;
               setSaved(null);
               setError(null);
+              setSync('idle');
+              setSummary(null);
             }}
           />
         </Card>
