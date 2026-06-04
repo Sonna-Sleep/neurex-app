@@ -91,8 +91,11 @@ export function Hypnogram({ epochs, startMs, endMs }: Props) {
 
           {/* Stepped stage bands with connectors between level changes */}
           {runs.map((run, i) => {
-            const x1 = xAt(run.startMs);
-            const x2 = xAt(run.startMs + run.durationMs);
+            // Epoch startMs is recording-relative (0-based, written by the
+            // backend), so shift by the absolute session start before mapping —
+            // otherwise bands land ~startMs off-screen and the chart looks empty.
+            const x1 = xAt(startMs + run.startMs);
+            const x2 = xAt(startMs + run.startMs + run.durationMs);
             const next = runs[i + 1];
             return (
               <React.Fragment key={i}>
