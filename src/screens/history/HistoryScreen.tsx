@@ -137,7 +137,7 @@ function Row({
 }) {
   const [dl, setDl] = useState<'idle' | 'busy' | 'err'>('idle');
   const total =
-    STAGE_ORDER.reduce((acc, k) => acc + session.stageMinutes[k], 0) || 1;
+    STAGE_ORDER.reduce((acc, k) => acc + (session.stageMinutes?.[k] ?? 0), 0) || 1;
   const tstLabel = session.tst != null
     ? `${Math.floor(session.tst / 60)}h ${Math.floor(session.tst % 60)}m asleep`
     : session.status === 'failed'
@@ -180,7 +180,7 @@ function Row({
         </View>
         <View style={styles.bar}>
           {STAGE_ORDER.map((stage) => {
-            const flex = session.stageMinutes[stage] / total;
+            const flex = (session.stageMinutes?.[stage] ?? 0) / total;
             if (flex <= 0) return null;
             return (
               <View

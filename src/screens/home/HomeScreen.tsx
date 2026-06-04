@@ -138,7 +138,7 @@ function Results({ session }: { session: Session }) {
         </>
       ) : null}
       <StimImpactCard
-        stimCount={session.stimPulses.length}
+        stimCount={session.stimPulses?.length ?? 0}
         stimImpactPct={session.stimImpactPct}
       />
     </View>
