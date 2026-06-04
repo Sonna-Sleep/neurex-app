@@ -19,6 +19,8 @@ import {
 import { colors, layout, spacing, stageColors, stageOpacity } from '../../theme/tokens';
 import { Skeleton } from '../../components/Skeleton';
 import { sessionRepo, type Session, type SleepStage } from '../../lib/repos';
+import { downloadRaw } from '../../lib/cloud/cloudSync';
+import * as Sharing from 'expo-sharing';
 import { useSession } from '../../state/session';
 import type { HistoryStackParamList } from '../../navigation/types';
 
@@ -133,46 +135,81 @@ function Row({
   session: Session;
   onPress: () => void;
 }) {
+  const [dl, setDl] = useState<'idle' | 'busy' | 'err'>('idle');
   const total =
     STAGE_ORDER.reduce((acc, k) => acc + session.stageMinutes[k], 0) || 1;
   const tstLabel = session.tst != null
-    ? `${Math.floor(session.tst / 60)}h ${Math.floor(session.tst % 60)}m`
-    : 'Still analyzing — usually under a minute';
+    ? `${Math.floor(session.tst / 60)}h ${Math.floor(session.tst % 60)}m asleep`
+    : session.status === 'failed'
+      ? 'Processing failed'
+      : 'Still analyzing — usually under a minute';
+  // date · timestamp · length (the per-account organization the user asked for)
+  const meta = `${formatTime(session.startMs)} · ${formatLen(session.tib)}`;
+  const canDownload = Boolean(session.storagePrefix);
+
+  const onDownload = useCallback(async () => {
+    if (!session.storagePrefix || dl === 'busy') return;
+    setDl('busy');
+    try {
+      const uri = await downloadRaw(session.storagePrefix, 'eeg');
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(uri, {
+          mimeType: 'application/octet-stream',
+          dialogTitle: 'Save / send EEG.BIN',
+        });
+      }
+      setDl('idle');
+    } catch {
+      setDl('err');
+    }
+  }, [session.storagePrefix, dl]);
+
   return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
-    >
-      <View style={styles.rowTop}>
-        <View>
-          <Eyebrow>{formatDate(session.endMs)}</Eyebrow>
-          <Secondary style={styles.meta}>
-            {tstLabel}
-          </Secondary>
+    <View style={styles.row}>
+      <Pressable
+        onPress={onPress}
+        style={({ pressed }) => [pressed && styles.rowPressed]}
+      >
+        <View style={styles.rowTop}>
+          <View>
+            <Eyebrow>{formatDate(session.startMs)}</Eyebrow>
+            <Secondary style={styles.meta}>{meta}</Secondary>
+            <Secondary style={styles.meta}>{tstLabel}</Secondary>
+          </View>
+          <SerifDisplay>{session.score ?? '—'}</SerifDisplay>
         </View>
-        <SerifDisplay>{session.score ?? '—'}</SerifDisplay>
-      </View>
-      <View style={styles.bar}>
-        {STAGE_ORDER.map((stage) => {
-          const flex = session.stageMinutes[stage] / total;
-          if (flex <= 0) return null;
-          return (
-            <View
-              key={stage}
-              style={{
-                flex,
-                // Stage-colored bars (matching the Hypnogram palette) plus
-                // stageOpacity gives both stage identity AND depth ordering.
-                // Replaces the previous all-white bars that wasted the
-                // vivid blue/lavender/grey palette defined in tokens.
-                backgroundColor: stageColors[stage],
-                opacity: stageOpacity[stage],
-              }}
-            />
-          );
-        })}
-      </View>
-    </Pressable>
+        <View style={styles.bar}>
+          {STAGE_ORDER.map((stage) => {
+            const flex = session.stageMinutes[stage] / total;
+            if (flex <= 0) return null;
+            return (
+              <View
+                key={stage}
+                style={{
+                  flex,
+                  backgroundColor: stageColors[stage],
+                  opacity: stageOpacity[stage],
+                }}
+              />
+            );
+          })}
+        </View>
+      </Pressable>
+      {canDownload ? (
+        <Pressable
+          onPress={onDownload}
+          style={({ pressed }) => [styles.dl, pressed && styles.rowPressed]}
+        >
+          <Secondary style={styles.dlText}>
+            {dl === 'busy'
+              ? 'downloading…'
+              : dl === 'err'
+                ? '↓ download raw — failed, tap to retry'
+                : '↓ download raw EEG'}
+          </Secondary>
+        </Pressable>
+      ) : null}
+    </View>
   );
 }
 
@@ -194,6 +231,20 @@ function formatDate(ms: number) {
 
 function stripTime(d: Date) {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+}
+
+function formatTime(ms: number) {
+  return new Date(ms).toLocaleTimeString(undefined, {
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
+function formatLen(minutes: number) {
+  const sec = Math.max(0, Math.round(minutes * 60));
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return m > 0 ? `${m}m ${s}s` : `${s}s`;
 }
 
 const styles = StyleSheet.create({
@@ -249,5 +300,13 @@ const styles = StyleSheet.create({
   },
   body: {
     color: colors.textSecondary,
+  },
+  dl: {
+    alignSelf: 'flex-start',
+    paddingTop: spacing.xs,
+  },
+  dlText: {
+    color: colors.textSecondary,
+    fontSize: 13,
   },
 });

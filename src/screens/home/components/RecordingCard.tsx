@@ -30,6 +30,7 @@ type SavedRecording = {
   eogUri: string;
   samples: number;
   durationSec: number;
+  startedAtMs: number;
 };
 
 export function RecordingCard() {
@@ -113,12 +114,14 @@ export function RecordingCard() {
         streaming != null
           ? Math.max(0, Math.floor((Date.now() - streaming.startedAtMs) / 1000))
           : 0;
+      const startedAtMs = streaming?.startedAtMs ?? Date.now() - elapsedSec * 1000;
       setSaved({
         sessionId: result.sessionId,
         eegUri: result.eegUri,
         eogUri: result.eogUri,
         samples: result.stats.samples,
         durationSec: elapsedSec,
+        startedAtMs,
       });
     } catch (e) {
       setError((e as Error).message);
@@ -155,8 +158,8 @@ export function RecordingCard() {
     try {
       await transmitSession({
         sessionId: saved.sessionId,
-        startMs: 0,
-        endMs: saved.durationSec * 1000,
+        startMs: saved.startedAtMs,
+        endMs: saved.startedAtMs + saved.durationSec * 1000,
       });
       setSync('analyzing');
       unsubRef.current?.();

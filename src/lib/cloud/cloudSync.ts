@@ -41,6 +41,24 @@ function segName(index: number): string {
   return `seg${String(index).padStart(4, '0')}.bin`;
 }
 
+/**
+ * Human-readable, collision-proof storage folder name for a recording:
+ *   2026-06-03_2014_6m1s_3f9ac1   (date _ HHMM _ length _ short-id)
+ * The 6-char id (from the session UUID) guarantees uniqueness even for two
+ * recordings in the same minute; the rest is for the eye when browsing Storage.
+ * Account isolation stays the opaque {user_id} parent folder — no PII in paths.
+ */
+export function readableLabel(sessionId: string, startMs: number, endMs: number): string {
+  const d = new Date(startMs);
+  const p = (n: number) => String(n).padStart(2, '0');
+  const date = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  const time = `${p(d.getHours())}${p(d.getMinutes())}`;
+  const sec = Math.max(0, Math.round((endMs - startMs) / 1000));
+  const len = sec >= 60 ? `${Math.floor(sec / 60)}m${sec % 60}s` : `${sec}s`;
+  const short = sessionId.replace(/-/g, '').slice(0, 6) || 'nodate';
+  return `${date}_${time}_${len}_${short}`;
+}
+
 export class NotAuthedError extends Error {
   constructor() {
     super('not signed in');
@@ -74,7 +92,7 @@ export type SegmentUploadResult = { stream: Stream; uploaded: number };
  * keep the local file and retry later (offline buffering).
  */
 export async function uploadFileAsSegments(
-  sessionId: string,
+  prefix: string,
   stream: Stream,
   file: File,
 ): Promise<SegmentUploadResult> {
@@ -82,7 +100,6 @@ export async function uploadFileAsSegments(
   if (!supabase) throw new NotAuthedError();
   if (!file.exists) return { stream, uploaded: 0 };
 
-  const uid = await currentUserId();
   const bytes = await file.bytes();
   const spans = planSegments(bytes.length, stream);
   let uploaded = 0;
@@ -91,7 +108,7 @@ export async function uploadFileAsSegments(
     const [start, end] = spans[i];
     if (end <= start) continue;
     const chunk = bytes.subarray(start, end);
-    const path = `${uid}/${sessionId}/segments/${stream}/${segName(i)}`;
+    const path = `${prefix}/segments/${stream}/${segName(i)}`;
     const { error } = await supabase.storage
       .from(RECORDINGS_BUCKET)
       .upload(path, chunk, { contentType: 'application/octet-stream', upsert: true });
@@ -111,7 +128,7 @@ export type FinalizeInput = {
  * Insert the sessions row (status='uploaded'). On the cloud this fires the DB
  * webhook → Modal assembles the segments → YASA → writes results back.
  */
-export async function finalizeSession(input: FinalizeInput): Promise<void> {
+export async function finalizeSession(input: FinalizeInput, prefix: string): Promise<void> {
   const supabase = getSupabase();
   if (!supabase) throw new NotAuthedError();
   const uid = await currentUserId();
@@ -119,7 +136,7 @@ export async function finalizeSession(input: FinalizeInput): Promise<void> {
     id: input.sessionId,
     user_id: uid,
     status: 'uploaded',
-    storage_prefix: `${uid}/${input.sessionId}`,
+    storage_prefix: prefix,
     start_ms: input.startMs,
     end_ms: input.endMs,
     tib: Math.max(0, (input.endMs - input.startMs) / 60000),
@@ -137,31 +154,40 @@ export function deleteLocalSession(sessionId: string): void {
  * One-shot: upload a session's local EEG (+ optional EOG) as segments, finalize,
  * then delete the local copy. Throws (and keeps local bytes) on any failure.
  */
-export async function transmitSession(input: FinalizeInput): Promise<void> {
+export async function transmitSession(input: FinalizeInput): Promise<string> {
   const dir = new Directory(Paths.document, 'sessions', input.sessionId);
   if (!dir.exists) throw new Error(`no local session ${input.sessionId}`);
 
+  // {user_id}/{readable label} — account folder stays the opaque uid; the
+  // session folder is human-readable date_time_length_shortid.
+  const uid = await currentUserId();
+  const prefix = `${uid}/${readableLabel(input.sessionId, input.startMs, input.endMs)}`;
+
   const eeg = new File(dir, 'EEG.BIN');
   const eog = new File(dir, 'EOG.BIN');
-  await uploadFileAsSegments(input.sessionId, 'eeg', eeg);
-  if (eog.exists) await uploadFileAsSegments(input.sessionId, 'eog', eog);
-  await finalizeSession(input);
+  await uploadFileAsSegments(prefix, 'eeg', eeg);
+  if (eog.exists) await uploadFileAsSegments(prefix, 'eog', eog);
+  await finalizeSession(input, prefix);
   deleteLocalSession(input.sessionId); // nothing stays on the phone
+  return prefix;
 }
 
-/** Download the assembled raw recording back to the phone, on demand. */
-export async function downloadRaw(sessionId: string, stream: Stream): Promise<string> {
+/**
+ * Download the assembled raw recording back to the phone, on demand.
+ * `prefix` is the session's storage_prefix ({user_id}/{readable label}).
+ */
+export async function downloadRaw(prefix: string, stream: Stream): Promise<string> {
   const supabase = getSupabase();
   if (!supabase) throw new NotAuthedError();
-  const uid = await currentUserId();
-  const path = `${uid}/${sessionId}/${stream}.bin`;
+  const path = `${prefix}/${stream}.bin`;
   const { data, error } = await supabase.storage.from(RECORDINGS_BUCKET).download(path);
   if (error || !data) throw new Error(`download failed (${path}): ${error?.message ?? 'no data'}`);
   const buf = new Uint8Array(await data.arrayBuffer());
 
+  const label = prefix.split('/').pop() || 'recording';
   const outDir = new Directory(Paths.document, 'downloads');
   if (!outDir.exists) outDir.create({ intermediates: true });
-  const out = new File(outDir, `${sessionId}_${stream}.bin`);
+  const out = new File(outDir, `${label}_${stream}.bin`);
   if (out.exists) out.delete();
   out.create();
   out.write(buf);
