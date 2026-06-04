@@ -14,7 +14,14 @@ type Props = {
 const HEIGHT = 220;
 const PADDING_TOP = 8;
 const PADDING_BOTTOM = 22; // space for the bottom time axis
+const LABEL_W = 36; // left gutter reserved for lane labels
 const LANES: SleepStage[] = ['wake', 'light', 'rem', 'deep'];
+const LANE_LABEL: Record<SleepStage, string> = {
+  wake: 'WAKE',
+  light: 'LIGHT',
+  rem: 'REM',
+  deep: 'DEEP',
+};
 // Hour labels nearer than this (in px) to either chart edge are dropped so
 // they don't collide with the bed/wake labels anchored at the edges.
 const EDGE_CLEARANCE_PX = 56;
@@ -23,6 +30,12 @@ export function Hypnogram({ epochs, startMs, endMs }: Props) {
   const [width, setWidth] = useState(0);
   const drawH = HEIGHT - PADDING_TOP - PADDING_BOTTOM;
   const totalMs = endMs - startMs || 1;
+
+  // Chart plots in [LABEL_W, width]; the left gutter holds lane labels.
+  const chartLeft = LABEL_W;
+  const chartW = Math.max(width - LABEL_W, 1);
+  const xAt = (ms: number) =>
+    chartLeft + ((ms - startMs) / totalMs) * chartW;
 
   // Each stage occupies a horizontal band; wake on top, deep at the bottom.
   const SLOT_H = drawH / LANES.length;
@@ -44,9 +57,24 @@ export function Hypnogram({ epochs, startMs, endMs }: Props) {
     >
       {width > 0 && (
         <Svg width={width} height={HEIGHT}>
+          {/* Left lane labels: Wake (top) -> Deep (bottom) */}
+          {LANES.map((stage) => (
+            <SvgText
+              key={`label-${stage}`}
+              x={0}
+              y={laneCenter(stage) + 3}
+              fontSize={9}
+              fill={colors.textTertiary}
+              textAnchor="start"
+              fontWeight="500"
+            >
+              {LANE_LABEL[stage]}
+            </SvgText>
+          ))}
+
           {/* Vertical hour gridlines */}
           {ticks.map((tick) => {
-            const x = ((tick.ms - startMs) / totalMs) * width;
+            const x = xAt(tick.ms);
             return (
               <Line
                 key={tick.ms}
@@ -63,9 +91,8 @@ export function Hypnogram({ epochs, startMs, endMs }: Props) {
 
           {/* Stepped stage bands with connectors between level changes */}
           {runs.map((run, i) => {
-            const x1 = ((run.startMs - startMs) / totalMs) * width;
-            const x2 =
-              ((run.startMs + run.durationMs - startMs) / totalMs) * width;
+            const x1 = xAt(run.startMs);
+            const x2 = xAt(run.startMs + run.durationMs);
             const next = runs[i + 1];
             return (
               <React.Fragment key={i}>
@@ -94,7 +121,7 @@ export function Hypnogram({ epochs, startMs, endMs }: Props) {
 
           {/* Bottom time axis: bedtime + waketime at the edges, hours between */}
           <SvgText
-            x={0}
+            x={chartLeft}
             y={axisY}
             fontSize={11}
             fill={colors.textSecondary}
@@ -114,13 +141,11 @@ export function Hypnogram({ epochs, startMs, endMs }: Props) {
             {fmt(endMs)}
           </SvgText>
           {ticks
-            .map((tick) => ({
-              tick,
-              x: ((tick.ms - startMs) / totalMs) * width,
-            }))
+            .map((tick) => ({ tick, x: xAt(tick.ms) }))
             .filter(
               ({ x }) =>
-                x > EDGE_CLEARANCE_PX && x < width - EDGE_CLEARANCE_PX,
+                x > chartLeft + EDGE_CLEARANCE_PX &&
+                x < width - EDGE_CLEARANCE_PX,
             )
             .map(({ tick, x }) => (
               <SvgText
