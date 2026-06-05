@@ -12,10 +12,28 @@ type User = {
   name: string | null;
 };
 
+// Live recording state. Persists in-memory only — a stream resumes on a hot
+// reload, not across a process kill. (Phase B's foreground service will
+// re-create this from the native side after restoration.)
+export type Streaming = {
+  sessionId: string;
+  startedAtMs: number;
+  packets: number;
+  samples: number;
+  drops: number;
+  lastSeq: number | null;
+  generation: number;
+  connection: 'connected' | 'reconnecting' | 'lost';
+};
+
 type SessionState = {
   authStatus: AuthStatus;
   user: User | null;
   pairedSerial: string | null;
+  // Platform-stable BLE identifier (UUID on iOS, MAC on Android) returned by
+  // ble-plx scan. We need this — not just the serial — to reconnect without
+  // re-scanning. Persisted alongside pairedSerial.
+  pairedDeviceId: string | null;
   onboardingComplete: boolean;
   hydrated: boolean;
   // True once the Supabase session check has completed — screens wait for
@@ -25,11 +43,19 @@ type SessionState = {
   // session row is fetched (or the user dismisses). Drives the Home screen's
   // "Processing…" card. Transient — not persisted.
   processingSessionId: string | null;
+  // Live stream state for the in-progress recording. null when idle. Transient.
+  streaming: Streaming | null;
+  // Live battery % from the paired headband (notified via BLE Battery Service).
+  // null while disconnected or before the first notify. Transient.
+  deviceBattery: number | null;
   setAuth: (user: User | null) => void;
-  setPaired: (serial: string | null) => void;
+  setPaired: (serial: string | null, deviceId?: string | null) => void;
   completeOnboarding: () => void;
   signOut: () => void;
   setProcessingSessionId: (id: string | null) => void;
+  setStreaming: (s: Streaming | null) => void;
+  patchStreaming: (patch: Partial<Streaming>) => void;
+  setDeviceBattery: (pct: number | null) => void;
 };
 
 export const useSession = create<SessionState>()(
@@ -38,10 +64,13 @@ export const useSession = create<SessionState>()(
       authStatus: 'unknown',
       user: null,
       pairedSerial: null,
+      pairedDeviceId: null,
       onboardingComplete: false,
       hydrated: false,
       authReady: false,
       processingSessionId: null,
+      streaming: null,
+      deviceBattery: null,
 
       setAuth: (user) =>
         set(() => ({
@@ -49,9 +78,19 @@ export const useSession = create<SessionState>()(
           authStatus: user ? 'signed-in' : 'signed-out',
         })),
 
-      setPaired: (serial) => {
+      setPaired: (serial, deviceId) => {
         if (serial) deviceRepo.pair(serial);
-        set({ pairedSerial: serial });
+        set({
+          pairedSerial: serial,
+          // Only overwrite deviceId when caller passes one explicitly;
+          // calling setPaired(null) clears both.
+          ...(deviceId !== undefined || serial === null
+            ? { pairedDeviceId: serial === null ? null : deviceId ?? null }
+            : {}),
+          // Forget last-known battery when unpairing so the StatusPill
+          // doesn't keep showing a stale percent for a device that's gone.
+          ...(serial === null ? { deviceBattery: null } : {}),
+        });
       },
 
       completeOnboarding: () => set({ onboardingComplete: true }),
@@ -62,12 +101,24 @@ export const useSession = create<SessionState>()(
           authStatus: 'signed-out',
           user: null,
           pairedSerial: null,
+          pairedDeviceId: null,
           onboardingComplete: false,
           processingSessionId: null,
+          streaming: null,
+          deviceBattery: null,
         });
       },
 
       setProcessingSessionId: (id) => set({ processingSessionId: id }),
+
+      setStreaming: (s) => set({ streaming: s }),
+
+      patchStreaming: (patch) =>
+        set((state) =>
+          state.streaming ? { streaming: { ...state.streaming, ...patch } } : {},
+        ),
+
+      setDeviceBattery: (pct) => set({ deviceBattery: pct }),
     }),
     {
       name: 'neurex-session',
@@ -75,6 +126,7 @@ export const useSession = create<SessionState>()(
       partialize: (s) => ({
         user: s.user,
         pairedSerial: s.pairedSerial,
+        pairedDeviceId: s.pairedDeviceId,
         onboardingComplete: s.onboardingComplete,
       }),
       merge: (persisted, current) => {

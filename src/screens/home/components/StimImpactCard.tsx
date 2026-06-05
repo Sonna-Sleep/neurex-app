@@ -4,6 +4,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { Body, Eyebrow, Secondary } from '../../../theme/typography';
 import {
   colors,
+  layout,
   radii,
   spacing,
   systemFontFamily,
@@ -72,6 +73,8 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     backgroundColor: colors.bgSurface,
     borderRadius: radii.card,
+    borderWidth: layout.hairline,
+    borderColor: colors.borderSubtle,
   },
   row: {
     flexDirection: 'row',

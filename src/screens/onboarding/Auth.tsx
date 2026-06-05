@@ -23,6 +23,11 @@ WebBrowser.maybeCompleteAuthSession();
 
 type Props = NativeStackScreenProps<OnboardingStackParamList, 'Auth'>;
 
+// Auth bypass for testing — reach the Pair/BLE flow without real auth.
+// Shown in dev (__DEV__) AND in internal test builds where EXPO_PUBLIC_DEV_BYPASS=1.
+// Hidden in normal production builds (flag unset) so it can't ship by accident.
+const ALLOW_AUTH_BYPASS = __DEV__ || process.env.EXPO_PUBLIC_DEV_BYPASS === '1';
+
 export function Auth({ navigation }: Props) {
   const setAuth = useSession((s) => s.setAuth);
   const authStatus = useSession((s) => s.authStatus);
@@ -178,6 +183,16 @@ export function Auth({ navigation }: Props) {
                 onPress={() => setShowEmail(true)}
               />
             )}
+
+            {/* Auth bypass for testing — gated on ALLOW_AUTH_BYPASS so it only
+                appears in dev or internal test builds, never in production. */}
+            {ALLOW_AUTH_BYPASS ? (
+              <Button
+                label="skip login (test)"
+                variant="ghost"
+                onPress={() => continueWithMockUser('dev-skip', null)}
+              />
+            ) : null}
           </View>
         </View>
       </KeyboardAvoidingView>

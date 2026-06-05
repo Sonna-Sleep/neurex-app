@@ -5,7 +5,7 @@ import type { Session, SessionRepo } from './types';
 // (stage_minutes, epochs, stim_pulses) are stored already in the app's shape.
 const COLUMNS =
   'id,start_ms,end_ms,tib,tst,waso,efficiency,awakenings,' +
-  'stage_minutes,epochs,stim_pulses,stim_impact_pct,score';
+  'stage_minutes,epochs,stim_pulses,stim_impact_pct,score,storage_prefix,status';
 
 type Row = {
   id: string;
@@ -21,6 +21,8 @@ type Row = {
   stim_pulses: Session['stimPulses'];
   stim_impact_pct: number | null;
   score: number | null;
+  storage_prefix: string | null;
+  status: string;
 };
 
 function toSession(r: Row): Session {
@@ -38,6 +40,8 @@ function toSession(r: Row): Session {
     stimPulses: r.stim_pulses,
     stimImpactPct: r.stim_impact_pct,
     score: r.score,
+    storagePrefix: r.storage_prefix,
+    status: r.status,
   };
 }
 

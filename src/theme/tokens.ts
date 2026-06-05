@@ -1,14 +1,14 @@
 import { Platform } from 'react-native';
 
 export const colors = {
-  bgPrimary: '#000000',
-  bgSurface: '#0F0F0F',
-  bgElevated: '#1A1A1A',
-  borderSubtle: '#2A2A2A',
-  borderDivider: '#3A3A3A',
+  bgPrimary: '#0A0A0A',
+  bgSurface: '#141414',
+  bgElevated: '#1C1C1C',
+  borderSubtle: '#242424',
+  borderDivider: '#333333',
   textPrimary: '#FFFFFF',
-  textSecondary: '#8A8A8A',
-  textTertiary: '#6B6B6B',
+  textSecondary: '#9A9A9A',
+  textTertiary: '#6E6E6E',
   ctaBg: '#FFFFFF',
   ctaText: '#000000',
   warning: '#E5C07B',

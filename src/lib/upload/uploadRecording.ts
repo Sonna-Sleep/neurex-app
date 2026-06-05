@@ -17,6 +17,8 @@ const MODAL_ENDPOINT_URL = process.env.EXPO_PUBLIC_MODAL_ENDPOINT_URL ?? '';
 
 export type UploadInput = {
   eeg: { uri: string; name: string };
+  /** EOG (2-channel infraorbital) captured alongside Fpz EEG since 2026-05-25. */
+  eog?: { uri: string; name: string };
   epochs?: { uri: string; name: string };
   stims?: { uri: string; name: string };
 };
@@ -44,6 +46,7 @@ export async function uploadRecording(input: UploadInput): Promise<UploadResult>
   // to read the bytes into memory — important for large overnight BIN files.
   const form = new FormData();
   appendFile(form, 'eeg', input.eeg);
+  if (input.eog) appendFile(form, 'eog', input.eog);
   if (input.epochs) appendFile(form, 'epochs', input.epochs);
   if (input.stims) appendFile(form, 'stims', input.stims);
 

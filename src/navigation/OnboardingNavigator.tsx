@@ -8,6 +8,7 @@ import { Pair } from '../screens/onboarding/Pair';
 import { HowItWorks } from '../screens/onboarding/HowItWorks';
 import { NotificationsPermission } from '../screens/onboarding/NotificationsPermission';
 import type { OnboardingStackParamList } from './types';
+import { colors } from '../theme/tokens';
 
 const Stack = createNativeStackNavigator<OnboardingStackParamList>();
 
@@ -17,7 +18,7 @@ export function OnboardingNavigator() {
       screenOptions={{
         headerShown: false,
         animation: 'slide_from_right',
-        contentStyle: { backgroundColor: '#000' },
+        contentStyle: { backgroundColor: colors.bgPrimary },
       }}
     >
       <Stack.Screen name="Welcome" component={Welcome} />
