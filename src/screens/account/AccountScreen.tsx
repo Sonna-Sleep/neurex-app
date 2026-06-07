@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { Linking, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '../../components/Button';
@@ -7,9 +7,11 @@ import { SerifHeadline, Body, Eyebrow } from '../../theme/typography';
 import { colors, layout, spacing } from '../../theme/tokens';
 import { useSession } from '../../state/session';
 import { deviceRepo, type Device } from '../../lib/repos';
+import { LEGAL_URLS } from '../../lib/legal';
 import appConfig from '../../../app.json';
 import { DebugSection } from './DebugSection';
 import { DualRecordSection } from './DualRecordSection';
+import { DeleteAccountSection } from './DeleteAccountSection';
 
 export function AccountScreen() {
   const user = useSession((s) => s.user);
@@ -45,7 +47,11 @@ export function AccountScreen() {
         </Section>
 
         <Section eyebrow="legal">
-          <Body style={styles.muted}>privacy policy · terms · about</Body>
+          <View style={styles.col}>
+            <Body style={styles.link} onPress={() => Linking.openURL(LEGAL_URLS.privacyPolicy)}>privacy policy</Body>
+            <Body style={styles.link} onPress={() => Linking.openURL(LEGAL_URLS.terms)}>terms</Body>
+            <Body style={styles.link} onPress={() => Linking.openURL(LEGAL_URLS.about)}>about</Body>
+          </View>
         </Section>
 
         <Section eyebrow="app">
@@ -55,6 +61,8 @@ export function AccountScreen() {
         <DualRecordSection />
 
         <DebugSection />
+
+        <DeleteAccountSection />
 
         <View style={styles.actions}>
           <Button label="log out" variant="ghost" onPress={signOut} />
@@ -107,6 +115,9 @@ const styles = StyleSheet.create({
   muted: {
     color: colors.textSecondary,
   },
+  // `accent` isn't in the palette yet; keep the documented fallback. The cast
+  // makes the optional lookup type-safe under the `as const` colors object.
+  link: { color: (colors as Record<string, string>).accent ?? colors.textSecondary, textDecorationLine: 'underline' },
   actions: {
     paddingTop: spacing.xl,
   },
