@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "smoke:auth": "ts-node --transpile-only scripts/smoke-auth.ts",
     "smoke:backoff": "ts-node --transpile-only --project scripts/tsconfig.scripts.json scripts/smoke-backoff.ts",
+    "smoke:account-deletion": "ts-node --transpile-only --project scripts/tsconfig.scripts.json scripts/smoke-account-deletion.ts",
     "prebuild": "expo prebuild"
   },
   "dependencies": {
