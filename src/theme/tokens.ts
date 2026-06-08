@@ -12,6 +12,7 @@ export const colors = {
   ctaBg: '#FFFFFF',
   ctaText: '#000000',
   warning: '#E5C07B',
+  danger: '#E5484D',
 } as const;
 
 export const stageOpacity = {

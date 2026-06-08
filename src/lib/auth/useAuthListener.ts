@@ -3,6 +3,7 @@ import * as Linking from 'expo-linking';
 
 import { getSupabase } from './supabase';
 import { useSession } from '../../state/session';
+import { cancelPendingDeletion } from '../accountDeletion';
 
 function parseTokensFromUrl(url: string) {
   const hashIndex = url.indexOf('#');
@@ -58,11 +59,18 @@ export function useAuthListener() {
       useSession.setState({ authReady: true });
     });
 
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
       if (!mounted) return;
       const u = session?.user ?? null;
-      if (u) setAuth({ id: u.id, email: u.email ?? null, name: null });
-      else setAuth(null);
+      if (u) {
+        setAuth({ id: u.id, email: u.email ?? null, name: null });
+        // Logging back in within the grace window cancels a scheduled deletion.
+        // Gate on SIGNED_IN: INITIAL_SESSION / TOKEN_REFRESHED must NOT cancel,
+        // or a cold-start with a lingering session would silently revoke it.
+        if (event === 'SIGNED_IN') {
+          cancelPendingDeletion().catch(() => undefined);
+        }
+      } else setAuth(null);
     });
 
     const handleUrl = async (url: string) => {
