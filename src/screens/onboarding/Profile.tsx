@@ -32,7 +32,6 @@ export function Profile({ navigation }: Props) {
   };
 
   const next = () => (step < 2 ? setStep(step + 1) : done());
-  const skipAll = () => navigation.navigate('Pair');
 
   if (step === 0) {
     return (
@@ -55,7 +54,7 @@ export function Profile({ navigation }: Props) {
   return (
     <ProfileCard eyebrow="about you" title="Biological sex"
       subtitle="Improves sleep-staging accuracy. You can skip this."
-      canContinue={sex !== null} onContinue={done} onSkip={skipAll} isLast>
+      canContinue={sex !== null} onContinue={done} onSkip={done} isLast>
       <View style={styles.choices}>
         {(['male', 'female', 'unspecified'] as Sex[]).map((opt) => (
           <Button key={opt}
