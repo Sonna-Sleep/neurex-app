@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Alert, Modal, StyleSheet, TextInput, View } from 'react-native';
 
 import { Button } from '../../components/Button';
@@ -14,6 +14,17 @@ export function EditProfileSheet({ visible, onClose }: { visible: boolean; onClo
   const [dob, setDob] = useState<string | null>(user?.dob ?? null);
   const [sex, setSex] = useState<Sex | null>((user?.sex as Sex) ?? null);
   const [busy, setBusy] = useState(false);
+
+  // The Modal is always mounted (visibility toggled via `visible`), so the
+  // useState initializers above run only at first mount. Re-seed local state
+  // from the saved profile each time the sheet opens, otherwise abandoned
+  // edits from a previous cancel would still be pre-filled and could be saved.
+  useEffect(() => {
+    if (!visible) return;
+    setFirstName(user?.firstName ?? '');
+    setDob(user?.dob ?? null);
+    setSex((user?.sex as Sex) ?? null);
+  }, [visible, user]);
 
   const save = async () => {
     setBusy(true);

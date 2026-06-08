@@ -22,6 +22,19 @@ export function DateOfBirthInput({ value, onChange }: Props) {
   const [m, setM] = React.useState(value ? value.slice(5, 7) : '');
   const [y, setY] = React.useState(value ? value.slice(0, 4) : '');
 
+  // Re-sync the visible fields when the parent changes `value` while we stay
+  // mounted (e.g. the Account edit sheet reopening). Only re-seed when the
+  // incoming value disagrees with what the fields already represent, so a
+  // parent that echoes our own onChange ISO back doesn't clobber in-progress
+  // typing of an as-yet-incomplete date.
+  React.useEffect(() => {
+    if (value === isoOrNull(d, m, y)) return;
+    setD(value ? value.slice(8, 10) : '');
+    setM(value ? value.slice(5, 7) : '');
+    setY(value ? value.slice(0, 4) : '');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value]);
+
   const update = (nd: string, nm: string, ny: string) => {
     setD(nd); setM(nm); setY(ny);
     onChange(isoOrNull(nd, nm, ny));
