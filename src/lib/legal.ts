@@ -1,7 +1,8 @@
-// Single source for legal URLs. Hosting is deferred — swap these to the live
-// URLs (e.g. https://neurex.tech/privacy) when the policy is published.
+// Single source for legal URLs surfaced in the app (Account → legal).
+// `privacyPolicy` is the live page required by the App Store — hosted on GitHub
+// Pages for now; swap to https://neurex.tech/privacy if you move it to your own
+// domain (one-line change, no other edits needed).
 export const LEGAL_URLS = {
-  privacyPolicy: 'https://neurex.tech/privacy',
-  terms: 'https://neurex.tech/terms',
+  privacyPolicy: 'https://aleksaspetro.github.io/neurex-legal/',
   about: 'https://neurex.tech',
 } as const;

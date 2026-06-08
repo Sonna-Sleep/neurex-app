@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { Linking, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -6,20 +6,17 @@ import { Button } from '../../components/Button';
 import { SerifHeadline, Body, Eyebrow } from '../../theme/typography';
 import { colors, layout, spacing } from '../../theme/tokens';
 import { useSession } from '../../state/session';
-import { deviceRepo, type Device } from '../../lib/repos';
+import { ageFromDob } from '../../lib/profile';
 import { LEGAL_URLS } from '../../lib/legal';
 import appConfig from '../../../app.json';
 import { DebugSection } from './DebugSection';
 import { DeleteAccountSection } from './DeleteAccountSection';
+import { EditProfileSheet } from './EditProfileSheet';
 
 export function AccountScreen() {
   const user = useSession((s) => s.user);
   const signOut = useSession((s) => s.signOut);
-  const [device, setDevice] = useState<Device | null>(null);
-
-  useEffect(() => {
-    deviceRepo.current().then(setDevice);
-  }, []);
+  const [editing, setEditing] = useState(false);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -29,26 +26,31 @@ export function AccountScreen() {
       >
         <SerifHeadline style={styles.headline}>Account</SerifHeadline>
 
-        <Section eyebrow="profile">
-          <Body>{user?.email ?? 'guest'}</Body>
+        <Section eyebrow="account">
+          <View style={styles.col}>
+            <Body>{user?.firstName ?? 'add your name'}</Body>
+            <Body style={styles.muted}>{user?.email ?? 'guest'}</Body>
+            <Body style={styles.muted}>
+              {ageFromDob(user?.dob) ? `${ageFromDob(user?.dob)} years` : 'add birth date'}
+              {user?.sex && user.sex !== 'unspecified' ? ` · ${user.sex}` : ''}
+            </Body>
+            <Body style={styles.link} onPress={() => setEditing(true)}>edit</Body>
+          </View>
         </Section>
 
-        <Section eyebrow="device">
-          {device ? (
-            <View style={styles.col}>
-              <Body>{device.serial}</Body>
-              <Body style={styles.muted}>battery {device.battery}%</Body>
-              <Body style={styles.muted}>firmware {device.firmware}</Body>
-            </View>
-          ) : (
-            <Body style={styles.muted}>no headband paired</Body>
-          )}
+        <Section eyebrow="about">
+          <Body style={styles.muted}>
+            Neurex tracks your sleep with a dry-electrode EEG headband and shows your stages and a nightly score.
+          </Body>
+        </Section>
+
+        <Section eyebrow="support">
+          <Body style={styles.link} onPress={() => Linking.openURL('mailto:contact@neurex.tech')}>contact@neurex.tech</Body>
         </Section>
 
         <Section eyebrow="legal">
           <View style={styles.col}>
             <Body style={styles.link} onPress={() => Linking.openURL(LEGAL_URLS.privacyPolicy)}>privacy policy</Body>
-            <Body style={styles.link} onPress={() => Linking.openURL(LEGAL_URLS.terms)}>terms</Body>
             <Body style={styles.link} onPress={() => Linking.openURL(LEGAL_URLS.about)}>about</Body>
           </View>
         </Section>
@@ -72,6 +74,8 @@ export function AccountScreen() {
           <Button label="log out" variant="ghost" onPress={signOut} />
         </View>
       </ScrollView>
+
+      <EditProfileSheet visible={editing} onClose={() => setEditing(false)} />
     </SafeAreaView>
   );
 }

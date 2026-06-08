@@ -11,6 +11,7 @@
     "smoke:auth": "ts-node --transpile-only scripts/smoke-auth.ts",
     "smoke:backoff": "ts-node --transpile-only --project scripts/tsconfig.scripts.json scripts/smoke-backoff.ts",
     "smoke:account-deletion": "ts-node --transpile-only --project scripts/tsconfig.scripts.json scripts/smoke-account-deletion.ts",
+    "smoke:profile": "ts-node --transpile-only --project scripts/tsconfig.scripts.json scripts/smoke-profile.ts",
     "prebuild": "expo prebuild"
   },
   "dependencies": {

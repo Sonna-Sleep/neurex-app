@@ -29,6 +29,18 @@ function parseTokensFromUrl(url: string) {
   };
 }
 
+function toUser(u: { id: string; email?: string | null; user_metadata?: any }) {
+  const m = u.user_metadata ?? {};
+  return {
+    id: u.id,
+    email: u.email ?? null,
+    name: null,
+    firstName: m.first_name ?? null,
+    dob: m.dob ?? null,
+    sex: m.sex ?? null,
+  };
+}
+
 /**
  * Wires Supabase auth state into the session store and handles the deep-link
  * return after an email magic-link or OAuth provider redirect.
@@ -54,7 +66,7 @@ export function useAuthListener() {
     supabase.auth.getSession().then(({ data }) => {
       if (!mounted) return;
       const u = data.session?.user;
-      if (u) setAuth({ id: u.id, email: u.email ?? null, name: null });
+      if (u) setAuth(toUser(u));
       // Auth is now settled — screens can safely query Supabase.
       useSession.setState({ authReady: true });
     });
@@ -63,7 +75,7 @@ export function useAuthListener() {
       if (!mounted) return;
       const u = session?.user ?? null;
       if (u) {
-        setAuth({ id: u.id, email: u.email ?? null, name: null });
+        setAuth(toUser(u));
         // Logging back in within the grace window cancels a scheduled deletion.
         // Gate on SIGNED_IN: INITIAL_SESSION / TOKEN_REFRESHED must NOT cancel,
         // or a cold-start with a lingering session would silently revoke it.

@@ -4,6 +4,7 @@ export type OnboardingStackParamList = {
   Welcome: undefined;
   Auth: undefined;
   EmailSent: { email: string };
+  Profile: undefined;
   Pair: undefined;
   HowItWorks: undefined;
   NotificationsPermission: undefined;

@@ -10,6 +10,9 @@ type User = {
   id: string;
   email: string | null;
   name: string | null;
+  firstName?: string | null;
+  dob?: string | null;            // ISO 'YYYY-MM-DD'
+  sex?: 'male' | 'female' | 'unspecified' | null;
 };
 
 // Live recording state. Persists in-memory only — a stream resumes on a hot
@@ -49,6 +52,7 @@ type SessionState = {
   // null while disconnected or before the first notify. Transient.
   deviceBattery: number | null;
   setAuth: (user: User | null) => void;
+  patchUser: (patch: Partial<User>) => void;
   setPaired: (serial: string | null, deviceId?: string | null) => void;
   completeOnboarding: () => void;
   signOut: () => void;
@@ -77,6 +81,9 @@ export const useSession = create<SessionState>()(
           user,
           authStatus: user ? 'signed-in' : 'signed-out',
         })),
+
+      patchUser: (patch) =>
+        set((s) => (s.user ? { user: { ...s.user, ...patch } } : {})),
 
       setPaired: (serial, deviceId) => {
         if (serial) deviceRepo.pair(serial);

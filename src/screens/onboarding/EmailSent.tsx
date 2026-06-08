@@ -19,7 +19,7 @@ export function EmailSent({ navigation, route }: Props) {
   // sets the session, which flips authStatus to 'signed-in'. Move them along.
   useEffect(() => {
     if (authStatus === 'signed-in') {
-      navigation.navigate('Pair');
+      navigation.navigate('Profile');
     }
   }, [authStatus, navigation]);
 

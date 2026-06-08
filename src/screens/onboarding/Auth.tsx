@@ -36,16 +36,16 @@ export function Auth({ navigation }: Props) {
   const [showEmail, setShowEmail] = useState(false);
 
   // When the user comes back from the email magic link, the auth listener
-  // updates the session store. Navigate to the Pair step automatically.
+  // updates the session store. Navigate to the Profile step automatically.
   useEffect(() => {
     if (authStatus === 'signed-in') {
-      navigation.navigate('Pair');
+      navigation.navigate('Profile');
     }
   }, [authStatus, navigation]);
 
   const continueWithMockUser = (id: string, providedEmail: string | null) => {
     setAuth({ id, email: providedEmail, name: null });
-    navigation.navigate('Pair');
+    navigation.navigate('Profile');
   };
 
   const handleGoogle = async () => {
@@ -95,7 +95,7 @@ export function Auth({ navigation }: Props) {
       const u = sessionData.user;
       if (u) {
         setAuth({ id: u.id, email: u.email ?? null, name: null });
-        navigation.navigate('Pair');
+        navigation.navigate('Profile');
       }
     } catch (e: any) {
       Alert.alert(
