@@ -19,15 +19,15 @@ export function DeleteAccountSection() {
     try {
       const { purgeAfterMs } = await requestScheduledDeletion();
       const date = new Date(purgeAfterMs).toLocaleDateString();
+      setBusy(false);
+      signOut();
       Alert.alert(
         'Deletion scheduled',
         `Your account and all data will be permanently deleted on ${date}. Log back in before then to cancel.`,
-        [{ text: 'OK', onPress: signOut }],
       );
     } catch (e) {
-      Alert.alert('Could not schedule deletion', String(e));
-    } finally {
       setBusy(false);
+      Alert.alert('Could not schedule deletion', e instanceof Error ? e.message : String(e));
     }
   };
 
@@ -35,15 +35,12 @@ export function DeleteAccountSection() {
     setBusy(true);
     try {
       await deleteImmediately();
-      Alert.alert(
-        'Account deleted',
-        'Your account and all data have been permanently deleted.',
-        [{ text: 'OK', onPress: signOut }],
-      );
-    } catch (e) {
-      Alert.alert('Could not delete account', String(e));
-    } finally {
       setBusy(false);
+      signOut();
+      Alert.alert('Account deleted', 'Your account and all data have been permanently deleted.');
+    } catch (e) {
+      setBusy(false);
+      Alert.alert('Could not delete account', e instanceof Error ? e.message : String(e));
     }
   };
 

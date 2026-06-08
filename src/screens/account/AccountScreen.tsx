@@ -115,9 +115,7 @@ const styles = StyleSheet.create({
   muted: {
     color: colors.textSecondary,
   },
-  // `accent` isn't in the palette yet; keep the documented fallback. The cast
-  // makes the optional lookup type-safe under the `as const` colors object.
-  link: { color: (colors as Record<string, string>).accent ?? colors.textSecondary, textDecorationLine: 'underline' },
+  link: { color: colors.textSecondary, textDecorationLine: 'underline' },
   actions: {
     paddingTop: spacing.xl,
   },

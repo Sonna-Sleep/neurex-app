@@ -1,6 +1,10 @@
 // Account-deletion lifecycle. Schedule = a plain RLS-protected row write (no
 // privileged backend). Immediate = a Modal endpoint call. Cancel = delete the
 // row. The Supabase client + fetch are injected so this is unit-smoke-testable.
+//
+// Backend contract (neurex-backend migration 0003): table
+// `account_deletion_requests` has `user_id uuid primary key` (so upsert updates
+// in place and maybeSingle() is safe) with RLS scoping every row to auth.uid().
 import { Directory, Paths } from 'expo-file-system';
 import { getSupabase } from './auth/supabase';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -29,7 +33,10 @@ export async function requestScheduledDeletion(
   const purgeAfter = new Date(Date.now() + GRACE_DAYS * 86400_000);
   const { error } = await c
     .from(TABLE)
-    .upsert({ user_id: uid, requested_at: new Date().toISOString(), purge_after: purgeAfter.toISOString() });
+    .upsert(
+      { user_id: uid, requested_at: new Date().toISOString(), purge_after: purgeAfter.toISOString() },
+      { onConflict: 'user_id' },
+    );
   if (error) throw new Error(error.message);
   return { purgeAfterMs: purgeAfter.getTime() };
 }
