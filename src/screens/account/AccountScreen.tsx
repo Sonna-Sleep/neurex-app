@@ -48,7 +48,6 @@ export function AccountScreen() {
         <Section eyebrow="legal">
           <View style={styles.col}>
             <Body style={styles.link} onPress={() => Linking.openURL(LEGAL_URLS.privacyPolicy)}>privacy policy</Body>
-            <Body style={styles.link} onPress={() => Linking.openURL(LEGAL_URLS.terms)}>terms</Body>
             <Body style={styles.link} onPress={() => Linking.openURL(LEGAL_URLS.about)}>about</Body>
           </View>
         </Section>

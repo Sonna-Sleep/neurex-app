@@ -18,7 +18,7 @@ _Framing rule: **wellness, not medical.** Never claim to diagnose, treat, or pre
 ## URLs
 - **Support URL:** `https://neurex.tech` (must resolve — a simple page with a contact is enough; `contact@neurex.tech` for support)
 - **Marketing URL:** `https://neurex.tech` (optional)
-- **Privacy Policy URL:** ⛔ TODO — host `docs/legal/privacy-policy.md` and paste the live URL (also update `src/lib/legal.ts`). Required field.
+- **Privacy Policy URL:** `https://aleksaspetro.github.io/neurex-legal/` — **live** (GitHub Pages, repo `aleksaspetro/neurex-legal`). Already wired into `src/lib/legal.ts`. Just paste this into the ASC field. (Swap to `neurex.tech/privacy` later if you move it.)
 
 ## Promotional text  *(≤170 chars, editable anytime without review)*
 `Track your sleep with a real EEG headband — see your hypnogram, sleep stages, and a nightly score the morning after. Dry electrodes, no gels, no wires to a wall.`  *(160)*
@@ -90,7 +90,7 @@ The app is a companion to a **hardware EEG headband** the reviewer won't have. W
 - [ ] `EXPO_PUBLIC_DEV_BYPASS=0` (hides the "skip login (test)" button in release)
 - [ ] `EXPO_PUBLIC_MODAL_ENDPOINT_URL` set in the build env (immediate-delete needs it)
 - [ ] `EXPO_PUBLIC_SUPABASE_URL` / `EXPO_PUBLIC_SUPABASE_ANON_KEY` set
-- [ ] Privacy Policy URL hosted + pasted into ASC + `src/lib/legal.ts` updated
+- [x] Privacy Policy hosted (`https://aleksaspetro.github.io/neurex-legal/`) + `src/lib/legal.ts` wired — just paste the URL into ASC
 - [ ] Version `1.0.0`, build number auto-incremented (eas.json `autoIncrement` is on)
 - [ ] Export compliance: already declared (`ios.config.usesNonExemptEncryption: false`) — no per-submit prompt
 ```
