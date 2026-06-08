@@ -58,7 +58,7 @@ export function DeleteAccountSection() {
 
   return (
     <View style={styles.section}>
-      <Eyebrow>danger zone</Eyebrow>
+      <Eyebrow>close account</Eyebrow>
       <View style={styles.body}>
         <Pressable onPress={confirm} disabled={busy} hitSlop={8}>
           <Body style={styles.delete}>
