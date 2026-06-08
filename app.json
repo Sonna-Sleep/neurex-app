@@ -3,7 +3,7 @@
     "name": "Neurex",
     "slug": "neurex-app",
     "scheme": "neurex",
-    "version": "0.1.0",
+    "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -15,6 +15,7 @@
     },
     "ios": {
       "supportsTablet": false,
+      "icon": "./assets/icon-ios.png",
       "bundleIdentifier": "tech.neurex.app",
       "infoPlist": {
         "NSBluetoothAlwaysUsageDescription": "Neurex uses Bluetooth to sync your sleep data from the headband.",
