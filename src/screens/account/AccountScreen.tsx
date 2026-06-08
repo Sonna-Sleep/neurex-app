@@ -10,7 +10,6 @@ import { deviceRepo, type Device } from '../../lib/repos';
 import { LEGAL_URLS } from '../../lib/legal';
 import appConfig from '../../../app.json';
 import { DebugSection } from './DebugSection';
-import { DualRecordSection } from './DualRecordSection';
 import { DeleteAccountSection } from './DeleteAccountSection';
 
 export function AccountScreen() {
@@ -58,7 +57,12 @@ export function AccountScreen() {
           <Body style={styles.muted}>version {appConfig.expo.version}</Body>
         </Section>
 
-        <DualRecordSection />
+        {/*
+          DORMANT: dual-headband recording removed from the UI 2026-06-07 (single-device app).
+          The component (./DualRecordSection.tsx) and engine (../../lib/ble/multiController.ts)
+          are kept intact but unwired. To revive, re-add the import above and render
+          <DualRecordSection /> here. See docs/DORMANT_FEATURES.md.
+        */}
 
         <DebugSection />
 

@@ -1,3 +1,8 @@
+// ⚠️ DORMANT — NOT RENDERED ANYWHERE as of 2026-06-07. Dual-headband recording
+// was removed from the app UI (single-device only). This component is kept
+// intact, not deleted. To revive: re-add the import + render <DualRecordSection />
+// in src/screens/account/AccountScreen.tsx. Registry: docs/DORMANT_FEATURES.md
+//
 // TEMPORARY two-person overnight recorder (Aleksas + Goda on one phone).
 //
 // 2026-06-01: self-contained section, deliberately separate from the main Home
