@@ -1,3 +1,8 @@
+// ⚠️ DORMANT — its only consumer (screens/account/DualRecordSection.tsx) was
+// unwired from the UI on 2026-06-07 (single-device app). Kept intact, not
+// deleted. Revive by re-rendering <DualRecordSection /> in AccountScreen.
+// Registry: docs/DORMANT_FEATURES.md
+//
 // Multi-device recording controller — TEMPORARY two-person overnight feature.
 //
 // 2026-06-01: lets two headbands record to one phone at once (e.g. Aleksas +
