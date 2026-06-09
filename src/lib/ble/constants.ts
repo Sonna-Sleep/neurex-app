@@ -86,7 +86,6 @@ export const PKT_IDX_DATA = 10;
 export const BYTES_PER_FRAME = 27;
 export const PKT_IDX_CHECKSUM = 223; // 7 (header) + 8 × 27 (samples)
 
-// Channel layout (sleep-mask wiring): Fpz = CH1, EOG-L = CH2, EOG-R = CH3.
+// Channel layout (sleep-mask wiring): export Fpz from CH1 for the current
+// one-device EEG-only beta.
 export const CH_FPZ = 0;
-export const CH_EOG_L = 1;
-export const CH_EOG_R = 2;

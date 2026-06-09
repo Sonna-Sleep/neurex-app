@@ -12,8 +12,7 @@
 //
 // Storage layout (matches backend assemble_if_needed):
 //   {uid}/{sessionId}/segments/eeg/segNNNN.bin
-//   {uid}/{sessionId}/segments/eog/segNNNN.bin
-// The backend concatenates these (whole-sample boundaries) into eeg.bin/eog.bin.
+// The backend concatenates these (whole-sample boundaries) into eeg.bin.
 
 import { File, Directory, Paths } from 'expo-file-system';
 
@@ -24,7 +23,7 @@ import type { Session } from '../repos/types';
 export const RECORDINGS_BUCKET = 'recordings';
 
 // On-disk bytes per sample (must match real.ts encoders + backend decoders).
-const SAMPLE_BYTES = { eeg: 8, eog: 12 } as const;
+const SAMPLE_BYTES = { eeg: 8 } as const;
 export type Stream = keyof typeof SAMPLE_BYTES;
 
 // ~5 minutes per segment at 250 Hz — fine-grained crash protection without
@@ -45,11 +44,10 @@ function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-// Global upload mutex. Serializes EVERY segment-upload loop (single- and
-// dual-record) so two recordings syncing at once can't race the shared Supabase
-// auth-token refresh or double the Storage request rate — the likely trigger of
-// the mid-stream HTTP 400 seen when both nights were synced together. Calls
-// queue and run one fully-before-the-next; order within a stream is preserved.
+// Global upload mutex. Serializes every segment-upload loop so recordings can't
+// race the shared Supabase auth-token refresh or double the Storage request
+// rate. Calls queue and run one fully-before-the-next; order within a stream is
+// preserved.
 let uploadTail: Promise<unknown> = Promise.resolve();
 function withUploadLock<T>(fn: () => Promise<T>): Promise<T> {
   const run = uploadTail.then(fn, fn);
@@ -76,9 +74,8 @@ export function readableLabel(
   const time = `${p(d.getHours())}${p(d.getMinutes())}`;
   const sec = Math.max(0, Math.round((endMs - startMs) / 1000));
   const len = sec >= 60 ? `${Math.floor(sec / 60)}m${sec % 60}s` : `${sec}s`;
-  // For dual-record the two nights share a phone but come from different
-  // headbands — tag the folder with the serial's tail so they're tellable apart
-  // at a glance. Single-device falls back to the session short-id.
+  // Tag the folder with the serial's tail when available; otherwise fall back
+  // to the session short-id.
   const tag = serial
     ? serial.replace(/[^A-Za-z0-9]/g, '').slice(-6) || 'rec'
     : sessionId.replace(/-/g, '').slice(0, 6) || 'nodate';
@@ -159,7 +156,7 @@ export async function uploadFileAsSegments(
 
   return withUploadLock(async () => {
     // Resume: don't re-send segments already in Storage (a 9.6h night is ~115
-    // EEG + ~115 EOG objects — a retry should pick up where it left off).
+    // EEG objects — a retry should pick up where it left off).
     const already = await existingSegments(prefix, stream);
 
     // Memory-safe: read one segment-sized chunk at a time through a file handle
@@ -211,10 +208,10 @@ export async function finalizeSession(input: FinalizeInput, prefix: string): Pro
     end_ms: input.endMs,
     tib: Math.max(0, (input.endMs - input.startMs) / 60000),
   });
-  // Idempotent: a retry of a recording with a STABLE session id (dual-record)
-  // re-runs finalize after the row already exists. A unique-violation (23505)
-  // just means "already finalized" — the backend will still stage it — so it's
-  // a success, not an error. Anything else is a real failure.
+  // Idempotent: a retry with the same session id re-runs finalize after the row
+  // already exists. A unique-violation (23505) just means "already finalized" —
+  // the backend will still stage it — so it's a success, not an error. Anything
+  // else is a real failure.
   if (error) {
     const code = (error as { code?: string }).code;
     if (code === '23505' || /duplicate key|already exists/i.test(error.message)) return;
@@ -229,8 +226,8 @@ export function deleteLocalSession(sessionId: string): void {
 }
 
 /**
- * One-shot: upload a session's local EEG (+ optional EOG) as segments, finalize,
- * then delete the local copy. Throws (and keeps local bytes) on any failure.
+ * One-shot: upload a session's local EEG as segments, finalize, then delete
+ * the local copy. Throws (and keeps local bytes) on any failure.
  */
 export async function transmitSession(input: FinalizeInput): Promise<string> {
   const dir = new Directory(Paths.document, 'sessions', input.sessionId);
@@ -242,111 +239,10 @@ export async function transmitSession(input: FinalizeInput): Promise<string> {
   const prefix = `${uid}/${readableLabel(input.sessionId, input.startMs, input.endMs)}`;
 
   const eeg = new File(dir, 'EEG.BIN');
-  const eog = new File(dir, 'EOG.BIN');
   await uploadFileAsSegments(prefix, 'eeg', eeg);
-  if (eog.exists) await uploadFileAsSegments(prefix, 'eog', eog);
   await finalizeSession(input, prefix);
   deleteLocalSession(input.sessionId); // nothing stays on the phone
   return prefix;
-}
-
-/** expo-crypto's randomUUID is RFC4122 v4 on SDK 54 — the cloud sessions.id
- * column is a strict uuid, so dual-record (whose local folder id is
- * "<serial>_<uuid>") must mint a fresh one rather than reuse the folder name. */
-function newUuid(): string {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const Crypto = require('expo-crypto') as { randomUUID?: () => string };
-  if (typeof Crypto.randomUUID === 'function') return Crypto.randomUUID();
-  throw new Error('expo-crypto randomUUID unavailable — cannot mint cloud session id');
-}
-
-const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
-
-/** Pull the embedded uuid out of a dual folder id ("<serial>_<uuid>"), so the
- * cloud session id is stable + valid without a sidecar lookup. */
-function uuidFromFolderId(folderId: string): string | null {
-  const m = folderId.match(UUID_RE);
-  return m ? m[0] : null;
-}
-
-type CloudMeta = { cloudSessionId: string; prefix: string; startMs: number; endMs: number };
-
-/**
- * Resolve the STABLE cloud identity for a local recording, persisted in a
- * `cloud.json` sidecar inside the session folder. This is the fix for the
- * duplicate-folder bug: a recovered recording has no fixed wall-clock start, so
- * deriving it from `Date.now()` made every retry mint a new prefix and re-upload
- * the whole night. Locking the chosen id + prefix + bounds on first sync means
- * every later retry reuses the SAME storage folder — so segment-resume actually
- * works and we never scatter duplicate copies across folders.
- */
-async function getOrCreateCloudMeta(
-  dir: Directory,
-  folderId: string,
-  uid: string,
-  serial: string | undefined,
-  startMs: number,
-  endMs: number,
-): Promise<CloudMeta> {
-  const metaFile = new File(dir, 'cloud.json');
-  if (metaFile.exists) {
-    try {
-      const m = JSON.parse(await metaFile.text()) as Partial<CloudMeta>;
-      if (m.cloudSessionId && m.prefix && typeof m.startMs === 'number' && typeof m.endMs === 'number') {
-        return m as CloudMeta;
-      }
-    } catch {
-      // fall through and re-create
-    }
-  }
-  const cloudSessionId = uuidFromFolderId(folderId) ?? newUuid();
-  const meta: CloudMeta = {
-    cloudSessionId,
-    prefix: `${uid}/${readableLabel(cloudSessionId, startMs, endMs, serial)}`,
-    startMs,
-    endMs,
-  };
-  try {
-    metaFile.write(JSON.stringify(meta));
-  } catch {
-    // sidecar is an optimization; if the write fails we still have a valid meta
-    // for this attempt (stability degrades to derive-from-folder-uuid only)
-  }
-  return meta;
-}
-
-/**
- * Transmit a local recording whose on-disk folder id is NOT a bare uuid. The
- * dual-record path (multiController) names folders "<serial>_<uuid>". A stable
- * cloud id + prefix is pinned in a sidecar on first sync so retries resume the
- * same upload instead of starting a new folder. Returns the CLOUD session id
- * (subscribe to that for the staged result).
- *
- * NON-DESTRUCTIVE on purpose: unlike transmitSession it does NOT delete the
- * local files. The dual path is a two-person stopgap and the recordings may be
- * the only on-device copy of someone else's night — the caller decides deletion.
- */
-export async function transmitLocalRecording(opts: {
-  folderId: string;
-  serial?: string;
-  startMs: number;
-  endMs: number;
-}): Promise<string> {
-  const dir = new Directory(Paths.document, 'sessions', opts.folderId);
-  if (!dir.exists) throw new Error(`no local session ${opts.folderId}`);
-
-  const uid = await currentUserId();
-  const meta = await getOrCreateCloudMeta(dir, opts.folderId, uid, opts.serial, opts.startMs, opts.endMs);
-
-  const eeg = new File(dir, 'EEG.BIN');
-  const eog = new File(dir, 'EOG.BIN');
-  await uploadFileAsSegments(meta.prefix, 'eeg', eeg);
-  if (eog.exists) await uploadFileAsSegments(meta.prefix, 'eog', eog);
-  await finalizeSession(
-    { sessionId: meta.cloudSessionId, startMs: meta.startMs, endMs: meta.endMs },
-    meta.prefix,
-  );
-  return meta.cloudSessionId;
 }
 
 /**

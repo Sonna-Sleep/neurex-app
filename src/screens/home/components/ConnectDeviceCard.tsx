@@ -149,8 +149,8 @@ export function ConnectDeviceCard() {
         <Card style={styles.card}>
           <SerifHeadline>Connect a device</SerifHeadline>
           <Body style={styles.subtext}>
-            Power on your headband(s) and tap below. Multiple Cerelogs in
-            range will be listed — pick the one closest to you.
+            Power on your headband and tap below. Cerelogs in range will be
+            listed — pick the one closest to you.
           </Body>
           <Button label="connect device" onPress={beginScan} />
         </Card>

@@ -3,9 +3,8 @@
 // Owns the start/stop orchestration via streamController.
 //
 // 2026-06-01: LOCAL-ONLY recording for the Android full-night test. On stop
-// the raw EEG.BIN / EOG.BIN stay on the phone (no cloud upload); the user
-// gets a "share recording" button to pull the files off in the morning
-// (Drive / email / USB). Cloud upload was removed from this flow.
+// the raw EEG.BIN stays on the phone; the user gets a "share recording" button
+// to pull the file off in the morning (Drive / email / USB).
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, StyleSheet, Text, View } from 'react-native';
@@ -27,7 +26,6 @@ import { SignalPreview } from './SignalPreview';
 type SavedRecording = {
   sessionId: string;
   eegUri: string;
-  eogUri: string;
   samples: number;
   durationSec: number;
   startedAtMs: number;
@@ -106,10 +104,9 @@ export function RecordingCard() {
     try {
       const result = await stopSession();
       if (!result) return;
-      // LOCAL-ONLY: no cloud upload. The raw EEG.BIN / EOG.BIN are already
-      // written to the phone (documentDirectory/sessions/<id>/) and persist
-      // across app restarts — safe for an overnight. Surface a share button
-      // so the files can be pulled off in the morning.
+      // The raw EEG.BIN is already written to the phone
+      // (documentDirectory/sessions/<id>/) and persists across app restarts.
+      // Surface a share button so the file can be pulled off in the morning.
       const elapsedSec =
         streaming != null
           ? Math.max(0, Math.floor((Date.now() - streaming.startedAtMs) / 1000))
@@ -118,7 +115,6 @@ export function RecordingCard() {
       setSaved({
         sessionId: result.sessionId,
         eegUri: result.eegUri,
-        eogUri: result.eogUri,
         samples: result.stats.samples,
         durationSec: elapsedSec,
         startedAtMs,
@@ -243,8 +239,8 @@ export function RecordingCard() {
           <SerifHeadline>Saved to this phone</SerifHeadline>
           <Body style={styles.subtext}>
             {saved.samples.toLocaleString()} samples
-            {saved.durationSec > 0 ? ` · ${mins}m ${secs}s` : ''}. Raw EEG/EOG
-            are stored on the device. Share them to Drive, email, or USB to pull
+            {saved.durationSec > 0 ? ` · ${mins}m ${secs}s` : ''}. Raw EEG is
+            stored on the device. Share it to Drive, email, or USB to pull
             the night off in the morning.
           </Body>
           {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -274,7 +270,6 @@ export function RecordingCard() {
           />
 
           <Button label="share EEG.BIN" variant="ghost" onPress={() => onShare(saved.eegUri)} />
-          <Button label="share EOG.BIN" variant="ghost" onPress={() => onShare(saved.eogUri)} />
           <Button
             label="done"
             variant="ghost"

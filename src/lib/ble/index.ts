@@ -19,6 +19,6 @@ export type { BleAvailability } from './permissions';
 
 // Pick real on dev-client / production builds (native module loaded);
 // fall back to the stub on Expo Go + web (no native BleManager). The
-// stub still writes real EEG.BIN/EOG.BIN to documentDirectory so the
-// upload + Supabase path is exercisable without hardware.
+// stub still writes a real EEG.BIN to documentDirectory so the upload +
+// Supabase path is exercisable without hardware.
 export const bleClient = getBleManager() ? realBleClient : stubBleClient;

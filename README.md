@@ -1,18 +1,18 @@
 # Neurex
 
 Mobile companion app for the Neurex EEG sleep headband. It connects to the
-headband over Bluetooth Low Energy, records EEG (and optional EOG) through the
-night, uploads the recording to the cloud, and shows you a staged hypnogram and
-a sleep score the next morning.
+headband over Bluetooth Low Energy, records EEG through the night, uploads the
+recording to the cloud, and shows you a staged hypnogram and a sleep score the
+next morning.
 
 Built with React Native + Expo (SDK 54, new architecture). iOS and Android.
 
 ## Features
 
-- **BLE streaming** — pairs and streams from one or two headbands at once
-  (`src/lib/ble/`), with auto-reconnect/backoff and an Android foreground
-  service (`modules/neurex-foreground-service/`) so recording survives the
-  screen turning off.
+- **BLE streaming** — pairs and streams from one headband (`src/lib/ble/`),
+  with auto-reconnect/backoff and an Android foreground service
+  (`modules/neurex-foreground-service/`) so recording survives the screen
+  turning off.
 - **Cloud sync** — recordings upload to Supabase Storage in resumable segments,
   with retry and a stable per-recording prefix so interrupted uploads resume
   instead of starting over (`src/lib/cloud/cloudSync.ts`).
@@ -41,7 +41,7 @@ Built with React Native + Expo (SDK 54, new architecture). iOS and Android.
 src/
   screens/        onboarding, home, history, account
   lib/
-    ble/          BLE connect, multi-device controller, recovery
+    ble/          BLE connect + single-device streaming
     cloud/        segment upload + resume to Supabase Storage
     auth/         Supabase magic-link auth
     repos/        Supabase data access
@@ -115,8 +115,8 @@ Install with `adb install -r <apk>` (in-place `-r` preserves app data).
 
 ## How a night flows
 
-1. Phone connects to the headband(s) over BLE and streams EEG/EOG, buffered to
-   disk by a foreground service.
+1. Phone connects to one headband over BLE and streams EEG, buffered to disk by
+   a foreground service.
 2. In the morning, the recording uploads to Supabase Storage as resumable
    segments.
 3. The Modal backend stages the EEG with YASA and writes a `sessions` row.

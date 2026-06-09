@@ -2,8 +2,8 @@
 //
 // Live-stream model: scan → connect → startStream(sessionId, callbacks).
 // The firmware notifies 118-byte packets at ~62.5 Hz (4 samples/packet @ 250
-// Hz). We append the decoded samples to per-session EEG.BIN / EOG.BIN files
-// in the canonical on-disk format the existing analysis pipelines expect.
+// Hz). We append the decoded Fpz samples to a per-session EEG.BIN file in the
+// canonical on-disk format the existing analysis pipelines expect.
 
 export type FoundDevice = {
   /** Platform-stable identifier — UUID on iOS, MAC address on Android. */
@@ -18,8 +18,6 @@ export type FoundDevice = {
 export type EegSample = {
   ms: number;
   fpz_uV: number;
-  eog_l_uV: number;
-  eog_r_uV: number;
 };
 
 /** One decoded 118-byte BLE notification, all 4 samples included. */
@@ -60,8 +58,6 @@ export type StreamHandle = {
   sessionDir: string;
   /** file:// URI of the EEG.BIN file being written. */
   eegUri: string;
-  /** file:// URI of the EOG.BIN file being written. */
-  eogUri: string;
   /** Stop notifications, flush + close file handles. Idempotent. */
   stop(): Promise<StreamStats>;
 };

@@ -1,6 +1,6 @@
 # Neurex Privacy Policy
 
-_Last updated: 2026-06-07_
+_Last updated: 2026-06-09_
 
 Neurex ("we", "us") makes a sleep-tracking headband and companion app. This
 policy explains what we collect, why, and your rights. Contact: contact@neurex.tech.
@@ -10,8 +10,8 @@ diagnose, treat, or prevent any disease.
 
 ## What we collect
 - **Account:** your email address (for sign-in via magic link).
-- **Sleep recordings:** EEG and EOG signals recorded by the headband, and the
-  sleep metrics derived from them (stages, sleep score, time-in-bed, etc.).
+- **Sleep recordings:** EEG signals recorded by the headband, and the sleep
+  metrics derived from them (stages, sleep score, time-in-bed, etc.).
 - **Device & diagnostic:** minimal app/device information needed to operate and
   troubleshoot the service.
 

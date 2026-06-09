@@ -4,8 +4,8 @@
 //   1. scan(): scoped by NEUREX_SERVICE_UUID (Apple-compliant for background BLE).
 //   2. connect(deviceId, { autoConnect: true }): MTU bump to fit 118 B in one PDU.
 //   3. startStream(sessionId, cb): subscribe to the notify characteristic,
-//      decode each 118-byte packet, append samples to EEG.BIN + EOG.BIN
-//      under FileSystem.documentDirectory/sessions/<sessionId>/.
+//      decode each 118-byte packet, append Fpz samples to EEG.BIN under
+//      FileSystem.documentDirectory/sessions/<sessionId>/.
 //
 // On-disk format is byte-identical to tools/capture/ble_stream_recv.py in the
 // algorithms repo, so the existing neurex_qc / neurex_stage / to_edf pipelines
@@ -24,8 +24,6 @@ import {
   BATTERY_LEVEL_CHAR_UUID,
   BATTERY_SERVICE_UUID,
   BYTES_PER_FRAME,
-  CH_EOG_L,
-  CH_EOG_R,
   CH_FPZ,
   EEG_SAMPLE_INTERVAL_MS,
   EEG_UV_PER_LSB,
@@ -208,17 +206,14 @@ function parsePacket(bytes: Uint8Array, generation: number): ParseOutcome {
     samples[s] = {
       ms,
       fpz_uV: i24be(bytes, o + CH_FPZ * 3) * EEG_UV_PER_LSB,
-      eog_l_uV: i24be(bytes, o + CH_EOG_L * 3) * EEG_UV_PER_LSB,
-      eog_r_uV: i24be(bytes, o + CH_EOG_R * 3) * EEG_UV_PER_LSB,
     };
   }
   return { ok: true, packet: { generation, seq, baseMs, samples } };
 }
 
-// ── on-disk encoders (match Python struct '<If' and '<Iff') ────────────────
+// ── on-disk encoder (matches Python struct '<If') ─────────────────────────
 
 const EEG_RECORD_BYTES = 8; // uint32 ms + float32 fpz_uV
-const EOG_RECORD_BYTES = 12; // uint32 ms + float32 eog_l + float32 eog_r
 
 function encodePacketEeg(packet: ParsedPacket): Uint8Array {
   const buf = new ArrayBuffer(SAMPLES_PER_PACKET * EEG_RECORD_BYTES);
@@ -227,18 +222,6 @@ function encodePacketEeg(packet: ParsedPacket): Uint8Array {
     const s = packet.samples[i];
     view.setUint32(i * EEG_RECORD_BYTES + 0, s.ms, true);
     view.setFloat32(i * EEG_RECORD_BYTES + 4, s.fpz_uV, true);
-  }
-  return new Uint8Array(buf);
-}
-
-function encodePacketEog(packet: ParsedPacket): Uint8Array {
-  const buf = new ArrayBuffer(SAMPLES_PER_PACKET * EOG_RECORD_BYTES);
-  const view = new DataView(buf);
-  for (let i = 0; i < SAMPLES_PER_PACKET; i++) {
-    const s = packet.samples[i];
-    view.setUint32(i * EOG_RECORD_BYTES + 0, s.ms, true);
-    view.setFloat32(i * EOG_RECORD_BYTES + 4, s.eog_l_uV, true);
-    view.setFloat32(i * EOG_RECORD_BYTES + 8, s.eog_r_uV, true);
   }
   return new Uint8Array(buf);
 }
@@ -408,7 +391,6 @@ export const realBleClient: BleClient = {
         if (!sessionDir.exists) sessionDir.create();
 
         const eeg = AppendingFile.open(sessionDir, 'EEG.BIN');
-        const eog = AppendingFile.open(sessionDir, 'EOG.BIN');
 
         const stats: StreamStats = {
           packets: 0,
@@ -502,7 +484,6 @@ export const realBleClient: BleClient = {
 
           try {
             eeg.appendChunk(encodePacketEeg(pkt));
-            eog.appendChunk(encodePacketEog(pkt));
           } catch (e) {
             cb.onError?.(e as Error);
             return;
@@ -520,7 +501,6 @@ export const realBleClient: BleClient = {
         return {
           sessionDir: sessionDir.uri,
           eegUri: eeg.uri,
-          eogUri: eog.uri,
           async stop(): Promise<StreamStats> {
             if (stopped) return stats;
             stopped = true;
@@ -534,11 +514,6 @@ export const realBleClient: BleClient = {
               eeg.close();
             } catch (e) {
               if (__DEV__) console.warn('[ble/real] EEG close failed:', e);
-            }
-            try {
-              eog.close();
-            } catch (e) {
-              if (__DEV__) console.warn('[ble/real] EOG close failed:', e);
             }
             return stats;
           },
