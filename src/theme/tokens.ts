@@ -103,8 +103,8 @@ export const typeScale = {
     lineHeight: 108,
     color: colors.textPrimary,
   },
-  // Stat numbers (StimImpactCard, future cards). Smaller than hero but
-  // still display-grade. Uses the same thin/tracked feel for consistency.
+  // Stat numbers for compact result cards. Smaller than hero but still
+  // display-grade. Uses the same thin/tracked feel for consistency.
   statNumber: {
     fontFamily: systemFontFamily,
     fontSize: 44,

@@ -1,6 +1,6 @@
-// POST a recording bundle (eeg.bin + optional epochs.bin + stims.bin) to the
-// Modal cloud endpoint, authenticated with the current Supabase JWT. Returns
-// the server-assigned session_id on success.
+// POST a recording bundle (eeg.bin + optional epochs.bin) to the Modal cloud
+// endpoint, authenticated with the current Supabase JWT. Returns the
+// server-assigned session_id on success.
 //
 // When firmware BLE lands, the byte source changes from expo-document-picker
 // to a streamed BLE buffer — this function's signature stays the same.
@@ -18,7 +18,6 @@ const MODAL_ENDPOINT_URL = process.env.EXPO_PUBLIC_MODAL_ENDPOINT_URL ?? '';
 export type UploadInput = {
   eeg: { uri: string; name: string };
   epochs?: { uri: string; name: string };
-  stims?: { uri: string; name: string };
 };
 
 export type UploadResult = {
@@ -45,7 +44,6 @@ export async function uploadRecording(input: UploadInput): Promise<UploadResult>
   const form = new FormData();
   appendFile(form, 'eeg', input.eeg);
   if (input.epochs) appendFile(form, 'epochs', input.epochs);
-  if (input.stims) appendFile(form, 'stims', input.stims);
 
   let response: Response;
   try {

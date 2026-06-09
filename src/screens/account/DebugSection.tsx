@@ -3,7 +3,7 @@
 //
 // Steps the user can do:
 //   1. Tap "pick eeg.bin" → expo-document-picker selects a local BIN
-//   2. Optionally pick epochs.bin / stims.bin as well
+//   2. Optionally pick epochs.bin as well
 //   3. Tap "upload to cloud" → uploadRecording() POSTs to Modal
 //   4. On success: stores session_id in zustand → Home shows ProcessingCard
 //   5. ProcessingCard polls Supabase, fires notification when ready
@@ -29,7 +29,6 @@ export function DebugSection() {
   const setProcessingSessionId = useSession((s) => s.setProcessingSessionId);
   const [eeg, setEeg] = useState<PickedFile | null>(null);
   const [epochs, setEpochs] = useState<PickedFile | null>(null);
-  const [stims, setStims] = useState<PickedFile | null>(null);
   const [uploading, setUploading] = useState(false);
 
   const pick = async (
@@ -54,7 +53,6 @@ export function DebugSection() {
       const { sessionId } = await uploadRecording({
         eeg,
         epochs: epochs ?? undefined,
-        stims: stims ?? undefined,
       });
       setProcessingSessionId(sessionId);
       Alert.alert(
@@ -82,7 +80,6 @@ export function DebugSection() {
 
         <FilePickRow label="eeg.bin (required)" file={eeg} onPick={() => pick(setEeg)} />
         <FilePickRow label="epochs.bin (optional)" file={epochs} onPick={() => pick(setEpochs)} />
-        <FilePickRow label="stims.bin (optional)" file={stims} onPick={() => pick(setStims)} />
 
         <View style={styles.uploadAction}>
           <Button

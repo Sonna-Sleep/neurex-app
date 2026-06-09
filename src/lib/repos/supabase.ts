@@ -2,10 +2,10 @@ import { getSupabase } from '../auth/supabase';
 import type { Session, SessionRepo } from './types';
 
 // Columns on the public.sessions table. The nested jsonb columns
-// (stage_minutes, epochs, stim_pulses) are stored already in the app's shape.
+// (stage_minutes, epochs) are stored already in the app's shape.
 const COLUMNS =
   'id,start_ms,end_ms,tib,tst,waso,efficiency,awakenings,' +
-  'stage_minutes,epochs,stim_pulses,stim_impact_pct,score,storage_prefix,status';
+  'stage_minutes,epochs,score,storage_prefix,status';
 
 type Row = {
   id: string;
@@ -18,8 +18,6 @@ type Row = {
   awakenings: number;
   stage_minutes: Session['stageMinutes'];
   epochs: Session['epochs'];
-  stim_pulses: Session['stimPulses'];
-  stim_impact_pct: number | null;
   score: number | null;
   storage_prefix: string | null;
   status: string;
@@ -35,10 +33,11 @@ function toSession(r: Row): Session {
     waso: r.waso,
     efficiency: r.efficiency,
     awakenings: r.awakenings,
-    stageMinutes: r.stage_minutes,
-    epochs: r.epochs,
-    stimPulses: r.stim_pulses,
-    stimImpactPct: r.stim_impact_pct,
+    // Defensive defaults: the DB columns are nullable and a half-staged row can
+    // arrive with these null even when `score` is set. Never hand null to the
+    // chart components — an empty shape renders cleanly instead of crashing.
+    stageMinutes: r.stage_minutes ?? { wake: 0, light: 0, rem: 0, deep: 0 },
+    epochs: r.epochs ?? [],
     score: r.score,
     storagePrefix: r.storage_prefix,
     status: r.status,

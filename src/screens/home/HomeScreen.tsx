@@ -20,7 +20,6 @@ import { Skeleton } from '../../components/Skeleton';
 import { NightSummary } from './components/NightSummary';
 import { StageBreakdown } from './components/StageBreakdown';
 import { Hypnogram } from './components/Hypnogram';
-import { StimImpactCard } from './components/StimImpactCard';
 import { ProcessingCard } from './components/ProcessingCard';
 import { RecordingCard } from './components/RecordingCard';
 import { ConnectDeviceCard } from './components/ConnectDeviceCard';
@@ -137,10 +136,6 @@ function Results({ session }: { session: Session }) {
           <StageBreakdown stageMinutes={session.stageMinutes} />
         </>
       ) : null}
-      <StimImpactCard
-        stimCount={session.stimPulses?.length ?? 0}
-        stimImpactPct={session.stimImpactPct}
-      />
     </View>
   );
 }

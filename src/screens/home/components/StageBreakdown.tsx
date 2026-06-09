@@ -15,13 +15,16 @@ const ORDER: { key: SleepStage; label: string }[] = [
 ];
 
 export function StageBreakdown({ stageMinutes }: Props) {
-  const total = ORDER.reduce((s, x) => s + stageMinutes[x.key], 0) || 1;
-  const max = Math.max(...ORDER.map((x) => stageMinutes[x.key]));
+  // A stage absent from a short night (e.g. no REM) is missing from the jsonb,
+  // so read every stage through `?? 0` — otherwise the math yields NaN%.
+  const minutesFor = (key: SleepStage) => stageMinutes?.[key] ?? 0;
+  const total = ORDER.reduce((s, x) => s + minutesFor(x.key), 0) || 1;
+  const max = Math.max(...ORDER.map((x) => minutesFor(x.key)));
 
   return (
     <View style={styles.wrap}>
       {ORDER.map(({ key, label }) => {
-        const min = stageMinutes[key];
+        const min = minutesFor(key);
         const fraction = min / total;
         const widthPct = (min / Math.max(max, 1)) * 100;
         return (

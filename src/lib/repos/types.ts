@@ -6,11 +6,6 @@ export type Epoch = {
   stage: SleepStage;
 };
 
-export type StimPulse = {
-  tMs: number;
-  epochIndex: number;
-};
-
 export type Session = {
   id: string;
   startMs: number;
@@ -27,13 +22,6 @@ export type Session = {
   awakenings: number | null;
   stageMinutes: Record<SleepStage, number>;
   epochs: Epoch[];
-  stimPulses: StimPulse[];
-  /**
-   * % increase in delta-band power (0.5–4 Hz) in 5s post-stim windows
-   * vs matched non-stim NREM baseline epochs the same night.
-   * null until the staging pipeline has produced a value.
-   */
-  stimImpactPct: number | null;
   /** 0..99, never 100. Capped by design (psychological retention hook). */
   score: number | null;
   /** Cloud Storage path {user_id}/{readable-label}; lets the app download the raw files. null for legacy rows. */
