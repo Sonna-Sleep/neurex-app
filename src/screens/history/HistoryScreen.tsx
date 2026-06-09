@@ -148,7 +148,9 @@ function Row({
   // Readable storage folders include a device tag (date_time_len_TAG); surface
   // it when present. null for legacy/uuid-only prefixes.
   const device = sourceTag(session.storagePrefix);
-  const canDownload = Boolean(session.storagePrefix);
+  // Raw-EEG download is a developer/debug affordance — hidden from beta users,
+  // shown only in dev builds (matches how DebugSection is gated).
+  const canDownload = __DEV__ && Boolean(session.storagePrefix);
 
   const onDownload = useCallback(async () => {
     if (!session.storagePrefix || dl === 'busy') return;

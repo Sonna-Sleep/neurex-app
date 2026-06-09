@@ -21,7 +21,7 @@ import { EEG_SAMPLE_RATE_HZ } from '../../../lib/ble/constants';
 import { transmitSession, subscribeToResult } from '../../../lib/cloud/cloudSync';
 import type { Session } from '../../../lib/repos/types';
 import { ageFromDob } from '../../../lib/profile';
-import { SignalPreview } from './SignalPreview';
+import { PreBedCheck } from './PreBedCheck';
 
 // Holds the just-finished local recording so the UI can offer a share button.
 type SavedRecording = {
@@ -41,6 +41,9 @@ export function RecordingCard() {
   const userDob = useSession((s) => s.user?.dob);
 
   const [busy, setBusy] = useState<'idle' | 'starting' | 'stopping'>('idle');
+  // True while the pre-bed signal check is on screen (between tapping
+  // "start session" and the recording actually beginning).
+  const [checking, setChecking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState<SavedRecording | null>(null);
   // Cloud sync of the just-finished recording (transmit → analyze → summary).
@@ -242,12 +245,10 @@ export function RecordingCard() {
       <View style={styles.wrap}>
         <Eyebrow>recording · saved on phone</Eyebrow>
         <Card style={styles.card}>
-          <SerifHeadline>Saved to this phone</SerifHeadline>
+          <SerifHeadline>Night saved</SerifHeadline>
           <Body style={styles.subtext}>
-            {saved.samples.toLocaleString()} samples
-            {saved.durationSec > 0 ? ` · ${mins}m ${secs}s` : ''}. Raw EEG is
-            stored on the device. Share it to Drive, email, or USB to pull
-            the night off in the morning.
+            Your recording is saved{saved.durationSec > 0 ? ` · ${mins}m ${secs}s` : ''}.
+            Sync it to the cloud to see your sleep results.
           </Body>
           {error ? <Text style={styles.error}>{error}</Text> : null}
           {sync === 'done' && summary ? (
@@ -275,7 +276,9 @@ export function RecordingCard() {
             loading={sync === 'uploading' || sync === 'analyzing'}
           />
 
-          <Button label="share EEG.BIN" variant="ghost" onPress={() => onShare(saved.eegUri)} />
+          {__DEV__ ? (
+            <Button label="share EEG.BIN" variant="ghost" onPress={() => onShare(saved.eegUri)} />
+          ) : null}
           <Button
             label="done"
             variant="ghost"
@@ -293,6 +296,25 @@ export function RecordingCard() {
     );
   }
 
+  // ── Pre-bed signal check (between "start session" and recording) ─────────
+  if (checking && pairedDeviceId) {
+    return (
+      <View style={styles.wrap}>
+        <Eyebrow>before you sleep</Eyebrow>
+        <Card style={styles.card}>
+          <PreBedCheck
+            deviceId={pairedDeviceId}
+            onProceed={() => {
+              setChecking(false);
+              onStart();
+            }}
+            onCancel={() => setChecking(false)}
+          />
+        </Card>
+      </View>
+    );
+  }
+
   // ── Idle (paired but not streaming) ──────────────────────────────────────
   if (!pairedDeviceId) return null;
   return (
@@ -301,16 +323,18 @@ export function RecordingCard() {
       <Card style={styles.card}>
         <SerifHeadline>Ready to record</SerifHeadline>
         <Body style={styles.subtext}>
-          Put on the sleep mask and tap Start. Keep the phone nearby through the
-          night.
+          Put on the sleep mask and tap Start. We'll check the signal looks good
+          before you settle in. Keep the phone nearby through the night.
         </Body>
         {error ? <Text style={styles.error}>{error}</Text> : null}
         <Button
           label={busy === 'starting' ? 'connecting…' : 'start session'}
-          onPress={onStart}
+          onPress={() => {
+            setError(null);
+            setChecking(true);
+          }}
           loading={busy === 'starting'}
         />
-        {pairedDeviceId ? <SignalPreview deviceId={pairedDeviceId} /> : null}
         <Button label="unpair" variant="ghost" onPress={onUnpair} />
       </Card>
     </View>

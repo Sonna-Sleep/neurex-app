@@ -45,15 +45,15 @@ const styles = StyleSheet.create({
   center: {
     flex: 1,
     justifyContent: 'center',
-    alignItems: 'center',
+    alignItems: 'flex-start',
   },
   headline: {
     marginBottom: spacing.md,
-    textAlign: 'center',
+    textAlign: 'left',
   },
   subtext: {
     color: colors.textSecondary,
-    textAlign: 'center',
+    textAlign: 'left',
   },
   actions: {
     paddingBottom: spacing.lg,

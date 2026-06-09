@@ -210,11 +210,11 @@ const styles = StyleSheet.create({
   center: {
     flex: 1,
     justifyContent: 'center',
-    alignItems: 'center',
+    alignItems: 'stretch',
   },
   headline: {
     marginBottom: spacing.md,
-    textAlign: 'center',
+    textAlign: 'left',
   },
   actions: {
     width: '100%',

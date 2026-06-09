@@ -1,5 +1,5 @@
-import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
 
 import { Secondary } from '../../../theme/typography';
 import { colors, spacing, typeScale } from '../../../theme/tokens';
@@ -22,12 +22,38 @@ export function NightSummary({
   recordingMinutes,
   label = 'last night',
 }: Props) {
+  // Spring the score in when analysis lands — it's the hero value, so it should
+  // arrive with a little life rather than just popping into place. Built-in
+  // Animated (no Reanimated/Babel dependency) keeps this beta-safe.
+  const anim = useRef(new Animated.Value(0)).current;
+  const isScored = score != null;
+  useEffect(() => {
+    if (!isScored) return;
+    anim.setValue(0);
+    Animated.timing(anim, {
+      toValue: 1,
+      duration: 600,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [score, isScored, anim]);
+
+  const scoreStyle = isScored
+    ? {
+        opacity: anim,
+        transform: [
+          { translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [14, 0] }) },
+          { scale: anim.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1] }) },
+        ],
+      }
+    : null;
+
   return (
     <View style={styles.wrap}>
       <Secondary style={styles.label}>{label}</Secondary>
-      <Text style={styles.score} allowFontScaling={false}>
+      <Animated.Text style={[styles.score, scoreStyle]} allowFontScaling={false}>
         {score ?? '—'}
-      </Text>
+      </Animated.Text>
       <Secondary style={styles.label}>{subline(tstMin, recordingMinutes)}</Secondary>
     </View>
   );

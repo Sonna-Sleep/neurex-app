@@ -1,18 +1,26 @@
 import { Platform } from 'react-native';
 
 export const colors = {
-  bgPrimary: '#0A0A0A',
-  bgSurface: '#141414',
-  bgElevated: '#1C1C1C',
-  borderSubtle: '#242424',
-  borderDivider: '#333333',
-  textPrimary: '#FFFFFF',
-  textSecondary: '#9A9A9A',
-  textTertiary: '#6E6E6E',
-  ctaBg: '#FFFFFF',
-  ctaText: '#000000',
+  // Warm near-black base (a brown undertone, not pure black) so the app reads
+  // like twilight rather than a cold tech dashboard. Surfaces/borders carry the
+  // same warmth so the shift feels intentional across every screen.
+  bgPrimary: '#0E0B09',
+  bgSurface: '#17130F',
+  bgElevated: '#201A15',
+  borderSubtle: '#2B2421',
+  borderDivider: '#39312B',
+  textPrimary: '#F7F4F1',
+  textSecondary: '#9C958C',
+  textTertiary: '#6F685F',
+  ctaBg: '#F7F4F1',
+  ctaText: '#0E0B09',
   warning: '#E5C07B',
   danger: '#E5484D',
+  // Calm, low-saturation green for "all good" cues (signal check, synced).
+  // Muted on purpose so it reads reassuring at night, not alarm-bright.
+  positive: '#6FB98F',
+  // Warm amber/taupe accent for "good morning"/score moments. Used sparingly.
+  accentWarm: '#D9B08C',
 } as const;
 
 export const stageOpacity = {
@@ -104,11 +112,12 @@ export const typeScale = {
     color: colors.textPrimary,
   },
   // Stat numbers for compact result cards. Smaller than hero but still
-  // display-grade. Uses the same thin/tracked feel for consistency.
+  // display-grade. Carries a touch more weight than the hero so figures read
+  // authoritative, not fragile.
   statNumber: {
     fontFamily: systemFontFamily,
     fontSize: 44,
-    fontWeight: '300' as const,
+    fontWeight: '400' as const,
     letterSpacing: -1,
     lineHeight: 48,
     color: colors.textPrimary,
@@ -127,7 +136,10 @@ export const spacing = {
 
 export const radii = {
   pill: 999,
-  card: 20,
+  // Primary button radius — deliberately NOT a full pill, so buttons read as a
+  // considered, signature shape rather than the default rounded-everything look.
+  button: 14,
+  card: 18,
   small: 8,
 } as const;
 
