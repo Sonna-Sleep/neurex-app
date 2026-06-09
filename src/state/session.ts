@@ -48,7 +48,7 @@ type SessionState = {
   processingSessionId: string | null;
   // Live stream state for the in-progress recording. null when idle. Transient.
   streaming: Streaming | null;
-  // Live battery % from the paired headband (notified via BLE Battery Service).
+  // Live battery % from the paired sleep mask (notified via BLE Battery Service).
   // null while disconnected or before the first notify. Transient.
   deviceBattery: number | null;
   setAuth: (user: User | null) => void;

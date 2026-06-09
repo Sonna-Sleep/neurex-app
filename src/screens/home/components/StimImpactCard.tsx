@@ -25,7 +25,7 @@ export function StimImpactCard({ stimCount, stimImpactPct }: Props) {
       <View style={styles.wrap}>
         <Eyebrow>neurex boost</Eyebrow>
         <Body style={styles.muted}>
-          No stims tonight. Wear the headband during NREM to enhance slow-wave
+          No stims tonight. Wear the sleep mask during NREM to enhance slow-wave
           sleep.
         </Body>
       </View>

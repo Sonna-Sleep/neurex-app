@@ -1,4 +1,4 @@
-// Public contract for talking to the Neurex headband over BLE.
+// Public contract for talking to the Neurex sleep mask over BLE.
 //
 // Live-stream model: scan → connect → startStream(sessionId, callbacks).
 // The firmware notifies 118-byte packets at ~62.5 Hz (4 samples/packet @ 250

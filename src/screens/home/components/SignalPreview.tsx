@@ -1,5 +1,5 @@
 // Live signal-quality preview shown on Home before the user starts a real
-// recording. Connects to the paired headband, streams ~62.5 Hz packets
+// recording. Connects to the paired sleep mask, streams ~62.5 Hz packets
 // without writing to disk, and renders a 2-second scrolling Fpz waveform
 // alongside two simple quality indicators:
 //   - rail: % of samples hitting the ADS1299 clip rail (electrode lifted)

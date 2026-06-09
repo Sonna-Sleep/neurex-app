@@ -2,7 +2,7 @@
 
 _Last updated: 2026-06-09_
 
-Neurex ("we", "us") makes a sleep-tracking headband and companion app. This
+Neurex ("we", "us") makes a sleep-tracking sleep mask and companion app. This
 policy explains what we collect, why, and your rights. Contact: contact@neurex.tech.
 
 Neurex is a **wellness** product. It is not a medical device and does not
@@ -10,7 +10,7 @@ diagnose, treat, or prevent any disease.
 
 ## What we collect
 - **Account:** your email address (for sign-in via magic link).
-- **Sleep recordings:** EEG signals recorded by the headband, and the sleep
+- **Sleep recordings:** EEG signals recorded by the sleep mask, and the sleep
   metrics derived from them (stages, sleep score, time-in-bed, etc.).
 - **Device & diagnostic:** minimal app/device information needed to operate and
   troubleshoot the service.

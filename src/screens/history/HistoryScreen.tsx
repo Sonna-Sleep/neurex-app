@@ -77,7 +77,7 @@ export function HistoryScreen({ navigation }: Props) {
           <SerifHeadline style={styles.headline}>Nothing here yet</SerifHeadline>
           <Body style={styles.body}>
             Past nights and trends will show up here once you've worn the
-            headband.
+            sleep mask.
           </Body>
         </View>
       </SafeAreaView>
@@ -145,9 +145,8 @@ function Row({
       : 'Still analyzing — usually under a minute';
   // date · timestamp · length (the per-account organization the user asked for)
   const meta = `${formatTime(session.startMs)} · ${formatLen(session.tib)}`;
-  // Dual-record nights carry the headband tag in their storage folder
-  // (date_time_len_TAG); surface it so two devices on one account are tellable
-  // apart at a glance. null for legacy/uuid-only prefixes.
+  // Readable storage folders include a device tag (date_time_len_TAG); surface
+  // it when present. null for legacy/uuid-only prefixes.
   const device = sourceTag(session.storagePrefix);
   const canDownload = Boolean(session.storagePrefix);
 
@@ -220,7 +219,7 @@ function Row({
   );
 }
 
-/** Headband tag from a readable storage prefix ({uid}/date_time_len_TAG).
+/** Device tag from a readable storage prefix ({uid}/date_time_len_TAG).
  * Returns null for legacy uuid-only prefixes so single recordings stay clean. */
 function sourceTag(prefix: string | null): string | null {
   if (!prefix) return null;

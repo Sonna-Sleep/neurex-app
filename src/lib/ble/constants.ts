@@ -57,9 +57,9 @@ export const EEG_UV_PER_LSB = (4.5 / Math.pow(2, 23) / 24) * 1e6;
 export const EEG_SAMPLE_RATE_HZ = 250;
 export const EEG_SAMPLE_INTERVAL_MS = 4;
 // 2026-06-03: 8 samples/packet (was 4). Full 250 SPS, but HALF the notification
-// rate (~31/s vs 62.5/s) — far less native→JS bridge load, which is what let
-// two headbands stall under dual full-rate. Must match the firmware BLE build's
-// -DSAMPLES_PER_PACKET=8 EXACTLY (it derives PACKET_TOTAL_SIZE the same way).
+// rate (~31/s vs 62.5/s) — far less native→JS bridge load. Must match the
+// firmware BLE build's -DSAMPLES_PER_PACKET=8 EXACTLY (it derives
+// PACKET_TOTAL_SIZE the same way).
 export const SAMPLES_PER_PACKET = 8;
 
 // ── Packet layout (226 bytes per notification) ──────────────────────────────

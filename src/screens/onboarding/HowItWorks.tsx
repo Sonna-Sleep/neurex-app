@@ -25,7 +25,7 @@ const STEPS: Step[] = [
   {
     eyebrow: 'ALL NIGHT',
     headline: 'Sleep.',
-    body: 'The headband records your sleep signal while you rest.',
+    body: 'The sleep mask records your sleep signal while you rest.',
   },
   {
     eyebrow: 'MORNING',

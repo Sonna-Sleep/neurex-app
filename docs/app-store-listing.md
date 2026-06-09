@@ -21,13 +21,13 @@ _Framing rule: **wellness, not medical.** Never claim to diagnose, treat, or pre
 - **Privacy Policy URL:** `https://aleksaspetro.github.io/neurex-legal/` — **live** (GitHub Pages, repo `aleksaspetro/neurex-legal`). Already wired into `src/lib/legal.ts`. Just paste this into the ASC field. (Swap to `neurex.tech/privacy` later if you move it.)
 
 ## Promotional text  *(≤170 chars, editable anytime without review)*
-`Track your sleep with a real EEG headband — see your hypnogram, sleep stages, and a nightly score the morning after. Dry electrodes, no gels, no wires to a wall.`  *(160)*
+`Track your sleep with a real EEG sleep mask — see your hypnogram, sleep stages, and a nightly score the morning after. Dry electrodes, no gels, no wires.`  *(150)*
 
 ## Description  *(≤4000 chars)*
 ```
 Neurex turns a night's sleep into something you can actually see.
 
-Pair the Neurex headband, wear it to bed, and in the morning the app shows you a clear picture of your night: a stage-by-stage hypnogram (wake, light, REM, deep), time asleep, how efficiently you slept, and a single nightly sleep score to track over time.
+Pair the Neurex sleep mask, wear it to bed, and in the morning the app shows you a clear picture of your night: a stage-by-stage hypnogram (wake, light, REM, deep), time asleep, how efficiently you slept, and a single nightly sleep score to track over time.
 
 Unlike wrist trackers that infer sleep from movement and heart rate, Neurex reads brain activity directly with a comfortable dry-electrode forehead sensor — no gels, no pastes, no clinic. Your recording is analyzed automatically and your results are ready when you wake up.
 
@@ -42,7 +42,7 @@ Your account is an email address; your recordings and results are stored securel
 
 Neurex is a wellness product to help you understand your sleep. It is not a medical device and does not diagnose, treat, or prevent any disease.
 
-Requires the Neurex headband.
+Requires the Neurex sleep mask.
 ```
 
 ## Keywords  *(≤100 chars total, comma-separated, no spaces between)*
@@ -71,13 +71,13 @@ Answer the questionnaire as below. These **must match** the privacy manifest in 
 ---
 
 ## App Review information (the part that prevents a "can't test it" rejection)
-The app is a companion to a **hardware EEG headband** the reviewer won't have. Without help they can't pair a device or generate a recording, so:
+The app is a companion to a **hardware EEG sleep mask** the reviewer won't have. Without help they can't pair a device or generate a recording, so:
 
 1. **Demo account:** create a real account and pre-load it with at least one completed night (so History shows a hypnogram + score). Put its email/password in the "Sign-In required" demo fields.
 2. **Notes for reviewer (suggested):**
    ```
-   Neurex is a companion app for the Neurex sleep-EEG headband (hardware). Recording
-   requires the physical headband, which reviewers won't have. Please sign in with the
+   Neurex is a companion app for the Neurex EEG sleep mask (hardware). Recording
+   requires the physical sleep mask, which reviewers won't have. Please sign in with the
    demo account above to view a previously recorded night: open History to see the
    hypnogram, sleep stages, and sleep score. Account deletion is available at
    Account → delete account (works without the hardware).

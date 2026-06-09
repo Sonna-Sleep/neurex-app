@@ -7,7 +7,7 @@ import {
   View,
 } from 'react-native';
 
-const HEADBAND = require('../../../assets/images/headband.png');
+const SLEEP_MASK = require('../../../assets/images/sleep-mask.png');
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Logo } from '../../components/Logo';
@@ -155,10 +155,10 @@ function EmptyState({ hasDevice }: { hasDevice: boolean }) {
       <Body style={styles.emptyBody}>
         {hasDevice
           ? 'Wear it tonight. Tap Start session before bed.'
-          : 'Pair your headband to start.'}
+          : 'Pair your sleep mask to start.'}
       </Body>
       <Image
-        source={HEADBAND}
+        source={SLEEP_MASK}
         style={styles.deviceImage}
         resizeMode="contain"
       />

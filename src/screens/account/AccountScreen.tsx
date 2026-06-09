@@ -40,7 +40,7 @@ export function AccountScreen() {
 
         <Section eyebrow="about">
           <Body style={styles.muted}>
-            Neurex tracks your sleep with a dry-electrode EEG headband and shows your stages and a nightly score.
+            Neurex tracks your sleep with a dry-electrode EEG sleep mask and shows your stages and a nightly score.
           </Body>
         </Section>
 

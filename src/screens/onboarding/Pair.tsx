@@ -8,7 +8,7 @@ import {
   View,
 } from 'react-native';
 
-const HEADBAND = require('../../../assets/images/headband.png');
+const SLEEP_MASK = require('../../../assets/images/sleep-mask.png');
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 
@@ -147,14 +147,14 @@ export function Pair({ navigation }: Props) {
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <View style={styles.center}>
         <Image
-          source={HEADBAND}
+          source={SLEEP_MASK}
           style={styles.deviceImage}
           resizeMode="contain"
         />
 
-        <SerifDisplay style={styles.headline}>Pair your headband</SerifDisplay>
+        <SerifDisplay style={styles.headline}>Pair your sleep mask</SerifDisplay>
         <Body style={styles.subtext}>
-          Hold the button on your headband for 4 seconds until the light pulses.
+          Hold the button on your sleep mask for 4 seconds until the light pulses.
           If multiple are in range, tap the closest one.
         </Body>
 
@@ -171,7 +171,7 @@ export function Pair({ navigation }: Props) {
               <ActivityIndicator color={colors.textSecondary} />
               <Body style={styles.cardText}>
                 {sortedDevices.length === 0
-                  ? 'Searching for your headband…'
+                  ? 'Searching for your sleep mask…'
                   : `Found ${sortedDevices.length} — keep scanning…`}
               </Body>
             </View>
@@ -201,7 +201,7 @@ export function Pair({ navigation }: Props) {
             <View style={styles.foundCol}>
               <Eyebrow>nothing yet</Eyebrow>
               <Body style={styles.cardText}>
-                Make sure the headband is powered on and the button is held
+                Make sure the sleep mask is powered on and the button is held
                 for 4 seconds.
               </Body>
             </View>
@@ -220,7 +220,7 @@ export function Pair({ navigation }: Props) {
             <View style={styles.foundCol}>
               <Eyebrow>permission needed</Eyebrow>
               <Body style={styles.cardText}>
-                Neurex needs Bluetooth permission to find your headband. Open
+                Neurex needs Bluetooth permission to find your sleep mask. Open
                 Settings to grant it.
               </Body>
             </View>

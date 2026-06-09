@@ -309,10 +309,10 @@ export const realBleClient: BleClient = {
     // discovery still works). Android foreground scanning here matches the
     // name in the advertising packet — simpler than a two-packet UUID filter
     // and still excludes earbuds/phones/watches/etc, so the user only sees
-    // Neurex headbands in the Pair UI.
+    // Neurex sleep masks in the Pair UI.
     //
     // No dedupe here: every advertisement fires onFound so the UI can
-    // refresh RSSI for ranking when multiple headbands are in range.
+    // refresh RSSI for ranking when multiple sleep masks are in range.
     manager.startDeviceScan(null, null, (error, device) => {
       if (error) {
         if (__DEV__) console.warn('[ble/real] scan error:', error);

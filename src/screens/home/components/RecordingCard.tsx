@@ -69,7 +69,7 @@ export function RecordingCard() {
 
   const onStart = useCallback(async () => {
     if (!pairedDeviceId) {
-      setError('Pair your headband first.');
+      setError('Pair your sleep mask first.');
       return;
     }
     setError(null);
@@ -85,8 +85,8 @@ export function RecordingCard() {
 
   const onUnpair = useCallback(() => {
     Alert.alert(
-      'Forget this headband?',
-      `${pairedSerial ?? 'The paired headband'} will be removed. You can pair again from Home.`,
+      'Forget this sleep mask?',
+      `${pairedSerial ?? 'The paired sleep mask'} will be removed. You can pair again from Home.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -192,10 +192,10 @@ export function RecordingCard() {
           <View style={styles.row}>
             <ActivityIndicator color={colors.textSecondary} />
             <View style={styles.titleCol}>
-              <SerifHeadline>Streaming from {pairedSerial ?? 'headband'}</SerifHeadline>
+              <SerifHeadline>Streaming from {pairedSerial ?? 'sleep mask'}</SerifHeadline>
               <Body style={styles.subtext}>
                 {isReconnecting
-                  ? 'Reconnecting to your headband…'
+                  ? 'Reconnecting to your sleep mask…'
                   : `${formatElapsed(elapsedSec)} elapsed`}
               </Body>
             </View>
@@ -291,11 +291,11 @@ export function RecordingCard() {
   if (!pairedDeviceId) return null;
   return (
     <View style={styles.wrap}>
-      <Eyebrow>headband · paired</Eyebrow>
+      <Eyebrow>sleep mask · paired</Eyebrow>
       <Card style={styles.card}>
         <SerifHeadline>Ready to record</SerifHeadline>
         <Body style={styles.subtext}>
-          Put on the headband and tap Start. Keep the phone nearby through the
+          Put on the sleep mask and tap Start. Keep the phone nearby through the
           night.
         </Body>
         {error ? <Text style={styles.error}>{error}</Text> : null}

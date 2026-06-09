@@ -1,7 +1,7 @@
 # Neurex
 
-Mobile companion app for the Neurex EEG sleep headband. It connects to the
-headband over Bluetooth Low Energy, records EEG through the night, uploads the
+Mobile companion app for the Neurex EEG sleep mask. It connects to the
+sleep mask over Bluetooth Low Energy, records EEG through the night, uploads the
 recording to the cloud, and shows you a staged hypnogram and a sleep score the
 next morning.
 
@@ -9,7 +9,7 @@ Built with React Native + Expo (SDK 54, new architecture). iOS and Android.
 
 ## Features
 
-- **BLE streaming** — pairs and streams from one headband (`src/lib/ble/`),
+- **BLE streaming** — pairs and streams from one sleep mask (`src/lib/ble/`),
   with auto-reconnect/backoff and an Android foreground service
   (`modules/neurex-foreground-service/`) so recording survives the screen
   turning off.
@@ -62,7 +62,7 @@ docs/             design specs + implementation plans
 - Node 18+ and npm
 - A development build is required (this app uses native modules — BLE and the
   foreground service — so it won't run in Expo Go). Use a physical device for
-  BLE; an emulator can't talk to the headband.
+  BLE; an emulator can't talk to the sleep mask.
 - Android: Android Studio + SDK. iOS: Xcode (macOS only).
 
 ## Setup
@@ -115,7 +115,7 @@ Install with `adb install -r <apk>` (in-place `-r` preserves app data).
 
 ## How a night flows
 
-1. Phone connects to one headband over BLE and streams EEG, buffered to disk by
+1. Phone connects to one sleep mask over BLE and streams EEG, buffered to disk by
    a foreground service.
 2. In the morning, the recording uploads to Supabase Storage as resumable
    segments.

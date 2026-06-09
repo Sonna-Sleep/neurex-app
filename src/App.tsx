@@ -7,7 +7,7 @@ import { View } from 'react-native';
 
 // Side-effect import: constructs the singleton BleManager at module-load
 // time so iOS state preservation/restoration works on a cold background
-// start (e.g. when a paired headband advertises while the app is
+// start (e.g. when a paired sleep mask advertises while the app is
 // suspended). Must happen before React renders. See src/lib/ble/manager.ts.
 import './lib/ble';
 
