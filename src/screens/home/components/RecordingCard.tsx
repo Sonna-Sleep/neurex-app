@@ -20,6 +20,7 @@ import { startSession, stopSession } from '../../../lib/ble/streamController';
 import { EEG_SAMPLE_RATE_HZ } from '../../../lib/ble/constants';
 import { transmitSession, subscribeToResult } from '../../../lib/cloud/cloudSync';
 import type { Session } from '../../../lib/repos/types';
+import { ageFromDob } from '../../../lib/profile';
 import { SignalPreview } from './SignalPreview';
 
 // Holds the just-finished local recording so the UI can offer a share button.
@@ -37,6 +38,7 @@ export function RecordingCard() {
   const pairedSerial = useSession((s) => s.pairedSerial);
   const setPaired = useSession((s) => s.setPaired);
   const deviceBattery = useSession((s) => s.deviceBattery);
+  const userDob = useSession((s) => s.user?.dob);
 
   const [busy, setBusy] = useState<'idle' | 'starting' | 'stopping'>('idle');
   const [error, setError] = useState<string | null>(null);
@@ -148,6 +150,10 @@ export function RecordingCard() {
   // deleting), so nothing is lost.
   const onSyncToCloud = useCallback(async () => {
     if (!saved || sync === 'uploading' || sync === 'analyzing' || sync === 'done') return;
+    if (ageFromDob(userDob) === null) {
+      setError('Add your birth date in Account before syncing to cloud. The recording is still saved on this phone.');
+      return;
+    }
     setError(null);
     setSummary(null);
     setSync('uploading');
@@ -167,7 +173,7 @@ export function RecordingCard() {
       setSync('error');
       setError((e as Error).message);
     }
-  }, [saved, sync]);
+  }, [saved, sync, userDob]);
 
   // ── Active recording ─────────────────────────────────────────────────────
   if (streaming) {

@@ -45,8 +45,8 @@ export function Profile({ navigation }: Props) {
   if (step === 1) {
     return (
       <ProfileCard eyebrow="about you" title="When were you born?"
-        subtitle="Used to make your sleep staging more accurate."
-        canContinue={dob !== null} onContinue={next} onSkip={() => setStep(2)} isLast={false}>
+        subtitle="Required for sleep staging."
+        canContinue={dob !== null} onContinue={next} isLast={false}>
         <DateOfBirthInput value={dob} onChange={setDob} />
       </ProfileCard>
     );

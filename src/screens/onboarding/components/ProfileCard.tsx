@@ -12,7 +12,7 @@ type Props = {
   subtitle?: string;
   canContinue: boolean;
   onContinue: () => void;
-  onSkip: () => void;
+  onSkip?: () => void;
   isLast: boolean;
   children: React.ReactNode;
 };
@@ -30,7 +30,7 @@ export function ProfileCard({
       </View>
       <View style={styles.actions}>
         <Button label={isLast ? 'finish' : 'continue'} onPress={onContinue} disabled={!canContinue} />
-        <Button label="skip" variant="ghost" onPress={onSkip} />
+        {onSkip ? <Button label="skip" variant="ghost" onPress={onSkip} /> : null}
       </View>
     </SafeAreaView>
   );
