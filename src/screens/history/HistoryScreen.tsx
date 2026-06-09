@@ -16,7 +16,7 @@ import {
   Eyebrow,
   Secondary,
 } from '../../theme/typography';
-import { colors, layout, spacing, stageColors, stageOpacity } from '../../theme/tokens';
+import { colors, layout, spacing, stageColors } from '../../theme/tokens';
 import { Skeleton } from '../../components/Skeleton';
 import { sessionRepo, type Session, type SleepStage } from '../../lib/repos';
 import { downloadRaw } from '../../lib/cloud/cloudSync';
@@ -108,7 +108,7 @@ export function HistoryScreen({ navigation }: Props) {
         }
       >
         <View style={styles.header}>
-          <Eyebrow>history · {sessions.length} nights</Eyebrow>
+          <Eyebrow>history · {sessions.length} {sessions.length === 1 ? 'night' : 'nights'}</Eyebrow>
           <SerifDisplay>{avg ?? '—'} avg</SerifDisplay>
         </View>
 
@@ -143,11 +143,8 @@ function Row({
     : session.status === 'failed'
       ? 'Processing failed'
       : 'Still analyzing — usually under a minute';
-  // date · timestamp · length (the per-account organization the user asked for)
+  // date · timestamp · length
   const meta = `${formatTime(session.startMs)} · ${formatLen(session.tib)}`;
-  // Readable storage folders include a device tag (date_time_len_TAG); surface
-  // it when present. null for legacy/uuid-only prefixes.
-  const device = sourceTag(session.storagePrefix);
   // Raw-EEG download is a developer/debug affordance — hidden from beta users,
   // shown only in dev builds (matches how DebugSection is gated).
   const canDownload = __DEV__ && Boolean(session.storagePrefix);
@@ -177,10 +174,7 @@ function Row({
       >
         <View style={styles.rowTop}>
           <View>
-            <Eyebrow>
-              {formatDate(session.startMs)}
-              {device ? ` · ${device}` : ''}
-            </Eyebrow>
+            <Eyebrow>{formatDate(session.startMs)}</Eyebrow>
             <Secondary style={styles.meta}>{meta}</Secondary>
             <Secondary style={styles.meta}>{tstLabel}</Secondary>
           </View>
@@ -196,7 +190,6 @@ function Row({
                 style={{
                   flex,
                   backgroundColor: stageColors[stage],
-                  opacity: stageOpacity[stage],
                 }}
               />
             );
@@ -219,17 +212,6 @@ function Row({
       ) : null}
     </View>
   );
-}
-
-/** Device tag from a readable storage prefix ({uid}/date_time_len_TAG).
- * Returns null for legacy uuid-only prefixes so single recordings stay clean. */
-function sourceTag(prefix: string | null): string | null {
-  if (!prefix) return null;
-  const label = prefix.split('/').pop() ?? '';
-  const parts = label.split('_');
-  if (parts.length < 4) return null; // not the date_time_len_tag shape
-  const tag = parts[parts.length - 1];
-  return tag || null;
 }
 
 function formatDate(ms: number) {
@@ -260,10 +242,13 @@ function formatTime(ms: number) {
 }
 
 function formatLen(minutes: number) {
-  const sec = Math.max(0, Math.round(minutes * 60));
-  const m = Math.floor(sec / 60);
-  const s = sec % 60;
-  return m > 0 ? `${m}m ${s}s` : `${s}s`;
+  const totalSec = Math.max(0, Math.round(minutes * 60));
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
 }
 
 const styles = StyleSheet.create({

@@ -1,94 +1,98 @@
 import React from 'react';
 import { StyleSheet, View, Text } from 'react-native';
 
-import { colors, spacing, stageColors, radii } from '../../../theme/tokens';
-import { systemFontFamily } from '../../../theme/tokens';
+import {
+  colors,
+  spacing,
+  stageColors,
+  STAGE_META,
+  radii,
+  systemFontFamily,
+} from '../../../theme/tokens';
 import type { SleepStage } from '../../../lib/repos';
 
 type Props = { stageMinutes: Record<SleepStage, number> };
 
-const ORDER: { key: SleepStage; label: string }[] = [
-  { key: 'wake', label: 'Awake' },
-  { key: 'light', label: 'Light' },
-  { key: 'rem', label: 'REM' },
-  { key: 'deep', label: 'Deep' },
-];
-
 export function StageBreakdown({ stageMinutes }: Props) {
-  // A stage absent from a short night (e.g. no REM) is missing from the jsonb,
-  // so read every stage through `?? 0` — otherwise the math yields NaN%.
+  // Read every stage through `?? 0` — a short night may be missing a stage.
   const minutesFor = (key: SleepStage) => stageMinutes?.[key] ?? 0;
-  const total = ORDER.reduce((s, x) => s + minutesFor(x.key), 0) || 1;
-  const max = Math.max(...ORDER.map((x) => minutesFor(x.key)));
+  const total = STAGE_META.reduce((s, x) => s + minutesFor(x.key), 0) || 1;
 
   return (
     <View style={styles.wrap}>
-      {ORDER.map(({ key, label }) => {
-        const min = minutesFor(key);
-        const fraction = min / total;
-        const widthPct = (min / Math.max(max, 1)) * 100;
-        return (
-          <View key={key} style={styles.row}>
-            <View style={styles.barTrack}>
-              <View
-                style={[
-                  styles.barFill,
-                  {
-                    width: `${widthPct}%`,
-                    backgroundColor: stageColors[key],
-                  },
-                ]}
-              />
-            </View>
-            <View style={styles.meta}>
+      {/* One honest stacked proportion bar: each segment is its true share of
+          the night, so widths actually match the percentages below. */}
+      <View style={styles.bar}>
+        {STAGE_META.map(({ key }) => {
+          const min = minutesFor(key);
+          if (min <= 0) return null;
+          return (
+            <View key={key} style={{ flex: min / total, backgroundColor: stageColors[key] }} />
+          );
+        })}
+      </View>
+
+      {/* Legend rows, sleep-first order: color · stage · duration · share. */}
+      <View style={styles.rows}>
+        {STAGE_META.map(({ key, label }) => {
+          const min = minutesFor(key);
+          const pct = Math.round((min / total) * 100);
+          return (
+            <View key={key} style={styles.row}>
+              <View style={[styles.dot, { backgroundColor: stageColors[key] }]} />
               <Text style={styles.label}>{label}</Text>
+              <View style={styles.spacer} />
               <Text style={styles.value}>{fmtDur(min)}</Text>
-              <Text style={styles.percent}>
-                {Math.round(fraction * 100)}%
-              </Text>
+              <Text style={styles.percent}>{pct}%</Text>
             </View>
-          </View>
-        );
-      })}
+          );
+        })}
+      </View>
     </View>
   );
 }
 
 function fmtDur(min: number) {
-  const h = Math.floor(min / 60);
-  const m = min % 60;
-  if (h === 0) return `${m}min`;
-  return `${h}h ${m}min`;
+  const m = Math.round(min);
+  const h = Math.floor(m / 60);
+  const r = m % 60;
+  if (h === 0) return `${r}m`;
+  return `${h}h ${r}m`;
 }
 
 const styles = StyleSheet.create({
   wrap: {
+    gap: spacing.lg,
+  },
+  bar: {
+    flexDirection: 'row',
+    height: 16,
+    borderRadius: radii.small,
+    overflow: 'hidden',
+    backgroundColor: colors.bgSurface,
+    gap: 2,
+  },
+  rows: {
     gap: spacing.md,
   },
   row: {
-    gap: spacing.sm,
-  },
-  barTrack: {
-    height: 22,
-    backgroundColor: colors.bgSurface,
-    borderRadius: radii.small,
-    overflow: 'hidden',
-  },
-  barFill: {
-    height: '100%',
-    backgroundColor: colors.textPrimary,
-    borderRadius: radii.small,
-  },
-  meta: {
     flexDirection: 'row',
-    alignItems: 'baseline',
+    alignItems: 'center',
     gap: spacing.sm,
+  },
+  dot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
   },
   label: {
     fontFamily: systemFontFamily,
     fontSize: 15,
-    fontWeight: '500',
+    fontWeight: '600',
     color: colors.textPrimary,
+  },
+  spacer: {
+    flex: 1,
   },
   value: {
     fontFamily: systemFontFamily,
@@ -99,7 +103,8 @@ const styles = StyleSheet.create({
   percent: {
     fontFamily: systemFontFamily,
     fontSize: 13,
-    fontWeight: '400',
     color: colors.textSecondary,
+    width: 40,
+    textAlign: 'right',
   },
 });

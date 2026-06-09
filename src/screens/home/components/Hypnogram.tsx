@@ -1,8 +1,8 @@
 import React, { useMemo, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import Svg, { Line, Rect, Text as SvgText } from 'react-native-svg';
 
-import { colors, stageColors } from '../../../theme/tokens';
+import { colors, spacing, stageColors, STAGE_META } from '../../../theme/tokens';
 import type { Epoch, SleepStage } from '../../../lib/repos';
 
 type Props = {
@@ -15,7 +15,7 @@ const HEIGHT = 220;
 const PADDING_TOP = 8;
 const PADDING_BOTTOM = 22; // space for the bottom time axis
 const LABEL_W = 36; // left gutter reserved for lane labels
-const LANES: SleepStage[] = ['wake', 'light', 'rem', 'deep'];
+const LANES: SleepStage[] = ['wake', 'rem', 'light', 'deep'];
 const LANE_LABEL: Record<SleepStage, string> = {
   wake: 'WAKE',
   light: 'LIGHT',
@@ -51,10 +51,19 @@ export function Hypnogram({ epochs, startMs, endMs }: Props) {
   const ticks = useMemo(() => axisTicks(startMs, endMs), [startMs, endMs]);
 
   return (
-    <View
-      style={styles.chart}
-      onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
-    >
+    <View style={styles.container}>
+      <View style={styles.legend}>
+        {STAGE_META.map((s) => (
+          <View key={s.key} style={styles.legendItem}>
+            <View style={[styles.swatch, { backgroundColor: stageColors[s.key] }]} />
+            <Text style={styles.legendLabel}>{s.label}</Text>
+          </View>
+        ))}
+      </View>
+      <View
+        style={styles.chart}
+        onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
+      >
       {width > 0 && (
         <Svg width={width} height={HEIGHT}>
           {/* Left lane labels: Wake (top) -> Deep (bottom) */}
@@ -63,10 +72,10 @@ export function Hypnogram({ epochs, startMs, endMs }: Props) {
               key={`label-${stage}`}
               x={0}
               y={laneCenter(stage) + 3}
-              fontSize={9}
-              fill={colors.textTertiary}
+              fontSize={10}
+              fill={colors.textSecondary}
               textAnchor="start"
-              fontWeight="500"
+              fontWeight="600"
             >
               {LANE_LABEL[stage]}
             </SvgText>
@@ -89,36 +98,25 @@ export function Hypnogram({ epochs, startMs, endMs }: Props) {
             );
           })}
 
-          {/* Stepped stage bands with connectors between level changes */}
+          {/* Stage bands only — the old vertical connector lines turned every
+              rapid stage flip into a full-height streak, reading as a barcode.
+              The bands alone make a clean, legible stage plot. */}
           {runs.map((run, i) => {
             // Epoch startMs is recording-relative (0-based, written by the
             // backend), so shift by the absolute session start before mapping —
             // otherwise bands land ~startMs off-screen and the chart looks empty.
             const x1 = xAt(startMs + run.startMs);
             const x2 = xAt(startMs + run.startMs + run.durationMs);
-            const next = runs[i + 1];
             return (
-              <React.Fragment key={i}>
-                <Rect
-                  x={x1}
-                  y={laneTop(run.stage)}
-                  width={Math.max(x2 - x1, 0.75)}
-                  height={BAND_H}
-                  rx={2}
-                  fill={stageColors[run.stage]}
-                />
-                {next && (
-                  <Line
-                    x1={x2}
-                    x2={x2}
-                    y1={laneCenter(run.stage)}
-                    y2={laneCenter(next.stage)}
-                    stroke={colors.textSecondary}
-                    strokeWidth={1.5}
-                    opacity={0.5}
-                  />
-                )}
-              </React.Fragment>
+              <Rect
+                key={i}
+                x={x1}
+                y={laneTop(run.stage)}
+                width={Math.max(x2 - x1, 0.75)}
+                height={BAND_H}
+                rx={2}
+                fill={stageColors[run.stage]}
+              />
             );
           })}
 
@@ -165,6 +163,7 @@ export function Hypnogram({ epochs, startMs, endMs }: Props) {
             ))}
         </Svg>
       )}
+      </View>
     </View>
   );
 }
@@ -211,6 +210,28 @@ function fmt(ms: number) {
 }
 
 const styles = StyleSheet.create({
+  container: {
+    gap: spacing.md,
+  },
+  legend: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.md,
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  swatch: {
+    width: 10,
+    height: 10,
+    borderRadius: 3,
+  },
+  legendLabel: {
+    fontSize: 12,
+    color: colors.textSecondary,
+  },
   chart: {
     width: '100%',
     height: HEIGHT,

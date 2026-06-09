@@ -7,7 +7,7 @@
 // to pull the file off in the morning (Drive / email / USB).
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import * as Sharing from 'expo-sharing';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 
@@ -335,7 +335,9 @@ export function RecordingCard() {
           }}
           loading={busy === 'starting'}
         />
-        <Button label="unpair" variant="ghost" onPress={onUnpair} />
+        <Pressable onPress={onUnpair} hitSlop={8} style={styles.unpair}>
+          <Secondary style={styles.unpairText}>unpair</Secondary>
+        </Pressable>
       </Card>
     </View>
   );
@@ -413,5 +415,12 @@ const styles = StyleSheet.create({
   error: {
     color: colors.warning,
     fontSize: 13,
+  },
+  unpair: {
+    alignSelf: 'center',
+    paddingVertical: spacing.xs,
+  },
+  unpairText: {
+    color: colors.textTertiary,
   },
 });

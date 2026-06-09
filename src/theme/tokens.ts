@@ -1,26 +1,28 @@
 import { Platform } from 'react-native';
 
+import type { SleepStage } from '../lib/repos/types';
+
 export const colors = {
-  // Warm near-black base (a brown undertone, not pure black) so the app reads
-  // like twilight rather than a cold tech dashboard. Surfaces/borders carry the
-  // same warmth so the shift feels intentional across every screen.
-  bgPrimary: '#0E0B09',
-  bgSurface: '#17130F',
-  bgElevated: '#201A15',
-  borderSubtle: '#2B2421',
-  borderDivider: '#39312B',
-  textPrimary: '#F7F4F1',
-  textSecondary: '#9C958C',
-  textTertiary: '#6F685F',
-  ctaBg: '#F7F4F1',
-  ctaText: '#0E0B09',
-  warning: '#E5C07B',
+  // Calm cool-neutral charcoal (Oura-like): deep but never pure black, never
+  // brown. Surfaces lift in clear steps so cards read as floating planes.
+  bgPrimary: '#0B0D10',
+  bgSurface: '#14171C',
+  bgElevated: '#1C2027',
+  borderSubtle: '#262B33',
+  borderDivider: '#333A44',
+  // Readable text ladder — primary ~17:1, secondary ~9:1, tertiary ~5:1 on
+  // bgPrimary, so supporting text is genuinely legible, not muddy grey.
+  textPrimary: '#F4F6F8',
+  textSecondary: '#A8B0BC',
+  textTertiary: '#727B87',
+  ctaBg: '#F4F6F8',
+  ctaText: '#0B0D10',
+  warning: '#E0B560',
   danger: '#E5484D',
-  // Calm, low-saturation green for "all good" cues (signal check, synced).
-  // Muted on purpose so it reads reassuring at night, not alarm-bright.
-  positive: '#6FB98F',
-  // Warm amber/taupe accent for "good morning"/score moments. Used sparingly.
-  accentWarm: '#D9B08C',
+  // Calm green for "all good" cues (signal check, synced).
+  positive: '#5FB89C',
+  // Single restrained accent — soft periwinkle, used sparingly for emphasis.
+  accent: '#7C9CE0',
 } as const;
 
 export const stageOpacity = {
@@ -30,14 +32,26 @@ export const stageOpacity = {
   deep: 1.0,
 } as const;
 
-// Stage colors. Deep is the brand hero (vivid indigo), light blends through
-// blue, REM picks up a lavender accent (dreaming), wake is a calm warm grey.
+// Stage colors — calm and clearly distinct in BOTH hue and lightness so the
+// graphs are readable at a glance. Deep = indigo anchor, Light = cyan-blue
+// (separated from deep), REM = the lone violet, Awake = warm taupe (NOT white,
+// so wake recedes instead of dominating the chart).
 export const stageColors = {
-  deep: '#3B82F6',
-  light: '#60A5FA',
-  rem: '#A78BFA',
-  wake: '#E5E7EB',
+  deep: '#4C6FE0',
+  light: '#5FA8E8',
+  rem: '#9B7DE0',
+  wake: '#C9A77F',
 } as const;
+
+// Single source of truth for stage order + labels across every visualization.
+// Sleep-first order (most restorative → least) so the user reads one consistent
+// order in the legend and breakdown.
+export const STAGE_META: { key: SleepStage; label: string }[] = [
+  { key: 'deep', label: 'Deep' },
+  { key: 'rem', label: 'REM' },
+  { key: 'light', label: 'Light' },
+  { key: 'wake', label: 'Awake' },
+];
 
 // Match neurex.tech: SF Pro Display on iOS, Roboto on Android (platform default sans).
 // We don't ship a custom font; system stack handles everything.
@@ -55,36 +69,39 @@ export const fonts = {
   sansSemibold: systemFontFamily,
 } as const;
 
+// One weight system: 600 for everything structural (display/headline/score/
+// stat/eyebrow/button), 400 for body/secondary. Dropping the old thin 300s is
+// what removes the "fragile/cheap" feel.
 export const typeScale = {
   serifDisplay: {
     fontFamily: systemFontFamily,
-    fontSize: 36,
-    lineHeight: 42,
-    letterSpacing: -0.6,
-    fontWeight: '300' as const,
+    fontSize: 34,
+    lineHeight: 40,
+    letterSpacing: -0.5,
+    fontWeight: '600' as const,
     color: colors.textPrimary,
   },
   serifHeadline: {
     fontFamily: systemFontFamily,
-    fontSize: 28,
-    lineHeight: 34,
+    fontSize: 24,
+    lineHeight: 30,
     letterSpacing: -0.3,
-    fontWeight: '300' as const,
+    fontWeight: '600' as const,
     color: colors.textPrimary,
   },
   sansEyebrow: {
     fontFamily: systemFontFamily,
     fontSize: 11,
     lineHeight: 14,
-    letterSpacing: 1.5,
-    fontWeight: '500' as const,
+    letterSpacing: 1.2,
+    fontWeight: '600' as const,
     color: colors.textTertiary,
     textTransform: 'uppercase' as const,
   },
   sansBody: {
     fontFamily: systemFontFamily,
     fontSize: 16,
-    lineHeight: 22,
+    lineHeight: 23,
     fontWeight: '400' as const,
     color: colors.textPrimary,
   },
@@ -101,25 +118,23 @@ export const typeScale = {
     lineHeight: 20,
     fontWeight: '600' as const,
   },
-  // Hero score display (Home: 0-99 sleep score). Tightly-tracked, thin
-  // weight, oversized — the visual centerpiece of the dashboard.
+  // Hero score number — sized to sit inside the ~180px score ring. Confident
+  // weight so it reads as a verdict, not a faint stat.
   serifHero: {
     fontFamily: systemFontFamily,
-    fontSize: 104,
-    fontWeight: '300' as const,
-    letterSpacing: -4,
-    lineHeight: 108,
+    fontSize: 68,
+    fontWeight: '600' as const,
+    letterSpacing: -2,
+    lineHeight: 72,
     color: colors.textPrimary,
   },
-  // Stat numbers for compact result cards. Smaller than hero but still
-  // display-grade. Carries a touch more weight than the hero so figures read
-  // authoritative, not fragile.
+  // Stat numbers for compact result cards.
   statNumber: {
     fontFamily: systemFontFamily,
-    fontSize: 44,
-    fontWeight: '400' as const,
+    fontSize: 40,
+    fontWeight: '600' as const,
     letterSpacing: -1,
-    lineHeight: 48,
+    lineHeight: 44,
     color: colors.textPrimary,
   },
 } as const;
@@ -139,8 +154,8 @@ export const radii = {
   // Primary button radius — deliberately NOT a full pill, so buttons read as a
   // considered, signature shape rather than the default rounded-everything look.
   button: 14,
-  card: 18,
-  small: 8,
+  card: 20,
+  small: 10,
 } as const;
 
 export const layout = {

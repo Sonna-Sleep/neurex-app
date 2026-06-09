@@ -5,7 +5,7 @@ import * as Haptics from 'expo-haptics';
 import { colors, radii, spacing, typeScale } from '../theme/tokens';
 import { Text } from 'react-native';
 
-type Variant = 'primary' | 'ghost';
+type Variant = 'primary' | 'ghost' | 'tonal';
 
 type Props = {
   label: string;
@@ -48,6 +48,7 @@ export function Button({
         fullWidth && styles.fullWidth,
         variant === 'primary' && styles.primary,
         variant === 'ghost' && styles.ghost,
+        variant === 'tonal' && styles.tonal,
         pressed && !isDisabled && styles.pressed,
         isDisabled && styles.disabled,
       ]}
@@ -65,6 +66,7 @@ export function Button({
                 styles.label,
                 variant === 'primary' && styles.labelPrimary,
                 variant === 'ghost' && styles.labelGhost,
+                variant === 'tonal' && styles.labelGhost,
               ]}
             >
               {label}
@@ -93,10 +95,16 @@ const styles = StyleSheet.create({
   ghost: {
     backgroundColor: 'transparent',
     borderWidth: 1,
-    borderColor: colors.borderSubtle,
+    borderColor: colors.borderDivider,
+  },
+  // Quiet filled variant for low-priority in-card actions (e.g. unpair) so they
+  // don't compete with the one light primary CTA.
+  tonal: {
+    backgroundColor: colors.bgElevated,
   },
   pressed: {
-    opacity: 0.7,
+    // 0.85 reads as a refined dim; 0.7 looked like a glitch.
+    opacity: 0.85,
     // Subtle scale-down on press gives the button a "physical" press feel
     // that pure-opacity changes lack. 0.98 is the Oura/Whoop sweet spot —
     // perceptible but not janky.

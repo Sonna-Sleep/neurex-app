@@ -1,6 +1,6 @@
 import React from 'react';
-import { View, StyleSheet, ViewProps } from 'react-native';
-import { colors, layout, radii, spacing } from '../theme/tokens';
+import { Platform, View, StyleSheet, ViewProps } from 'react-native';
+import { colors, layout, radii } from '../theme/tokens';
 
 type Props = ViewProps & {
   children: React.ReactNode;
@@ -20,6 +20,18 @@ const styles = StyleSheet.create({
     borderRadius: radii.card,
     borderWidth: layout.hairline,
     borderColor: colors.borderSubtle,
-    padding: spacing.lg,
+    paddingVertical: 22,
+    paddingHorizontal: 20,
+    // Soft, low shadow so cards float gently off the page (iOS only — Android
+    // elevation renders harsher; the surface/border lift carries it there).
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOpacity: 0.25,
+        shadowRadius: 16,
+        shadowOffset: { width: 0, height: 8 },
+      },
+      default: {},
+    }),
   },
 });
