@@ -22,8 +22,7 @@
         "NSBluetoothPeripheralUsageDescription": "Neurex uses Bluetooth to communicate with your headband.",
         "UIBackgroundModes": [
           "bluetooth-central",
-          "fetch",
-          "processing"
+          "fetch"
         ]
       },
       "config": { "usesNonExemptEncryption": false },
