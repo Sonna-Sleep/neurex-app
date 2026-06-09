@@ -20,17 +20,17 @@ const STEPS: Step[] = [
   {
     eyebrow: 'NIGHT',
     headline: 'Slip it on.',
-    body: 'Neurex starts on its own when it senses you wearing it. No app to open. No routine.',
+    body: 'Open Neurex, tap Start session, then keep your phone nearby through the night.',
   },
   {
     eyebrow: 'ALL NIGHT',
     headline: 'Sleep.',
-    body: 'Neurex strengthens your deep sleep silently — you feel nothing.',
+    body: 'The headband records your sleep signal while you rest.',
   },
   {
     eyebrow: 'MORNING',
-    headline: 'Place it on the charger.',
-    body: 'Your night syncs to your phone. Wake up to your data.',
+    headline: 'Stop and sync.',
+    body: 'Tap Stop session, then sync to the cloud so your sleep graph can appear.',
   },
 ];
 

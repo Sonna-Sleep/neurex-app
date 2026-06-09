@@ -154,7 +154,7 @@ function EmptyState({ hasDevice }: { hasDevice: boolean }) {
       </SerifHeadline>
       <Body style={styles.emptyBody}>
         {hasDevice
-          ? 'Wear it tonight. It starts on its own.'
+          ? 'Wear it tonight. Tap Start session before bed.'
           : 'Pair your headband to start.'}
       </Body>
       <Image
