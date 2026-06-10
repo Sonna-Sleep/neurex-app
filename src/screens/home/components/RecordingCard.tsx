@@ -442,6 +442,6 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xs,
   },
   unpairText: {
-    color: colors.textTertiary,
+    color: colors.textSecondary,
   },
 });

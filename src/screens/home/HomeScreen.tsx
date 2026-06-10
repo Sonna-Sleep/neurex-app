@@ -144,7 +144,8 @@ const styles = StyleSheet.create({
   },
   viewNight: {
     textAlign: 'center',
-    color: colors.textTertiary,
+    color: colors.accent,
+    fontWeight: '600',
     marginTop: spacing.md,
   },
   empty: {

@@ -92,13 +92,13 @@ const styles = StyleSheet.create({
   primary: {
     backgroundColor: colors.ctaBg,
   },
+  // Secondary button: a clearly visible filled surface + border so it reads as
+  // tappable (a transparent + faint-border ghost was too dark to notice).
   ghost: {
-    backgroundColor: 'transparent',
+    backgroundColor: colors.bgElevated,
     borderWidth: 1,
     borderColor: colors.borderDivider,
   },
-  // Quiet filled variant for low-priority in-card actions (e.g. unpair) so they
-  // don't compete with the one light primary CTA.
   tonal: {
     backgroundColor: colors.bgElevated,
   },
