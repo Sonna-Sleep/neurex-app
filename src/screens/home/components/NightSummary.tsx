@@ -122,7 +122,7 @@ function fmtDuration(min: number) {
 
 const styles = StyleSheet.create({
   wrap: {
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: spacing.md,
   },
   label: {

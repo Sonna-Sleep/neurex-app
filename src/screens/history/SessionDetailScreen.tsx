@@ -112,15 +112,12 @@ const styles = StyleSheet.create({
   empty: {
     flex: 1,
     justifyContent: 'center',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: spacing.md,
     paddingTop: spacing.xxxl,
   },
-  emptyHeadline: {
-    textAlign: 'center',
-  },
+  emptyHeadline: {},
   emptyBody: {
     color: colors.textSecondary,
-    textAlign: 'center',
   },
 });

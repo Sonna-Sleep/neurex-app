@@ -94,7 +94,6 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.xl,
   },
   headline: {
-    textAlign: 'center',
     marginBottom: spacing.xxl,
   },
   timeline: {},

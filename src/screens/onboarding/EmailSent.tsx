@@ -59,23 +59,20 @@ const styles = StyleSheet.create({
   center: {
     flex: 1,
     justifyContent: 'center',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: spacing.md,
   },
   headline: {
-    textAlign: 'center',
     marginBottom: spacing.sm,
   },
   body: {
     color: colors.textPrimary,
-    textAlign: 'center',
   },
   email: {
     color: colors.textPrimary,
   },
   muted: {
     color: colors.textTertiary,
-    textAlign: 'center',
     marginTop: spacing.md,
   },
   actions: {

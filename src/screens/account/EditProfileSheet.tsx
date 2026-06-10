@@ -109,7 +109,7 @@ const styles = StyleSheet.create({
     paddingTop: spacing.xl,
     paddingBottom: spacing.lg,
     gap: spacing.md,
-    alignItems: 'center',
+    alignItems: 'flex-start',
   },
   cancel: {
     paddingVertical: spacing.xs,

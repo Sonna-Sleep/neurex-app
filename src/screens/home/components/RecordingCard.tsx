@@ -394,23 +394,20 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
   },
   idle: {
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: spacing.xl,
   },
   idleHead: {
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: spacing.sm,
   },
-  idleTitle: {
-    textAlign: 'center',
-  },
+  idleTitle: {},
   idleSub: {
     color: colors.textSecondary,
-    textAlign: 'center',
   },
   idleActions: {
     alignSelf: 'stretch',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: spacing.md,
   },
   stats: {

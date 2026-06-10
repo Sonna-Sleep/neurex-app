@@ -275,18 +275,17 @@ const styles = StyleSheet.create({
   center: {
     flex: 1,
     justifyContent: 'center',
-    alignItems: 'center',
+    alignItems: 'flex-start',
   },
   headline: {
     marginBottom: spacing.md,
-    textAlign: 'center',
   },
   subtext: {
     color: colors.textSecondary,
     marginBottom: spacing.xl,
-    textAlign: 'center',
   },
   card: {
+    alignSelf: 'stretch',
     minHeight: 100,
     justifyContent: 'center',
     gap: spacing.lg,

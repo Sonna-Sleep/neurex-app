@@ -136,27 +136,23 @@ const styles = StyleSheet.create({
   hero: {
     flex: 1,
     justifyContent: 'center',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     paddingVertical: spacing.xxl,
   },
   pressed: {
     opacity: 0.6,
   },
   viewNight: {
-    textAlign: 'center',
     color: colors.accent,
     fontWeight: '600',
     marginTop: spacing.md,
   },
   empty: {
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: spacing.sm,
   },
-  emptyTitle: {
-    textAlign: 'center',
-  },
+  emptyTitle: {},
   emptySub: {
-    textAlign: 'center',
     color: colors.textSecondary,
   },
   footer: {

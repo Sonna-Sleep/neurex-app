@@ -83,7 +83,7 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.xxxl,
   },
   profile: {
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: spacing.xs,
     paddingBottom: spacing.xl,
   },
@@ -149,7 +149,7 @@ const styles = StyleSheet.create({
   },
   footer: {
     marginTop: spacing.xxl,
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: spacing.lg,
   },
   logout: {
