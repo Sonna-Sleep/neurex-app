@@ -7,7 +7,9 @@
 // to pull the file off in the morning (Drive / email / USB).
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+
+const SLEEP_MASK = require('../../../../assets/images/sleep-mask.png');
 import * as Sharing from 'expo-sharing';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 
@@ -317,15 +319,17 @@ export function RecordingCard() {
     );
   }
 
-  // ── Idle (paired but not streaming) ──────────────────────────────────────
+  // ── Idle (paired but not streaming) — flat, editorial, mask as the hero ──
   if (!pairedDeviceId) return null;
   return (
-    <View style={styles.wrap}>
-      <Eyebrow>sleep mask · paired</Eyebrow>
-      <Card style={styles.card}>
-        <SerifHeadline>Ready to record</SerifHeadline>
-        <Body style={styles.subtext}>Put it on and tap start. Keep your phone nearby.</Body>
-        {error ? <Text style={styles.error}>{error}</Text> : null}
+    <View style={styles.idle}>
+      <Image source={SLEEP_MASK} style={styles.mask} resizeMode="contain" />
+      <View style={styles.idleHead}>
+        <SerifHeadline style={styles.idleTitle}>Ready when you are</SerifHeadline>
+        <Secondary style={styles.idleSub}>Put on your mask, then start.</Secondary>
+      </View>
+      {error ? <Text style={styles.error}>{error}</Text> : null}
+      <View style={styles.idleActions}>
         <Button
           label={busy === 'starting' ? 'connecting…' : 'start session'}
           onPress={() => {
@@ -337,7 +341,7 @@ export function RecordingCard() {
         <Pressable onPress={onUnpair} hitSlop={8} style={styles.unpair}>
           <Secondary style={styles.unpairText}>unpair</Secondary>
         </Pressable>
-      </Card>
+      </View>
     </View>
   );
 }
@@ -390,6 +394,30 @@ const styles = StyleSheet.create({
   },
   subtext: {
     color: colors.textSecondary,
+  },
+  idle: {
+    alignItems: 'center',
+    gap: spacing.xl,
+  },
+  mask: {
+    width: '78%',
+    height: 200,
+  },
+  idleHead: {
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  idleTitle: {
+    textAlign: 'center',
+  },
+  idleSub: {
+    color: colors.textSecondary,
+    textAlign: 'center',
+  },
+  idleActions: {
+    alignSelf: 'stretch',
+    alignItems: 'center',
+    gap: spacing.md,
   },
   stats: {
     flexDirection: 'row',
