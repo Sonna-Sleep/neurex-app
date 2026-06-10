@@ -147,12 +147,9 @@ export function ConnectDeviceCard() {
       <View style={styles.wrap}>
         <Eyebrow>no sleep mask</Eyebrow>
         <Card style={styles.card}>
-          <SerifHeadline>Connect a device</SerifHeadline>
-          <Body style={styles.subtext}>
-            Power on your sleep mask and tap below. Any masks in range will be
-            listed — pick the one closest to you.
-          </Body>
-          <Button label="connect device" onPress={beginScan} />
+          <SerifHeadline>Connect your mask</SerifHeadline>
+          <Body style={styles.subtext}>Power it on, then tap connect.</Body>
+          <Button label="connect" onPress={beginScan} />
         </Card>
       </View>
     );

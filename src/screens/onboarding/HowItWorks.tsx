@@ -19,18 +19,18 @@ type Step = {
 const STEPS: Step[] = [
   {
     eyebrow: 'NIGHT',
-    headline: 'Slip it on.',
-    body: 'Open Neurex, tap Start session, then keep your phone nearby through the night.',
+    headline: 'Put it on.',
+    body: 'Tap start, then keep your phone nearby.',
   },
   {
     eyebrow: 'ALL NIGHT',
     headline: 'Sleep.',
-    body: 'The sleep mask records your sleep signal while you rest.',
+    body: 'It records while you rest.',
   },
   {
     eyebrow: 'MORNING',
-    headline: 'Stop and sync.',
-    body: 'Tap Stop session, then sync to the cloud so your sleep graph can appear.',
+    headline: 'See your night.',
+    body: 'Stop, and your sleep appears.',
   },
 ];
 

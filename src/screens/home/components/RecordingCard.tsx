@@ -210,19 +210,21 @@ export function RecordingCard() {
             </View>
           </View>
 
-          <View style={styles.stats}>
-            <Stat label="samples" value={streaming.samples.toLocaleString()} />
-            <Stat
-              label="rate"
-              value={`${realRateHz} Hz`}
-              hint={`target ${EEG_SAMPLE_RATE_HZ}`}
-            />
-            <Stat label="drops" value={`${streaming.drops}`} hint={`${lossPct}%`} />
-            <Stat
-              label="battery"
-              value={deviceBattery !== null ? `${deviceBattery}%` : '—'}
-            />
-          </View>
+          {__DEV__ ? (
+            <View style={styles.stats}>
+              <Stat label="samples" value={streaming.samples.toLocaleString()} />
+              <Stat
+                label="rate"
+                value={`${realRateHz} Hz`}
+                hint={`target ${EEG_SAMPLE_RATE_HZ}`}
+              />
+              <Stat label="drops" value={`${streaming.drops}`} hint={`${lossPct}%`} />
+              <Stat
+                label="battery"
+                value={deviceBattery !== null ? `${deviceBattery}%` : '—'}
+              />
+            </View>
+          ) : null}
 
           {error ? <Text style={styles.error}>{error}</Text> : null}
 
@@ -322,10 +324,7 @@ export function RecordingCard() {
       <Eyebrow>sleep mask · paired</Eyebrow>
       <Card style={styles.card}>
         <SerifHeadline>Ready to record</SerifHeadline>
-        <Body style={styles.subtext}>
-          Put on the sleep mask and tap Start. We'll check the signal looks good
-          before you settle in. Keep the phone nearby through the night.
-        </Body>
+        <Body style={styles.subtext}>Put it on and tap start. Keep your phone nearby.</Body>
         {error ? <Text style={styles.error}>{error}</Text> : null}
         <Button
           label={busy === 'starting' ? 'connecting…' : 'start session'}

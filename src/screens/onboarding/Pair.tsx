@@ -154,8 +154,7 @@ export function Pair({ navigation }: Props) {
 
         <SerifDisplay style={styles.headline}>Pair your sleep mask</SerifDisplay>
         <Body style={styles.subtext}>
-          Hold the button on your sleep mask for 4 seconds until the light pulses.
-          If multiple are in range, tap the closest one.
+          Hold the button until the light pulses.
         </Body>
 
         <Card style={styles.card}>

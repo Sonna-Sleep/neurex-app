@@ -141,10 +141,8 @@ function Row({
   const tstLabel = session.tst != null
     ? `${Math.floor(session.tst / 60)}h ${Math.floor(session.tst % 60)}m asleep`
     : session.status === 'failed'
-      ? 'Processing failed'
-      : 'Still analyzing — usually under a minute';
-  // date · timestamp · length
-  const meta = `${formatTime(session.startMs)} · ${formatLen(session.tib)}`;
+      ? 'failed'
+      : 'analyzing…';
   // Raw-EEG download is a developer/debug affordance — hidden from beta users,
   // shown only in dev builds (matches how DebugSection is gated).
   const canDownload = __DEV__ && Boolean(session.storagePrefix);
@@ -175,7 +173,6 @@ function Row({
         <View style={styles.rowTop}>
           <View>
             <Eyebrow>{formatDate(session.startMs)}</Eyebrow>
-            <Secondary style={styles.meta}>{meta}</Secondary>
             <Secondary style={styles.meta}>{tstLabel}</Secondary>
           </View>
           <SerifDisplay>{session.score ?? '—'}</SerifDisplay>
@@ -232,23 +229,6 @@ function formatDate(ms: number) {
 
 function stripTime(d: Date) {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-}
-
-function formatTime(ms: number) {
-  return new Date(ms).toLocaleTimeString(undefined, {
-    hour: 'numeric',
-    minute: '2-digit',
-  });
-}
-
-function formatLen(minutes: number) {
-  const totalSec = Math.max(0, Math.round(minutes * 60));
-  const h = Math.floor(totalSec / 3600);
-  const m = Math.floor((totalSec % 3600) / 60);
-  const s = totalSec % 60;
-  if (h > 0) return `${h}h ${m}m`;
-  if (m > 0) return `${m}m ${s}s`;
-  return `${s}s`;
 }
 
 const styles = StyleSheet.create({

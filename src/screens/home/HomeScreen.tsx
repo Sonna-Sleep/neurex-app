@@ -1,57 +1,46 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   Image,
+  Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
 
 const SLEEP_MASK = require('../../../assets/images/sleep-mask.png');
-import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Logo } from '../../components/Logo';
 import { StatusPill } from '../../components/StatusPill';
-import { SerifHeadline, Body, Eyebrow } from '../../theme/typography';
+import { Button } from '../../components/Button';
+import { SerifHeadline, Secondary } from '../../theme/typography';
 import { colors, layout, spacing } from '../../theme/tokens';
 import { deviceRepo, sessionRepo, type Session, type Device } from '../../lib/repos';
 import { useSession } from '../../state/session';
 import { Skeleton } from '../../components/Skeleton';
 import { NightSummary } from './components/NightSummary';
-import { StageBreakdown } from './components/StageBreakdown';
-import { Hypnogram } from './components/Hypnogram';
 import { ProcessingCard } from './components/ProcessingCard';
-import { RecordingCard } from './components/RecordingCard';
-import { ConnectDeviceCard } from './components/ConnectDeviceCard';
 
 export function HomeScreen() {
+  const navigation = useNavigation<any>();
   const [session, setSession] = useState<Session | null>(null);
   const [device, setDevice] = useState<Device | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  // Distinguishes "we haven't tried fetching yet" (show Skeleton) from
-  // "we tried and got nothing" (show EmptyState — the genuine first-night
-  // CTA). Without this flag both states look identical.
   const [loaded, setLoaded] = useState(false);
   const authReady = useSession((s) => s.authReady);
   const processingSessionId = useSession((s) => s.processingSessionId);
   const streaming = useSession((s) => s.streaming);
-  const pairedDeviceId = useSession((s) => s.pairedDeviceId);
   const deviceBattery = useSession((s) => s.deviceBattery);
 
   const load = useCallback(async () => {
-    const [s, d] = await Promise.all([
-      sessionRepo.latest(),
-      deviceRepo.current(),
-    ]);
+    const [s, d] = await Promise.all([sessionRepo.latest(), deviceRepo.current()]);
     setSession(s);
     setDevice(d);
     setLoaded(true);
   }, []);
 
-  // Re-runs when auth settles, so a cold start that queried as anonymous
-  // re-fetches once the Supabase session is restored. Also refetches when
-  // a processing job finishes so the new session row replaces the
-  // ProcessingCard.
   useEffect(() => {
     load().catch(() => undefined);
   }, [load, authReady, processingSessionId]);
@@ -65,13 +54,19 @@ export function HomeScreen() {
     }
   }, [load]);
 
+  const openSleep = () => navigation.navigate('Record');
+  const openNight = () =>
+    session &&
+    navigation.navigate('History', {
+      screen: 'SessionDetail',
+      params: { sessionId: session.id },
+    });
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.topBar}>
-        <Logo height={32} />
+        <Logo height={30} />
         <View style={styles.topBarRight}>
-          {/* Live BLE battery wins; falls back to the persisted repo value
-              (e.g. last-known on cold start before a connection is made). */}
           <StatusPill battery={deviceBattery ?? device?.battery ?? null} />
         </View>
       </View>
@@ -80,84 +75,39 @@ export function HomeScreen() {
         contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={colors.textSecondary}
-          />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.textSecondary} />
         }
       >
-        {/*
-          Streaming + paired-but-idle cards live above the historical results.
-          Even mid-recording the user can still glance at last night's
-          summary, so we render both stacked rather than swapping them.
-        */}
-        {(streaming || pairedDeviceId) && !processingSessionId ? (
-          <RecordingCard />
-        ) : !pairedDeviceId && !processingSessionId ? (
-          <ConnectDeviceCard />
-        ) : null}
+        <View style={styles.hero}>
+          {processingSessionId ? (
+            <ProcessingCard
+              sessionId={processingSessionId}
+              onReady={() => load().catch(() => undefined)}
+            />
+          ) : session ? (
+            <Pressable onPress={openNight} style={({ pressed }) => pressed && styles.pressed}>
+              <NightSummary tstMin={session.tst} score={session.score} recordingMinutes={session.tib} />
+              {session.score != null ? <Secondary style={styles.viewNight}>view night</Secondary> : null}
+            </Pressable>
+          ) : !loaded ? (
+            <Skeleton.Card />
+          ) : (
+            <View style={styles.empty}>
+              <Image source={SLEEP_MASK} style={styles.maskImage} resizeMode="contain" />
+              <SerifHeadline style={styles.emptyTitle}>Your first night awaits</SerifHeadline>
+            </View>
+          )}
+        </View>
 
-        {processingSessionId ? (
-          <ProcessingCard
-            sessionId={processingSessionId}
-            onReady={() => load().catch(() => undefined)}
-          />
-        ) : session ? (
-          <Results session={session} />
-        ) : !loaded ? (
-          <Skeleton.Card />
-        ) : (
-          <EmptyState hasDevice={!!device} />
-        )}
+        <View style={styles.footer}>
+          {streaming ? (
+            <Button label="recording — open" onPress={openSleep} />
+          ) : (
+            <Button label="start sleep" onPress={openSleep} />
+          )}
+        </View>
       </ScrollView>
     </SafeAreaView>
-  );
-}
-
-function Results({ session }: { session: Session }) {
-  // `tib` is the recording duration in minutes; pass it so the night summary
-  // can say "21 min recorded — not analyzed yet" until staging produces tst.
-  const isAnalyzed = session.score !== null;
-  return (
-    <View style={styles.results}>
-      <NightSummary
-        tstMin={session.tst}
-        score={session.score}
-        recordingMinutes={session.tib}
-      />
-      {isAnalyzed ? (
-        <>
-          <Hypnogram
-            epochs={session.epochs}
-            startMs={session.startMs}
-            endMs={session.endMs}
-          />
-          <StageBreakdown stageMinutes={session.stageMinutes} />
-        </>
-      ) : null}
-    </View>
-  );
-}
-
-function EmptyState({ hasDevice }: { hasDevice: boolean }) {
-  return (
-    <View style={styles.emptyState}>
-      <Eyebrow>last night</Eyebrow>
-      <SerifHeadline style={styles.emptyHeadline}>
-        Waiting for your first night
-      </SerifHeadline>
-      <Body style={styles.emptyBody}>
-        {hasDevice
-          ? 'Wear it tonight. Tap Start session before bed.'
-          : 'Pair your sleep mask to start.'}
-      </Body>
-      <Image
-        source={SLEEP_MASK}
-        style={styles.deviceImage}
-        resizeMode="contain"
-      />
-    </View>
   );
 }
 
@@ -166,9 +116,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.bgPrimary,
   },
-  // Oura-style top bar: logo dead-center of the screen, status pill
-  // floating on the right. Center is true center (the pill is absolutely
-  // positioned so it doesn't shift the logo off-axis).
   topBar: {
     paddingHorizontal: layout.screenPadding,
     paddingTop: spacing.md,
@@ -187,31 +134,35 @@ const styles = StyleSheet.create({
   scroll: {
     flexGrow: 1,
     paddingHorizontal: layout.screenPadding,
-    paddingBottom: spacing.xxxl,
+    paddingBottom: spacing.xl,
   },
-  results: {
-    gap: spacing.xl,
-    paddingTop: spacing.md,
-  },
-  emptyState: {
+  hero: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingTop: spacing.xxxl,
-    gap: spacing.md,
+    paddingVertical: spacing.xxl,
   },
-  emptyHeadline: {
-    marginTop: spacing.sm,
+  pressed: {
+    opacity: 0.6,
+  },
+  viewNight: {
+    textAlign: 'center',
+    color: colors.textTertiary,
+    marginTop: spacing.md,
+  },
+  empty: {
+    alignItems: 'center',
+    gap: spacing.lg,
+  },
+  maskImage: {
+    width: '70%',
+    height: 160,
+    opacity: 0.45,
+  },
+  emptyTitle: {
     textAlign: 'center',
   },
-  emptyBody: {
-    color: colors.textSecondary,
-    textAlign: 'center',
-  },
-  deviceImage: {
-    width: '100%',
-    height: 200,
-    marginTop: spacing.xxl,
-    opacity: 0.5,
+  footer: {
+    paddingTop: spacing.lg,
   },
 });

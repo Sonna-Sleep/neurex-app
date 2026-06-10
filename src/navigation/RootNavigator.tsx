@@ -6,6 +6,7 @@ import { useSession } from '../state/session';
 import { colors } from '../theme/tokens';
 import { OnboardingNavigator } from './OnboardingNavigator';
 import { TabNavigator } from './TabNavigator';
+import { RecordScreen } from '../screens/record/RecordScreen';
 import type { RootStackParamList } from './types';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -33,7 +34,14 @@ export function RootNavigator() {
     <NavigationContainer theme={navTheme}>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         {onboardingComplete ? (
-          <Stack.Screen name="Main" component={TabNavigator} />
+          <>
+            <Stack.Screen name="Main" component={TabNavigator} />
+            <Stack.Screen
+              name="Record"
+              component={RecordScreen}
+              options={{ presentation: 'fullScreenModal' }}
+            />
+          </>
         ) : (
           <Stack.Screen name="Onboarding" component={OnboardingNavigator} />
         )}

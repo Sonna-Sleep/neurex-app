@@ -38,12 +38,6 @@ export function AccountScreen() {
           </View>
         </Section>
 
-        <Section eyebrow="about">
-          <Body style={styles.muted}>
-            Neurex tracks your sleep with a dry-electrode EEG sleep mask and shows your stages and a nightly score.
-          </Body>
-        </Section>
-
         <Section eyebrow="support">
           <Body style={styles.link} onPress={() => Linking.openURL('mailto:contact@neurex.tech')}>contact@neurex.tech</Body>
         </Section>

@@ -24,4 +24,5 @@ export type TabParamList = {
 export type RootStackParamList = {
   Onboarding: NavigatorScreenParams<OnboardingStackParamList>;
   Main: NavigatorScreenParams<TabParamList>;
+  Record: undefined;
 };
