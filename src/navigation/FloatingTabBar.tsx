@@ -92,6 +92,11 @@ const styles = StyleSheet.create({
   },
   itemActive: {
     backgroundColor: colors.bgElevated,
+    // Same-color border: not decoration — it forces Android onto the bordered
+    // drawing path, which rounds corners reliably (the bar itself proves it:
+    // its borderWidth:1 corners render; background-only views can draw square).
+    borderWidth: 1,
+    borderColor: colors.bgElevated,
   },
   label: {
     fontFamily: systemFontFamily,
