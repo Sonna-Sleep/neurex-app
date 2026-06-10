@@ -8,7 +8,6 @@ import { useSession } from '../../state/session';
 import { ageFromDob } from '../../lib/profile';
 import type { LegalDocKey } from '../../lib/legalContent';
 import appConfig from '../../../app.json';
-import { DebugSection } from './DebugSection';
 import { DeleteAccountSection } from './DeleteAccountSection';
 import { EditProfileSheet } from './EditProfileSheet';
 import { LegalSheet } from './LegalSheet';
@@ -69,8 +68,6 @@ export function AccountScreen() {
           <Row label="Privacy policy" onPress={() => setLegalDoc('privacy')} />
           <Row label="About" onPress={() => setLegalDoc('about')} />
         </View>
-
-        <DebugSection />
 
         {/* Footer */}
         <View style={styles.footer}>

@@ -53,10 +53,6 @@ type SessionState = {
   // True once the Supabase session check has completed — screens wait for
   // this before querying so they don't run as anonymous on a cold start.
   authReady: boolean;
-  // Set right after a successful Modal upload, cleared when the resulting
-  // session row is fetched (or the user dismisses). Drives the Home screen's
-  // "Processing…" card. Transient — not persisted.
-  processingSessionId: string | null;
   // Live stream state for the in-progress recording. null when idle. Transient.
   streaming: Streaming | null;
   // Live battery % from the paired sleep mask (notified via BLE Battery Service).
@@ -73,7 +69,6 @@ type SessionState = {
   setPaired: (serial: string | null, deviceId?: string | null) => void;
   completeOnboarding: () => void;
   signOut: () => void;
-  setProcessingSessionId: (id: string | null) => void;
   setStreaming: (s: Streaming | null) => void;
   patchStreaming: (patch: Partial<Streaming>) => void;
   setDeviceBattery: (pct: number | null) => void;
@@ -90,7 +85,6 @@ export const useSession = create<SessionState>()(
       onboardingComplete: false,
       hydrated: false,
       authReady: false,
-      processingSessionId: null,
       streaming: null,
       deviceBattery: null,
       unviewedNightIds: [],
@@ -146,14 +140,11 @@ export const useSession = create<SessionState>()(
           pairedSerial: null,
           pairedDeviceId: null,
           onboardingComplete: false,
-          processingSessionId: null,
           streaming: null,
           deviceBattery: null,
           unviewedNightIds: [],
         });
       },
-
-      setProcessingSessionId: (id) => set({ processingSessionId: id }),
 
       setStreaming: (s) => set({ streaming: s }),
 
