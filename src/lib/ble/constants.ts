@@ -20,11 +20,12 @@ export const NEUREX_EEG_NOTIFY_UUID = '6e6b0000-1000-8000-0078-65726e6b0002';
 // the name as a human-readable fallback for the "found device" display.
 export const NEUREX_DEVICE_LOCAL_NAME = 'Neurex-EEG';
 
-// Plan 02 ACK characteristic (write-no-response, 2 bytes {gen, seq}). The
-// phone writes its last contiguous (generation, seq) frontier here so the
-// firmware ring/flash tiers only free packets we've actually stitched in
-// order — this is what makes a full overnight survive BLE disconnects.
-// Same 6e6b… family as the service/notify UUIDs; firmware UUID is 6e6b0003.
+// ACK characteristic (write-no-response, 2 bytes {gen, seq}). The
+// phone writes its last contiguous frontier here so firmware-side accounting
+// never advances past data the app actually received.
+// Current firmware streaming remains best-effort; reconnect/resume is handled
+// in the app with baseMs dedup and explicit drop counters.
+// Same 6e6b... family as the service/notify UUIDs; firmware UUID is 6e6b0003.
 export const NEUREX_ACK_WRITE_UUID = '6e6b0000-1000-8000-0078-65726e6b0003';
 
 // How often the ACK loop writes the contiguous frontier. Firmware just needs

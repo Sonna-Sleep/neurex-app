@@ -12,8 +12,8 @@
 // consume it without changes.
 //
 // Best-effort, lossy by design: BLE drops are unavoidable. Drops surface as
-// onDrop callbacks + StreamStats counters; the firmware ACK loop (Phase B B4)
-// is what actually closes the loss gap.
+// onDrop callbacks + StreamStats counters; reconnect resumes the same files
+// and dedups by baseMs so late packets cannot corrupt the timeline.
 
 import { File, Directory, Paths } from 'expo-file-system';
 import type { Subscription } from 'react-native-ble-plx';
@@ -24,30 +24,17 @@ import { useSession } from '../../state/session';
 import {
   BATTERY_LEVEL_CHAR_UUID,
   BATTERY_SERVICE_UUID,
-  BYTES_PER_FRAME,
-  CH_FPZ,
-  EEG_SAMPLE_INTERVAL_MS,
-  EEG_UV_PER_LSB,
   NEUREX_ACK_INTERVAL_MS,
   NEUREX_ACK_WRITE_UUID,
   NEUREX_EEG_NOTIFY_UUID,
   NEUREX_SERVICE_UUID,
-  PACKET_END_HI,
-  PACKET_END_LO,
-  PACKET_SIZE,
-  PACKET_START_HI,
-  PACKET_START_LO,
-  PKT_IDX_CHECKSUM,
-  PKT_IDX_DATA,
-  PKT_IDX_SEQ,
-  PKT_IDX_TS,
   SAMPLES_PER_PACKET,
 } from './constants';
+import { parsePacket } from './packet';
 import type {
   BleClient,
   ConnectedDevice,
   ConnectOpts,
-  EegSample,
   FoundDevice,
   ParsedPacket,
   PreviewCallbacks,
@@ -89,11 +76,6 @@ function manualAtob(b64: string): string {
   return out;
 }
 
-function i24be(bytes: Uint8Array, offset: number): number {
-  const v = (bytes[offset] << 16) | (bytes[offset + 1] << 8) | bytes[offset + 2];
-  return v & 0x800000 ? v - 0x1000000 : v;
-}
-
 // ble-plx writes characteristic values as base64. The ACK payload is 2 bytes
 // {gen, seq}; encode without pulling in a Buffer polyfill.
 function bytesToB64(bytes: Uint8Array): string {
@@ -121,15 +103,15 @@ function manualBtoa(bytes: Uint8Array): string {
 
 // ── ACK contiguous-frontier tracker (Plan 02) ───────────────────────────────
 //
-// Mirrors the Recorder contig logic in tools/capture/ble_stream_recv.py. The
-// firmware frees ring/flash slots only up to the (gen, seq) we ACK, and ONLY
-// the last *contiguous* packet may be ACKed — ACKing past a gap would free
-// packets we never stitched, defeating the replay-on-reconnect guarantee.
+// Mirrors the Recorder contig logic in tools/capture/ble_stream_recv.py. ACKs
+// report the last contiguous (gen, seq) the app received, giving firmware a
+// conservative frontier for stream accounting. ACKing past a gap would make
+// device-side health/backpressure telemetry lie about what reached the phone.
 //
 // gen is the receiver's observed generation: bumped on every 0xFF→0x00 seq
 // transition, exactly as the firmware producer bumps it. contig advances only
-// on an exact +1 from the current frontier; a gap parks it until the missing
-// packet arrives (via firmware replay), then it walks forward again.
+// on an exact +1 from the current frontier; a gap parks it until the stream
+// becomes contiguous again.
 class ContigTracker {
   private lastSeq: number | null = null;
   private obsGen = 0;
@@ -171,46 +153,7 @@ class ContigTracker {
   }
 }
 
-function u32be(bytes: Uint8Array, offset: number): number {
-  return (
-    bytes[offset] * 0x1000000 +
-    ((bytes[offset + 1] << 16) | (bytes[offset + 2] << 8) | bytes[offset + 3])
-  );
-}
-
 // ── packet parser ──────────────────────────────────────────────────────────
-
-type ParseOutcome =
-  | { ok: true; packet: ParsedPacket }
-  | { ok: false; reason: 'markers' | 'checksum' | 'size' };
-
-function parsePacket(bytes: Uint8Array, generation: number): ParseOutcome {
-  if (bytes.length !== PACKET_SIZE) return { ok: false, reason: 'size' };
-  if (
-    bytes[0] !== PACKET_START_HI ||
-    bytes[1] !== PACKET_START_LO ||
-    bytes[PKT_IDX_CHECKSUM + 1] !== PACKET_END_HI ||
-    bytes[PKT_IDX_CHECKSUM + 2] !== PACKET_END_LO
-  ) {
-    return { ok: false, reason: 'markers' };
-  }
-  let sum = 0;
-  for (let i = PKT_IDX_SEQ; i < PKT_IDX_CHECKSUM; i++) sum = (sum + bytes[i]) & 0xff;
-  if (sum !== bytes[PKT_IDX_CHECKSUM]) return { ok: false, reason: 'checksum' };
-
-  const seq = bytes[PKT_IDX_SEQ];
-  const baseMs = u32be(bytes, PKT_IDX_TS);
-  const samples: EegSample[] = new Array(SAMPLES_PER_PACKET);
-  for (let s = 0; s < SAMPLES_PER_PACKET; s++) {
-    const o = PKT_IDX_DATA + s * BYTES_PER_FRAME;
-    const ms = (baseMs + s * EEG_SAMPLE_INTERVAL_MS) >>> 0; // wrap as uint32
-    samples[s] = {
-      ms,
-      fpz_uV: i24be(bytes, o + CH_FPZ * 3) * EEG_UV_PER_LSB,
-    };
-  }
-  return { ok: true, packet: { generation, seq, baseMs, samples } };
-}
 
 // ── on-disk encoder (matches Python struct '<If') ─────────────────────────
 
@@ -445,9 +388,9 @@ export const realBleClient: BleClient = {
         let fatal = false;
         let subscription: Subscription | null = null;
 
-        // Plan 02 ACK: track the contiguous frontier and write it to the
-        // firmware every NEUREX_ACK_INTERVAL_MS so the device frees only
-        // delivered packets and replays the rest on reconnect.
+        // Track the contiguous frontier and write it to the firmware every
+        // NEUREX_ACK_INTERVAL_MS so device-side stream accounting advances
+        // only over packets the app actually received.
         const contig = new ContigTracker();
         let ackInFlight = false;
         const ackTimer = setInterval(() => {
@@ -493,9 +436,9 @@ export const realBleClient: BleClient = {
           }
           const pkt = result.packet;
 
-          // Resume dedup: firmware replays un-ACKed packets on reconnect.
-          // Drop any whose baseMs we've already written so files stay
-          // monotonic. baseMs is uint32 ms-since-boot — no overnight wrap.
+          // Resume dedup: reconnect can deliver a packet older than the last
+          // one already written. Drop any such packet so files stay monotonic.
+          // baseMs is uint32 ms-since-boot, so there is no overnight wrap.
           if (stats.lastBaseMs !== null && pkt.baseMs <= stats.lastBaseMs) {
             stats.dupSkips++;
             cb.onPacket?.(pkt, stats);
@@ -535,8 +478,8 @@ export const realBleClient: BleClient = {
           stats.samples += SAMPLES_PER_PACKET;
           stats.lastBaseMs = pkt.baseMs;
 
-          // Advance the ACK frontier (only over in-order packets — the
-          // tracker parks on a gap until firmware replay fills it).
+          // Advance the ACK frontier only over in-order packets. The tracker
+          // parks on a gap instead of pretending dropped data arrived.
           contig.feed(pkt.seq);
 
           cb.onPacket?.(pkt, stats);

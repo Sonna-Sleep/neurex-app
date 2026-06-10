@@ -1,7 +1,7 @@
 // Public contract for talking to the Neurex sleep mask over BLE.
 //
 // Live-stream model: scan → connect → startStream(sessionId, callbacks).
-// The firmware notifies 118-byte packets at ~62.5 Hz (4 samples/packet @ 250
+// The firmware notifies 226-byte packets at ~31.25 Hz (8 samples/packet @ 250
 // Hz). We append the decoded Fpz samples to a per-session EEG.BIN file in the
 // canonical on-disk format the existing analysis pipelines expect.
 
@@ -20,7 +20,7 @@ export type EegSample = {
   fpz_uV: number;
 };
 
-/** One decoded 118-byte BLE notification, all 4 samples included. */
+/** One decoded 226-byte BLE notification, all 8 samples included. */
 export type ParsedPacket = {
   /** Monotonic counter that increments on every seq wrap (0xFF → 0x00). */
   generation: number;
