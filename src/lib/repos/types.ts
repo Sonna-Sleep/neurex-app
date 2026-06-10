@@ -24,6 +24,10 @@ export type Session = {
   epochs: Epoch[];
   /** 0..99, never 100. Capped by design (psychological retention hook). */
   score: number | null;
+  /** 0..1 mean per-epoch staging confidence (signal-quality proxy). null until staged. */
+  confidence: number | null;
+  /** Sleep onset latency, minutes (time to fall asleep). null until staged / never slept. */
+  sol: number | null;
   /** Cloud Storage path {user_id}/{readable-label}; lets the app download the raw files. null for legacy rows. */
   storagePrefix: string | null;
   /** uploaded | processing | ready | failed — drives "analyzing…" vs results in the list. */

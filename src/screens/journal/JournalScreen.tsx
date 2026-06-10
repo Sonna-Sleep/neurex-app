@@ -152,6 +152,24 @@ export function JournalScreen() {
                   <Hypnogram epochs={selected.epochs} startMs={selected.startMs} endMs={selected.endMs} />
                 </View>
                 <StageBreakdown stageMinutes={selected.stageMinutes} />
+
+                <View style={styles.section}>
+                  <Eyebrow>details</Eyebrow>
+                  <View style={styles.detailRows}>
+                    <DetailRow
+                      label="Fell asleep in"
+                      value={selected.sol != null ? `${Math.round(selected.sol)} min` : '—'}
+                    />
+                    <DetailRow
+                      label="Signal quality"
+                      value={
+                        selected.confidence != null
+                          ? `${Math.round(selected.confidence * 100)}%`
+                          : '—'
+                      }
+                    />
+                  </View>
+                </View>
               </>
             ) : (
               <Secondary style={styles.processing}>Analyzing this night…</Secondary>
@@ -174,6 +192,15 @@ function Stat({ value, label }: { value: string; label: string }) {
     <View style={styles.stat}>
       <Text style={styles.statValue}>{value}</Text>
       <Secondary style={styles.statLabel}>{label}</Secondary>
+    </View>
+  );
+}
+
+function DetailRow({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={styles.detailRow}>
+      <Secondary style={styles.detailLabel}>{label}</Secondary>
+      <Text style={styles.detailValue}>{value}</Text>
     </View>
   );
 }
@@ -231,6 +258,23 @@ const styles = StyleSheet.create({
   },
   section: {
     gap: spacing.md,
+  },
+  detailRows: {
+    gap: spacing.sm,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  detailLabel: {
+    color: colors.textSecondary,
+  },
+  detailValue: {
+    fontFamily: systemFontFamily,
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.textPrimary,
   },
   processing: {
     color: colors.textSecondary,
