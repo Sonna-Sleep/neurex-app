@@ -4,6 +4,7 @@ import * as Linking from 'expo-linking';
 import { getSupabase } from './supabase';
 import { useSession } from '../../state/session';
 import { cancelPendingDeletion } from '../accountDeletion';
+import { registerForPush, resetPushRegistration } from '../push/registerPush';
 
 function parseTokensFromUrl(url: string) {
   const hashIndex = url.indexOf('#');
@@ -66,7 +67,12 @@ export function useAuthListener() {
     supabase.auth.getSession().then(({ data }) => {
       if (!mounted) return;
       const u = data.session?.user;
-      if (u) setAuth(toUser(u));
+      if (u) {
+        setAuth(toUser(u));
+        // Cold start with a live session → make sure this device's push token is
+        // registered so "report ready" notifications can reach it. Best-effort.
+        registerForPush().catch(() => undefined);
+      }
       // Auth is now settled — screens can safely query Supabase.
       useSession.setState({ authReady: true });
     });
@@ -81,8 +87,14 @@ export function useAuthListener() {
         // or a cold-start with a lingering session would silently revoke it.
         if (event === 'SIGNED_IN') {
           cancelPendingDeletion().catch(() => undefined);
+          // Register this device for "report ready" push on a fresh sign-in.
+          registerForPush().catch(() => undefined);
         }
-      } else setAuth(null);
+      } else {
+        setAuth(null);
+        // Signed out: drop the cached token so the next user re-registers theirs.
+        resetPushRegistration();
+      }
     });
 
     const handleUrl = async (url: string) => {

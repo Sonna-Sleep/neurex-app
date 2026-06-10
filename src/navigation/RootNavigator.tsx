@@ -6,6 +6,8 @@ import { useSession } from '../state/session';
 import { colors } from '../theme/tokens';
 import { OnboardingNavigator } from './OnboardingNavigator';
 import { TabNavigator } from './TabNavigator';
+import { navigationRef } from './navigationRef';
+import { usePushDeepLinks } from '../lib/push/usePushDeepLinks';
 import type { RootStackParamList } from './types';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -27,10 +29,14 @@ export function RootNavigator() {
   const onboardingComplete = useSession((s) => s.onboardingComplete);
   const hydrated = useSession((s) => s.hydrated);
 
+  // Handle a tapped "report ready" notification (deep-links to the Journal tab).
+  // Called unconditionally before any early return so hook order stays stable.
+  usePushDeepLinks();
+
   if (!hydrated) return null;
 
   return (
-    <NavigationContainer theme={navTheme}>
+    <NavigationContainer ref={navigationRef} theme={navTheme}>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         {onboardingComplete ? (
           <Stack.Screen name="Main" component={TabNavigator} />
