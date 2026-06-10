@@ -6,7 +6,6 @@ import { useSession } from '../state/session';
 import { colors } from '../theme/tokens';
 import { OnboardingNavigator } from './OnboardingNavigator';
 import { TabNavigator } from './TabNavigator';
-import { RecordScreen } from '../screens/record/RecordScreen';
 import type { RootStackParamList } from './types';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -34,12 +33,7 @@ export function RootNavigator() {
     <NavigationContainer theme={navTheme}>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         {onboardingComplete ? (
-          <>
-            <Stack.Screen name="Main" component={TabNavigator} />
-            <Stack.Screen name="Record" component={RecordScreen} />
-            {/* Standard push (not a modal) so it never traps: iOS edge-swipe
-                back works and BackButton returns to the tabs. */}
-          </>
+          <Stack.Screen name="Main" component={TabNavigator} />
         ) : (
           <Stack.Screen name="Onboarding" component={OnboardingNavigator} />
         )}

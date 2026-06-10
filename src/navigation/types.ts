@@ -16,13 +16,12 @@ export type HistoryStackParamList = {
 };
 
 export type TabParamList = {
-  Home: undefined;
-  History: NavigatorScreenParams<HistoryStackParamList>;
-  Account: undefined;
+  Sleep: undefined;
+  Journal: undefined;
+  Profile: undefined;
 };
 
 export type RootStackParamList = {
   Onboarding: NavigatorScreenParams<OnboardingStackParamList>;
   Main: NavigatorScreenParams<TabParamList>;
-  Record: undefined;
 };
