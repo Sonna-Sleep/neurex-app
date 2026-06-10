@@ -9,10 +9,6 @@
 // exercised unmodified.
 import './_expo-fs-stub';
 process.env.EXPO_PUBLIC_MODAL_ENDPOINT_URL = 'https://example.test';
-import assert from 'node:assert';
-import {
-  requestScheduledDeletion, getPendingDeletion, cancelPendingDeletion, deleteImmediately,
-} from '../src/lib/accountDeletion';
 
 function mockClient(uid: string | null) {
   const rows: Record<string, any> = {};
@@ -32,20 +28,46 @@ function mockClient(uid: string | null) {
   } as any;
 }
 
+function expect(condition: unknown, message: string): void {
+  if (!condition) throw new Error(message);
+}
+
+function expectEqual<T>(actual: T, expected: T, message: string): void {
+  if (actual !== expected) {
+    throw new Error(`${message}: expected ${String(expected)}, got ${String(actual)}`);
+  }
+}
+
+async function expectRejects(fn: () => Promise<unknown>, message: string): Promise<void> {
+  try {
+    await fn();
+  } catch {
+    return;
+  }
+  throw new Error(message);
+}
+
 (async () => {
+  const {
+    requestScheduledDeletion,
+    getPendingDeletion,
+    cancelPendingDeletion,
+    deleteImmediately,
+  } = await import('../src/lib/accountDeletion');
+
   const c = mockClient('u1');
-  assert.strictEqual(await getPendingDeletion(c), null);
+  expectEqual(await getPendingDeletion(c), null, 'initial pending deletion');
   const { purgeAfterMs } = await requestScheduledDeletion(c);
-  assert.ok(purgeAfterMs > Date.now());
+  expect(purgeAfterMs > Date.now(), 'purgeAfterMs should be in the future');
   const p = await getPendingDeletion(c);
-  assert.ok(p && p.userId === 'u1');
-  assert.strictEqual(await cancelPendingDeletion(c), true);
-  assert.strictEqual(await getPendingDeletion(c), null);
+  expect(p && p.userId === 'u1', 'pending deletion should belong to u1');
+  expectEqual(await cancelPendingDeletion(c), true, 'cancelPendingDeletion');
+  expectEqual(await getPendingDeletion(c), null, 'pending deletion after cancel');
 
   // immediate: mock fetch. localWipe runs against the stubbed FS (no-op).
   const okFetch = (async () => ({ ok: true, status: 200 })) as unknown as typeof fetch;
   await deleteImmediately(c, okFetch);
   const badFetch = (async () => ({ ok: false, status: 401 })) as unknown as typeof fetch;
-  await assert.rejects(() => deleteImmediately(c, badFetch));
+  await expectRejects(() => deleteImmediately(c, badFetch), 'bad immediate delete should reject');
   console.log('smoke-account-deletion OK');
 })();

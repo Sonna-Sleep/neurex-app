@@ -16,7 +16,6 @@ const expoFsStub = {
   Paths: { document: '/tmp/neurex-smoke' },
   Directory: class {
     exists = false;
-    constructor(..._parts: unknown[]) {}
     delete(): void {}
   },
 };

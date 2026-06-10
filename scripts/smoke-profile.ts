@@ -15,13 +15,28 @@ const mem = new Map<string, string>();
     get length() { return mem.size; },
   },
 };
-import assert from 'node:assert';
-import { ageFromDob, getProfile, saveProfile } from '../src/lib/profile';
 
-assert.strictEqual(ageFromDob('1990-01-01')! >= 30, true);
-assert.strictEqual(ageFromDob(null), null);
-assert.strictEqual(ageFromDob('not-a-date'), null);
-assert.strictEqual(ageFromDob(`${new Date().getFullYear() + 1}-01-01`), null); // future
+function expect(condition: unknown, message: string): void {
+  if (!condition) throw new Error(message);
+}
+
+function expectEqual(actual: unknown, expected: unknown, message: string): void {
+  if (actual !== expected) {
+    throw new Error(`${message}: expected ${String(expected)}, got ${String(actual)}`);
+  }
+}
+
+function expectDeepEqual(
+  actual: Record<string, unknown>,
+  expected: Record<string, unknown>,
+  message: string,
+): void {
+  const actualJson = JSON.stringify(actual);
+  const expectedJson = JSON.stringify(expected);
+  if (actualJson !== expectedJson) {
+    throw new Error(`${message}: expected ${expectedJson}, got ${actualJson}`);
+  }
+}
 
 function mockClient() {
   const meta: Record<string, unknown> = {};
@@ -34,9 +49,20 @@ function mockClient() {
 }
 
 (async () => {
+  const { ageFromDob, getProfile, saveProfile } = await import('../src/lib/profile');
+
+  expect(ageFromDob('1990-01-01')! >= 30, 'age from 1990 should be at least 30');
+  expectEqual(ageFromDob(null), null, 'null dob');
+  expectEqual(ageFromDob('not-a-date'), null, 'invalid dob');
+  expectEqual(ageFromDob(`${new Date().getFullYear() + 1}-01-01`), null, 'future dob');
+
   const c = mockClient();
-  assert.deepStrictEqual(await getProfile(c), { firstName: null, dob: null, sex: null });
+  expectDeepEqual(await getProfile(c), { firstName: null, dob: null, sex: null }, 'empty profile');
   await saveProfile({ firstName: 'Alex', dob: '1990-06-15', sex: 'male' }, c);
-  assert.deepStrictEqual(await getProfile(c), { firstName: 'Alex', dob: '1990-06-15', sex: 'male' });
+  expectDeepEqual(
+    await getProfile(c),
+    { firstName: 'Alex', dob: '1990-06-15', sex: 'male' },
+    'saved profile',
+  );
   console.log('smoke-profile OK');
 })();
