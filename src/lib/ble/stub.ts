@@ -15,6 +15,7 @@ import {
 import type {
   BleClient,
   ConnectedDevice,
+  ConnectOpts,
   EegSample,
   FoundDevice,
   ParsedPacket,
@@ -46,7 +47,7 @@ function encodePacketEeg(packet: ParsedPacket): Uint8Array {
 
 type FileHandleLike = {
   offset: number;
-  size: number;
+  size: number | null;
   writeBytes(bytes: Uint8Array): void;
   close(): void;
 };
@@ -56,7 +57,7 @@ function openAppending(dir: Directory, name: string): { uri: string; handle: Fil
   if (!file.exists) file.create();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const handle = (file as any).open() as FileHandleLike;
-  handle.offset = handle.size;
+  handle.offset = handle.size ?? 0;
   return { uri: file.uri, handle };
 }
 

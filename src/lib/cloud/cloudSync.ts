@@ -272,20 +272,37 @@ export async function downloadRaw(prefix: string, stream: Stream): Promise<strin
  * the staged summary the moment the backend flips it to 'ready'. Falls back to
  * one immediate read in case it was already done. Returns an unsubscribe fn.
  */
+export type SubscribeResultOpts = {
+  /** If the row hasn't flipped to 'ready' within this window, fire `onSlow`
+   * once so the UI can stop showing an endless spinner. The subscription stays
+   * live, so a late 'ready' still delivers via `onReady`. */
+  timeoutMs?: number;
+  onSlow?: () => void;
+};
+
 export function subscribeToResult(
   sessionId: string,
   onReady: (session: Session) => void,
+  opts?: SubscribeResultOpts,
 ): () => void {
   const supabase = getSupabase();
   if (!supabase) return () => {};
 
   let done = false;
+  let slowTimer: ReturnType<typeof setTimeout> | null = null;
+  const clearSlow = () => {
+    if (slowTimer) {
+      clearTimeout(slowTimer);
+      slowTimer = null;
+    }
+  };
   // Only fire for a row the backend has actually staged. byId returns the row at
   // ANY status (including the just-inserted 'uploaded'), so without this guard
   // the immediate read below would flip the UI to "done" before YASA ever runs.
   const finish = (s: Session | null) => {
     if (s && s.status === 'ready' && !done) {
       done = true;
+      clearSlow();
       onReady(s);
     }
   };
@@ -307,7 +324,17 @@ export function subscribeToResult(
     )
     .subscribe();
 
+  // Stalled-staging escape hatch: surface "still analyzing" rather than an
+  // infinite spinner. Does NOT unsubscribe — a late 'ready' still resolves.
+  if (opts?.timeoutMs && opts.onSlow) {
+    const onSlow = opts.onSlow;
+    slowTimer = setTimeout(() => {
+      if (!done) onSlow();
+    }, opts.timeoutMs);
+  }
+
   return () => {
+    clearSlow();
     supabase.removeChannel(channel);
   };
 }

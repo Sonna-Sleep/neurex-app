@@ -1,7 +1,10 @@
 import { requireOptionalNativeModule } from 'expo';
 
 export type NeurexForegroundServiceModule = {
-  start(title: string, body: string): void;
+  /** Returns true if the start intent was dispatched (context present, no
+   * exception). false means the service could not be started — the caller
+   * should warn the user that background recording isn't protected. */
+  start(title: string, body: string): boolean;
   stop(): void;
 };
 

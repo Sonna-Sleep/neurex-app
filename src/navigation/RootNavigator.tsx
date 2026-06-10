@@ -8,6 +8,7 @@ import { OnboardingNavigator } from './OnboardingNavigator';
 import { TabNavigator } from './TabNavigator';
 import { navigationRef } from './navigationRef';
 import { usePushDeepLinks } from '../lib/push/usePushDeepLinks';
+import { useRecoverOnLaunch } from '../lib/cloud/useRecoverOnLaunch';
 import type { RootStackParamList } from './types';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -32,6 +33,9 @@ export function RootNavigator() {
   // Handle a tapped "report ready" notification (deep-links to the Journal tab).
   // Called unconditionally before any early return so hook order stays stable.
   usePushDeepLinks();
+
+  // Recover + upload any night left on disk by a crash/kill/failed upload.
+  useRecoverOnLaunch();
 
   if (!hydrated) return null;
 

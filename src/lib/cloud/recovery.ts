@@ -1,0 +1,177 @@
+// Crash / kill recovery for overnight recordings.
+//
+// A night is written to documentDirectory/sessions/<id>/EEG.BIN incrementally.
+// If the app is killed mid-night (OOM, crash, force-stop, reboot) the bytes are
+// on disk but the in-memory session state is gone, so without this nothing
+// would ever upload them — a silently lost night. This module closes that gap:
+//
+//   - At session start, streamController writes a self-describing meta.json into
+//     the session dir AND a durable "active recording" marker in AsyncStorage
+//     (so an iOS state-restoration relaunch knows which session to resume).
+//   - At a clean stop, the marker is cleared.
+//   - On app launch, scanRecoverable() finds every session dir with a non-empty
+//     EEG.BIN that isn't the live session and isn't yet uploaded (an uploaded
+//     night's dir is removed by deleteLocalSession), and recoverAll() ships them
+//     through the same transmitSession path. transmitSession deletes the local
+//     copy only after the cloud upload + finalize succeed, so a failed recovery
+//     keeps the bytes for next launch.
+
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { File, Directory, Paths } from 'expo-file-system';
+
+import { transmitSession } from './cloudSync';
+import { reconstructTiming } from './recoveryMath';
+import { EEG_SAMPLE_RATE_HZ } from '../ble/constants';
+
+const ACTIVE_KEY = 'neurex-active-recording';
+const META_NAME = 'meta.json';
+const EEG_NAME = 'EEG.BIN';
+
+export type RecordingMeta = {
+  sessionId: string;
+  startedAtMs: number;
+  deviceId?: string | null;
+  serial?: string | null;
+};
+
+export type RecoverableRecording = {
+  sessionId: string;
+  startedAtMs: number;
+  endMs: number;
+  sizeBytes: number;
+  serial?: string | null;
+};
+
+function sessionsDir(): Directory {
+  return new Directory(Paths.document, 'sessions');
+}
+
+function isMeta(m: unknown): m is RecordingMeta {
+  return (
+    !!m &&
+    typeof (m as RecordingMeta).sessionId === 'string' &&
+    typeof (m as RecordingMeta).startedAtMs === 'number'
+  );
+}
+
+// ── durable active-recording marker (AsyncStorage) ─────────────────────────
+
+/** Persist which session is live + where it started, so an iOS restoration
+ * relaunch can resume it. Best-effort; failure never blocks recording. */
+export async function setActiveRecording(meta: RecordingMeta): Promise<void> {
+  try {
+    await AsyncStorage.setItem(ACTIVE_KEY, JSON.stringify(meta));
+  } catch {
+    /* non-fatal */
+  }
+}
+
+export async function clearActiveRecording(): Promise<void> {
+  try {
+    await AsyncStorage.removeItem(ACTIVE_KEY);
+  } catch {
+    /* non-fatal */
+  }
+}
+
+export async function getActiveRecording(): Promise<RecordingMeta | null> {
+  try {
+    const raw = await AsyncStorage.getItem(ACTIVE_KEY);
+    if (!raw) return null;
+    const m = JSON.parse(raw);
+    return isMeta(m) ? m : null;
+  } catch {
+    return null;
+  }
+}
+
+// ── self-describing per-session meta.json ──────────────────────────────────
+
+/** Write meta.json into the session dir (best-effort) so a recovered orphan's
+ * true start time + device survive a kill even without the AsyncStorage marker. */
+export function writeSessionMeta(meta: RecordingMeta): void {
+  try {
+    const dir = new Directory(sessionsDir(), meta.sessionId);
+    if (!dir.exists) dir.create({ intermediates: true });
+    const f = new File(dir, META_NAME);
+    if (!f.exists) f.create();
+    f.write(JSON.stringify(meta));
+  } catch {
+    /* non-fatal — recovery still reconstructs timing from size + mtime */
+  }
+}
+
+function readMeta(dir: Directory): RecordingMeta | null {
+  try {
+    const f = new File(dir, META_NAME);
+    if (!f.exists) return null;
+    const m = JSON.parse(f.textSync());
+    return isMeta(m) ? m : null;
+  } catch {
+    return null;
+  }
+}
+
+// ── scan + recover orphaned recordings ─────────────────────────────────────
+
+/**
+ * Find recordings on disk that were never uploaded: every session dir with a
+ * non-empty EEG.BIN, except the one currently recording. Endpoints come from
+ * meta.json when present, else are reconstructed from the file's byte count
+ * (→ duration) and modification time, so even a metadata-less orphan uploads.
+ */
+export function scanRecoverable(activeSessionId?: string | null): RecoverableRecording[] {
+  const out: RecoverableRecording[] = [];
+  let items: (Directory | File)[];
+  try {
+    const dir = sessionsDir();
+    if (!dir.exists) return out;
+    items = dir.list();
+  } catch {
+    return out;
+  }
+  for (const item of items) {
+    if (!(item instanceof Directory)) continue;
+    const sessionId = item.uri.replace(/\/+$/, '').split('/').pop() ?? '';
+    if (!sessionId || sessionId === activeSessionId) continue;
+    let eeg: File;
+    try {
+      eeg = new File(item, EEG_NAME);
+      if (!eeg.exists || eeg.size <= 0) continue;
+    } catch {
+      continue;
+    }
+    const sizeBytes = eeg.size;
+    const meta = readMeta(item);
+    const { startedAtMs, endMs } = reconstructTiming({
+      sizeBytes,
+      sampleRateHz: EEG_SAMPLE_RATE_HZ,
+      modificationTimeMs: eeg.modificationTime,
+      metaStartedAtMs: meta?.startedAtMs ?? null,
+      nowMs: Date.now(),
+    });
+    out.push({ sessionId, startedAtMs, endMs, sizeBytes, serial: meta?.serial ?? null });
+  }
+  return out;
+}
+
+export type RecoveryResult = { sessionId: string; ok: boolean; error?: string };
+
+/**
+ * Upload every recoverable recording through the normal transmit path. Each is
+ * independent — one failure doesn't block the rest. Returns a per-session
+ * result for logging/surfacing.
+ */
+export async function recoverAll(activeSessionId?: string | null): Promise<RecoveryResult[]> {
+  const recs = scanRecoverable(activeSessionId);
+  const results: RecoveryResult[] = [];
+  for (const r of recs) {
+    try {
+      await transmitSession({ sessionId: r.sessionId, startMs: r.startedAtMs, endMs: r.endMs });
+      results.push({ sessionId: r.sessionId, ok: true });
+    } catch (e) {
+      results.push({ sessionId: r.sessionId, ok: false, error: (e as Error).message });
+    }
+  }
+  return results;
+}
