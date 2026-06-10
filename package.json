@@ -15,7 +15,8 @@
     "smoke:connect-timeout": "ts-node --transpile-only --project scripts/tsconfig.scripts.json scripts/smoke-connect-timeout.ts",
     "smoke:recovery": "ts-node --transpile-only --project scripts/tsconfig.scripts.json scripts/smoke-recovery.ts",
     "prebuild": "expo prebuild",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "smoke:support": "ts-node --transpile-only --project scripts/tsconfig.scripts.json scripts/smoke-support.ts"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",

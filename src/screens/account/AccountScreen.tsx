@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { colors, layout, radii, spacing, systemFontFamily } from '../../theme/tokens';
@@ -12,6 +12,7 @@ import { DebugSection } from './DebugSection';
 import { DeleteAccountSection } from './DeleteAccountSection';
 import { EditProfileSheet } from './EditProfileSheet';
 import { LegalSheet } from './LegalSheet';
+import { SupportSheet } from './SupportSheet';
 import { TAB_BAR_SPACE } from '../../navigation/FloatingTabBar';
 
 function greeting(hour: number): string {
@@ -35,6 +36,7 @@ export function AccountScreen() {
   const signOut = useSession((s) => s.signOut);
   const [editing, setEditing] = useState(false);
   const [legalDoc, setLegalDoc] = useState<LegalDocKey | null>(null);
+  const [support, setSupport] = useState(false);
 
   const firstName = user?.firstName?.trim();
   const name = firstName || 'You';
@@ -60,10 +62,10 @@ export function AccountScreen() {
           </Pressable>
         </View>
 
-        {/* Links — grouped card. Privacy + About render in-app (LegalSheet),
-            not external Chrome links. */}
+        {/* Links — grouped card. All three render in-app (SupportSheet /
+            LegalSheet), no external mail client or browser. */}
         <View style={styles.card}>
-          <Row label="Contact support" onPress={() => Linking.openURL('mailto:contact@neurex.tech')} first />
+          <Row label="Contact support" onPress={() => setSupport(true)} first />
           <Row label="Privacy policy" onPress={() => setLegalDoc('privacy')} />
           <Row label="About" onPress={() => setLegalDoc('about')} />
         </View>
@@ -84,6 +86,7 @@ export function AccountScreen() {
 
       <EditProfileSheet visible={editing} onClose={() => setEditing(false)} />
       <LegalSheet doc={legalDoc} onClose={() => setLegalDoc(null)} />
+      <SupportSheet visible={support} onClose={() => setSupport(false)} />
     </SafeAreaView>
   );
 }
