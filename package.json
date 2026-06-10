@@ -12,7 +12,8 @@
     "smoke:backoff": "ts-node --transpile-only --project scripts/tsconfig.scripts.json scripts/smoke-backoff.ts",
     "smoke:account-deletion": "ts-node --transpile-only --project scripts/tsconfig.scripts.json scripts/smoke-account-deletion.ts",
     "smoke:profile": "ts-node --transpile-only --project scripts/tsconfig.scripts.json scripts/smoke-profile.ts",
-    "prebuild": "expo prebuild"
+    "prebuild": "expo prebuild",
+    "lint": "eslint ."
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",
@@ -58,6 +59,8 @@
     "@types/node": "^25.7.0",
     "@types/react": "~19.1.0",
     "dotenv": "^17.4.2",
+    "eslint": "^9.39.4",
+    "eslint-config-expo": "^56.0.4",
     "ts-node": "^10.9.2",
     "typescript": "~5.9.2"
   },
