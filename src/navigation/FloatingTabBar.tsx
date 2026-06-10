@@ -83,7 +83,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
-    borderRadius: radii.pill,
+    // Concrete radius, NOT radii.pill: oversized radii on background-only views
+    // (no borderWidth) render square on some Android/new-arch builds. 26 ≈ this
+    // item's stadium (height ~53) AND concentric with the container's rounding
+    // minus its 6px padding, so the highlight nests evenly inside the bar.
+    borderRadius: 26,
     gap: 3,
   },
   itemActive: {
