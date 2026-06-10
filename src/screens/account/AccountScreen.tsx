@@ -10,6 +10,7 @@ import appConfig from '../../../app.json';
 import { DebugSection } from './DebugSection';
 import { DeleteAccountSection } from './DeleteAccountSection';
 import { EditProfileSheet } from './EditProfileSheet';
+import { TAB_BAR_SPACE } from '../../navigation/FloatingTabBar';
 
 export function AccountScreen() {
   const user = useSession((s) => s.user);
@@ -80,7 +81,7 @@ const styles = StyleSheet.create({
   },
   scroll: {
     paddingTop: spacing.xxl,
-    paddingBottom: spacing.xxxl,
+    paddingBottom: TAB_BAR_SPACE,
   },
   profile: {
     alignItems: 'flex-start',

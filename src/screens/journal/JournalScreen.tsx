@@ -1,9 +1,10 @@
 // Journal tab — a sleep calendar. A week strip of day-circles up top; tapping a
 // day shows that night's report (score ring + in-bed/asleep + hypnogram +
 // stage breakdown). Pages back/forward by week.
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 
 import { Eyebrow, SerifDisplay, Secondary } from '../../theme/typography';
 import { colors, layout, spacing, systemFontFamily } from '../../theme/tokens';
@@ -33,18 +34,21 @@ function todayKey(): string {
 
 export function JournalScreen() {
   const authReady = useSession((s) => s.authReady);
-  const processingSessionId = useSession((s) => s.processingSessionId);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [selectedKey, setSelectedKey] = useState<string>(todayKey());
   const [weekStart, setWeekStart] = useState<Date>(weekStartOf(new Date(Date.now())));
   const [loaded, setLoaded] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const initialized = useRef(false);
 
   const load = useCallback(async () => {
     const list = await sessionRepo.list();
     setSessions(list);
     setLoaded(true);
-    // Default-select the most recent night on first load.
-    if (list.length > 0) {
+    // Select the most recent night ONCE — a later refetch must not yank the
+    // user off the day/week they're viewing.
+    if (!initialized.current && list.length > 0) {
+      initialized.current = true;
       const latest = list.reduce((a, b) => (a.endMs > b.endMs ? a : b));
       const k = dateKey(new Date(latest.endMs));
       setSelectedKey(k);
@@ -52,10 +56,25 @@ export function JournalScreen() {
     }
   }, []);
 
+  // Refetch when auth settles (cold start) and whenever the tab regains focus —
+  // so a night recorded on the Sleep tab appears here without an app restart.
   useEffect(() => {
     load().catch(() => undefined);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authReady, processingSessionId]);
+  }, [authReady, load]);
+  useFocusEffect(
+    useCallback(() => {
+      load().catch(() => undefined);
+    }, [load]),
+  );
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await load();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [load]);
 
   // Index sessions by their wake day (local date of endMs).
   const byDate = useMemo(() => {
@@ -87,7 +106,13 @@ export function JournalScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.textSecondary} />
+        }
+      >
         {/* Header: date + week paging */}
         <View style={styles.header}>
           <SerifDisplay>{headerLabel}</SerifDisplay>
