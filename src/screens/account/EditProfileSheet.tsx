@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
 import { Segmented } from '../../components/Segmented';
 import { Avatar } from '../../components/Avatar';
@@ -50,6 +50,10 @@ export function EditProfileSheet({ visible, onClose }: { visible: boolean; onClo
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
+      {/* A RN Modal renders outside the app's SafeAreaProvider, so SafeAreaView
+          insets would be 0 (content slides under the status bar). Give the modal
+          its own provider so the top inset is real. */}
+      <SafeAreaProvider>
       <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
         {/* Top bar — close on the left, Save on the right (reachable, iOS-style) */}
         <View style={styles.topBar}>
@@ -108,6 +112,7 @@ export function EditProfileSheet({ visible, onClose }: { visible: boolean; onClo
           </View>
         </ScrollView>
       </SafeAreaView>
+      </SafeAreaProvider>
     </Modal>
   );
 }
@@ -122,7 +127,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: spacing.lg,
+    paddingTop: spacing.sm,
     paddingBottom: spacing.md,
   },
   close: {
