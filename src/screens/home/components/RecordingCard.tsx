@@ -203,6 +203,8 @@ export function RecordingCard() {
   const hasDob = ageFromDob(userDob) !== null;
   useEffect(() => {
     if (saved && sync === 'idle' && saved.durationSec >= MIN_AUTOSYNC_SEC && hasDob) {
+      // Intentional transition side-effect: once a recording becomes saved, start upload.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       onSyncToCloud();
     }
   }, [saved, sync, hasDob, onSyncToCloud]);

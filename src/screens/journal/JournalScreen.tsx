@@ -60,6 +60,8 @@ export function JournalScreen() {
   // Refetch when auth settles (cold start) and whenever the tab regains focus —
   // so a night recorded on the Sleep tab appears here without an app restart.
   useEffect(() => {
+    // Intentional data fetch on auth readiness; load() owns the state transition.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void load();
   }, [authReady, load]);
   useFocusEffect(

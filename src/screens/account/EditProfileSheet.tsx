@@ -31,6 +31,8 @@ export function EditProfileSheet({ visible, onClose }: { visible: boolean; onClo
   // edits from a previous cancel would still be pre-filled and could be saved.
   useEffect(() => {
     if (!visible) return;
+    // Intentional modal-open draft reset.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setFirstName(user?.firstName ?? '');
     setDob(user?.dob ?? null);
     setSex((user?.sex as Sex) ?? null);

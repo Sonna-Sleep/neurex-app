@@ -29,6 +29,8 @@ export function DateOfBirthInput({ value, onChange }: Props) {
   // typing of an as-yet-incomplete date.
   React.useEffect(() => {
     if (value === isoOrNull(d, m, y)) return;
+    // Intentional controlled-prop resync for a locally edited segmented date.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setD(value ? value.slice(8, 10) : '');
     setM(value ? value.slice(5, 7) : '');
     setY(value ? value.slice(0, 4) : '');
