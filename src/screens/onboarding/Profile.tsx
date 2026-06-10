@@ -10,9 +10,9 @@ import { DateOfBirthInput } from './components/DateOfBirthInput';
 import { saveProfile, type Sex } from '../../lib/profile';
 
 const SEX_OPTIONS: { value: Sex; label: string }[] = [
-  { value: 'male', label: 'male' },
-  { value: 'female', label: 'female' },
-  { value: 'unspecified', label: 'other' },
+  { value: 'male', label: 'Male' },
+  { value: 'female', label: 'Female' },
+  { value: 'unspecified', label: 'Other' },
 ];
 
 type Props = NativeStackScreenProps<OnboardingStackParamList, 'Profile'>;

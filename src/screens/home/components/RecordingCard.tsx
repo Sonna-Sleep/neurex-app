@@ -229,7 +229,7 @@ export function RecordingCard() {
           {error ? <Text style={styles.error}>{error}</Text> : null}
 
           <Button
-            label={busy === 'stopping' ? 'saving…' : 'stop session'}
+            label={busy === 'stopping' ? 'Saving…' : 'Stop session'}
             variant="ghost"
             onPress={onStop}
             loading={busy === 'stopping'}
@@ -255,24 +255,24 @@ export function RecordingCard() {
           {error ? <Text style={styles.error}>{error}</Text> : null}
           {sync === 'done' && summary ? (
             <View style={styles.stats}>
-              <Stat label="score" value={summary.score != null ? `${summary.score}` : '—'} />
-              <Stat label="deep" value={`${Math.round(summary.stageMinutes?.deep ?? 0)}m`} />
-              <Stat label="rem" value={`${Math.round(summary.stageMinutes?.rem ?? 0)}m`} />
-              <Stat label="light" value={`${Math.round(summary.stageMinutes?.light ?? 0)}m`} />
+              <Stat label="Score" value={summary.score != null ? `${summary.score}` : '—'} />
+              <Stat label="Deep" value={`${Math.round(summary.stageMinutes?.deep ?? 0)}m`} />
+              <Stat label="REM" value={`${Math.round(summary.stageMinutes?.rem ?? 0)}m`} />
+              <Stat label="Light" value={`${Math.round(summary.stageMinutes?.light ?? 0)}m`} />
             </View>
           ) : null}
 
           <Button
             label={
               sync === 'uploading'
-                ? 'uploading to cloud…'
+                ? 'Uploading to cloud…'
                 : sync === 'analyzing'
-                  ? 'analyzing in cloud…'
+                  ? 'Analyzing in cloud…'
                   : sync === 'done'
-                    ? 'synced ✓'
+                    ? 'Synced ✓'
                     : sync === 'error'
-                      ? 'retry cloud sync'
-                      : 'sync to cloud'
+                      ? 'Retry cloud sync'
+                      : 'Sync to cloud'
             }
             onPress={onSyncToCloud}
             loading={sync === 'uploading' || sync === 'analyzing'}
@@ -282,7 +282,7 @@ export function RecordingCard() {
             <Button label="share EEG.BIN" variant="ghost" onPress={() => onShare(saved.eegUri)} />
           ) : null}
           <Button
-            label="done"
+            label="Done"
             variant="ghost"
             onPress={() => {
               unsubRef.current?.();
@@ -329,7 +329,7 @@ export function RecordingCard() {
       {error ? <Text style={styles.error}>{error}</Text> : null}
       <View style={styles.idleActions}>
         <Button
-          label={busy === 'starting' ? 'connecting…' : 'start session'}
+          label={busy === 'starting' ? 'Connecting…' : 'Start session'}
           onPress={() => {
             setError(null);
             setChecking(true);
@@ -337,7 +337,7 @@ export function RecordingCard() {
           loading={busy === 'starting'}
         />
         <Pressable onPress={onUnpair} hitSlop={8} style={styles.unpair}>
-          <Secondary style={styles.unpairText}>unpair</Secondary>
+          <Secondary style={styles.unpairText}>Unpair</Secondary>
         </Pressable>
       </View>
     </View>

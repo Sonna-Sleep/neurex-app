@@ -40,7 +40,7 @@ export function EmailSent({ navigation, route }: Props) {
 
         <View style={styles.actions}>
           <Button
-            label="use a different email"
+            label="Use a different email"
             variant="ghost"
             onPress={() => navigation.goBack()}
           />

@@ -200,11 +200,11 @@ export function PreBedCheck({ deviceId, onProceed, onCancel }: Props) {
 
       <View style={styles.actions}>
         {ready ? (
-          <Button label="start recording" onPress={onProceed} />
+          <Button label="Start recording" onPress={onProceed} />
         ) : (
-          <Button label="start anyway" variant="ghost" onPress={onProceed} />
+          <Button label="Start anyway" variant="ghost" onPress={onProceed} />
         )}
-        <Button label="cancel" variant="ghost" onPress={onCancel} />
+        <Button label="Cancel" variant="ghost" onPress={onCancel} />
       </View>
       {phase === 'error' ? (
         <Secondary style={styles.hint}>You can still start — the check is just a heads-up.</Secondary>

@@ -150,7 +150,7 @@ export function Auth({ navigation }: Props) {
 
           <View style={styles.actions}>
             <Button
-              label="continue with google"
+              label="Continue with Google"
               variant="ghost"
               onPress={handleGoogle}
               loading={busy}
@@ -171,14 +171,14 @@ export function Auth({ navigation }: Props) {
                   style={styles.input}
                 />
                 <Button
-                  label="send sign-in link"
+                  label="Send sign-in link"
                   onPress={handleEmail}
                   loading={busy}
                 />
               </View>
             ) : (
               <Button
-                label="continue with email"
+                label="Continue with email"
                 variant="ghost"
                 onPress={() => setShowEmail(true)}
               />
@@ -188,7 +188,7 @@ export function Auth({ navigation }: Props) {
                 appears in dev or internal test builds, never in production. */}
             {ALLOW_AUTH_BYPASS ? (
               <Button
-                label="skip login (test)"
+                label="Skip login (test)"
                 variant="ghost"
                 onPress={() => continueWithMockUser('dev-skip', null)}
               />

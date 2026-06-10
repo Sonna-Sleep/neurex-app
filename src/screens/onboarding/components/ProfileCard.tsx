@@ -44,8 +44,8 @@ export function ProfileCard({
           <View style={styles.input}>{children}</View>
         </Pressable>
         <View style={styles.actions}>
-          <Button label={isLast ? 'finish' : 'continue'} onPress={onContinue} disabled={!canContinue} />
-          {onSkip ? <Button label="skip" variant="ghost" onPress={onSkip} /> : null}
+          <Button label={isLast ? 'Finish' : 'Continue'} onPress={onContinue} disabled={!canContinue} />
+          {onSkip ? <Button label="Skip" variant="ghost" onPress={onSkip} /> : null}
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>

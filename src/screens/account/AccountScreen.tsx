@@ -35,15 +35,15 @@ export function AccountScreen() {
           {user?.email ? <Text style={styles.sub}>{user.email}</Text> : null}
           {sub ? <Text style={styles.sub}>{sub}</Text> : null}
           <Pressable onPress={() => setEditing(true)} hitSlop={8} style={styles.editBtn}>
-            <Text style={styles.editText}>edit profile</Text>
+            <Text style={styles.editText}>Edit profile</Text>
           </Pressable>
         </View>
 
         {/* Links */}
         <View style={styles.rows}>
-          <Row label="contact support" onPress={() => Linking.openURL('mailto:contact@neurex.tech')} />
-          <Row label="privacy policy" onPress={() => Linking.openURL(LEGAL_URLS.privacyPolicy)} />
-          <Row label="about" onPress={() => Linking.openURL(LEGAL_URLS.about)} />
+          <Row label="Contact support" onPress={() => Linking.openURL('mailto:contact@neurex.tech')} />
+          <Row label="Privacy policy" onPress={() => Linking.openURL(LEGAL_URLS.privacyPolicy)} />
+          <Row label="About" onPress={() => Linking.openURL(LEGAL_URLS.about)} />
         </View>
 
         <DebugSection />
@@ -51,7 +51,7 @@ export function AccountScreen() {
         {/* Footer */}
         <View style={styles.footer}>
           <Pressable onPress={signOut} hitSlop={8}>
-            <Text style={styles.logout}>log out</Text>
+            <Text style={styles.logout}>Log out</Text>
           </Pressable>
           <DeleteAccountSection />
           <Text style={styles.version}>version {appConfig.expo.version}</Text>

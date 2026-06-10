@@ -115,8 +115,8 @@ export function JournalScreen() {
             <View style={styles.scoreRow}>
               <ScoreRing score={selected.score} size={150} />
               <View style={styles.stats}>
-                <Stat value={fmtDur(selected.tib)} label="in bed" />
-                <Stat value={fmtDur(selected.tst)} label="asleep" />
+                <Stat value={fmtDur(selected.tib)} label="In bed" />
+                <Stat value={fmtDur(selected.tst)} label="Asleep" />
               </View>
             </View>
 

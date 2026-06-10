@@ -11,9 +11,9 @@ import { saveProfile, type Sex } from '../../lib/profile';
 import { DateOfBirthInput } from '../onboarding/components/DateOfBirthInput';
 
 const SEX_OPTIONS: { value: Sex; label: string }[] = [
-  { value: 'male', label: 'male' },
-  { value: 'female', label: 'female' },
-  { value: 'unspecified', label: 'other' },
+  { value: 'male', label: 'Male' },
+  { value: 'female', label: 'Female' },
+  { value: 'unspecified', label: 'Other' },
 ];
 
 export function EditProfileSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
@@ -73,9 +73,9 @@ export function EditProfileSheet({ visible, onClose }: { visible: boolean; onClo
         </View>
 
         <View style={styles.actions}>
-          <Button label={busy ? 'saving…' : 'save'} onPress={save} disabled={busy} />
+          <Button label={busy ? 'Saving…' : 'Save'} onPress={save} disabled={busy} />
           <Pressable onPress={onClose} hitSlop={8} style={styles.cancel}>
-            <Text style={styles.cancelText}>cancel</Text>
+            <Text style={styles.cancelText}>Cancel</Text>
           </Pressable>
         </View>
       </SafeAreaView>

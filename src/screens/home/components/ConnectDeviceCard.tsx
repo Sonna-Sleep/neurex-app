@@ -149,7 +149,7 @@ export function ConnectDeviceCard() {
         <Card style={styles.card}>
           <SerifHeadline>Connect your mask</SerifHeadline>
           <Body style={styles.subtext}>Power it on, then tap connect.</Body>
-          <Button label="connect" onPress={beginScan} />
+          <Button label="Connect" onPress={beginScan} />
         </Card>
       </View>
     );
@@ -240,17 +240,17 @@ export function ConnectDeviceCard() {
 
         <View style={styles.actions}>
           {state === 'bluetooth-off' || state === 'permission-denied' ? (
-            <Button label="open settings" onPress={openSettingsForBluetooth} />
+            <Button label="Open settings" onPress={openSettingsForBluetooth} />
           ) : null}
 
           {state === 'scan-timeout' ||
           state === 'error' ||
           state === 'bluetooth-off' ||
           state === 'permission-denied' ? (
-            <Button label="re-scan" variant="ghost" onPress={beginScan} />
+            <Button label="Re-scan" variant="ghost" onPress={beginScan} />
           ) : null}
 
-          <Button label="cancel" variant="ghost" onPress={cancel} />
+          <Button label="Cancel" variant="ghost" onPress={cancel} />
         </View>
       </Card>
     </View>

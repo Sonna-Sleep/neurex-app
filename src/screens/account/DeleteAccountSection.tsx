@@ -57,7 +57,7 @@ export function DeleteAccountSection() {
 
   return (
     <Pressable onPress={confirm} disabled={busy} hitSlop={8}>
-      <Text style={styles.delete}>{busy ? 'working…' : 'delete account'}</Text>
+      <Text style={styles.delete}>{busy ? 'Working…' : 'Delete account'}</Text>
     </Pressable>
   );
 }

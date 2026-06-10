@@ -38,7 +38,7 @@ export function FloatingTabBar({ state, navigation }: BottomTabBarProps) {
             <Pressable key={route.key} onPress={onPress} hitSlop={6}>
               <View style={[styles.item, focused && styles.itemActive]}>
                 <TabIcon name={ICONS[route.name] ?? 'sleep'} color={color} size={21} />
-                <Text style={[styles.label, { color }]}>{route.name.toLowerCase()}</Text>
+                <Text style={[styles.label, { color }]}>{route.name}</Text>
               </View>
             </Pressable>
           );

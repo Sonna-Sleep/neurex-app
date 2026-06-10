@@ -74,7 +74,7 @@ export function HowItWorks({ navigation }: Props) {
 
       <View style={styles.actions}>
         <Button
-          label="got it"
+          label="Got it"
           onPress={() => navigation.navigate('NotificationsPermission')}
         />
       </View>

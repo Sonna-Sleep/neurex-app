@@ -26,7 +26,7 @@ export function Welcome({ navigation }: Props) {
       </View>
 
       <View style={styles.actions}>
-        <Button label="continue" onPress={() => navigation.navigate('Auth')} />
+        <Button label="Continue" onPress={() => navigation.navigate('Auth')} />
       </View>
     </SafeAreaView>
   );

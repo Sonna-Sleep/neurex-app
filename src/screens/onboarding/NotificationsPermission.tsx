@@ -41,8 +41,8 @@ export function NotificationsPermission({ navigation: _ }: Props) {
       </View>
 
       <View style={styles.actions}>
-        <Button label="allow" onPress={allow} loading={busy} />
-        <Button label="not now" variant="ghost" onPress={skip} />
+        <Button label="Allow" onPress={allow} loading={busy} />
+        <Button label="Not now" variant="ghost" onPress={skip} />
       </View>
     </SafeAreaView>
   );

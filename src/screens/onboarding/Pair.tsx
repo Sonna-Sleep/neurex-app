@@ -252,15 +252,15 @@ export function Pair({ navigation }: Props) {
 
       <View style={styles.actions}>
         {state === 'bluetooth-off' || state === 'permission-denied' ? (
-          <Button label="open settings" onPress={openSettingsForBluetooth} />
+          <Button label="Open settings" onPress={openSettingsForBluetooth} />
         ) : null}
         {state === 'scan-timeout' ||
         state === 'error' ||
         state === 'bluetooth-off' ||
         state === 'permission-denied' ? (
-          <Button label="re-scan" variant="ghost" onPress={beginScan} />
+          <Button label="Re-scan" variant="ghost" onPress={beginScan} />
         ) : null}
-        <Button label="skip for now" variant="ghost" onPress={skip} />
+        <Button label="Skip for now" variant="ghost" onPress={skip} />
       </View>
     </SafeAreaView>
   );
