@@ -24,12 +24,15 @@ import { useSession } from '../../state/session';
 type PickedFile = { uri: string; name: string };
 
 export function DebugSection() {
-  if (!__DEV__) return null;
-
   const setProcessingSessionId = useSession((s) => s.setProcessingSessionId);
   const [eeg, setEeg] = useState<PickedFile | null>(null);
   const [epochs, setEpochs] = useState<PickedFile | null>(null);
   const [uploading, setUploading] = useState(false);
+
+  // Gated AFTER the hooks so they always run in the same order (Rules of
+  // Hooks). __DEV__ is constant per build, so this is a correctness/lint
+  // cleanup, not a behavior change.
+  if (!__DEV__) return null;
 
   const pick = async (
     setter: (f: PickedFile | null) => void,

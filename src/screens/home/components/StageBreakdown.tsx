@@ -6,7 +6,6 @@ import {
   spacing,
   stageColors,
   STAGE_META,
-  radii,
   systemFontFamily,
 } from '../../../theme/tokens';
 import type { SleepStage } from '../../../lib/repos';
@@ -20,18 +19,6 @@ export function StageBreakdown({ stageMinutes }: Props) {
 
   return (
     <View style={styles.wrap}>
-      {/* One honest stacked proportion bar: each segment is its true share of
-          the night, so widths actually match the percentages below. */}
-      <View style={styles.bar}>
-        {STAGE_META.map(({ key }) => {
-          const min = minutesFor(key);
-          if (min <= 0) return null;
-          return (
-            <View key={key} style={{ flex: min / total, backgroundColor: stageColors[key] }} />
-          );
-        })}
-      </View>
-
       {/* Legend rows, sleep-first order: color · stage · duration · share. */}
       <View style={styles.rows}>
         {STAGE_META.map(({ key, label }) => {
@@ -63,14 +50,6 @@ function fmtDur(min: number) {
 const styles = StyleSheet.create({
   wrap: {
     gap: spacing.lg,
-  },
-  bar: {
-    flexDirection: 'row',
-    height: 16,
-    borderRadius: radii.small,
-    overflow: 'hidden',
-    backgroundColor: colors.bgSurface,
-    gap: 2,
   },
   rows: {
     gap: spacing.md,

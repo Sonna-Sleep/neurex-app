@@ -4,7 +4,7 @@ import * as Linking from 'expo-linking';
 import { getSupabase } from './supabase';
 import { useSession } from '../../state/session';
 import { cancelPendingDeletion } from '../accountDeletion';
-import { registerForPush, resetPushRegistration } from '../push/registerPush';
+import { registerPushToken } from '../push/registerPushToken';
 
 function parseTokensFromUrl(url: string) {
   const hashIndex = url.indexOf('#');
@@ -30,7 +30,12 @@ function parseTokensFromUrl(url: string) {
   };
 }
 
-function toUser(u: { id: string; email?: string | null; user_metadata?: any }) {
+function toUser(u: {
+  id: string;
+  email?: string | null;
+  created_at?: string | null;
+  user_metadata?: any;
+}) {
   const m = u.user_metadata ?? {};
   return {
     id: u.id,
@@ -39,6 +44,7 @@ function toUser(u: { id: string; email?: string | null; user_metadata?: any }) {
     firstName: m.first_name ?? null,
     dob: m.dob ?? null,
     sex: m.sex ?? null,
+    memberSinceMs: u.created_at ? Date.parse(u.created_at) : null,
   };
 }
 
@@ -69,9 +75,9 @@ export function useAuthListener() {
       const u = data.session?.user;
       if (u) {
         setAuth(toUser(u));
-        // Cold start with a live session → make sure this device's push token is
-        // registered so "report ready" notifications can reach it. Best-effort.
-        registerForPush().catch(() => undefined);
+        // Cold start with a live session → register this device's push token so
+        // "report ready" notifications can reach it. Best-effort.
+        registerPushToken(u.id).catch(() => undefined);
       }
       // Auth is now settled — screens can safely query Supabase.
       useSession.setState({ authReady: true });
@@ -88,12 +94,10 @@ export function useAuthListener() {
         if (event === 'SIGNED_IN') {
           cancelPendingDeletion().catch(() => undefined);
           // Register this device for "report ready" push on a fresh sign-in.
-          registerForPush().catch(() => undefined);
+          registerPushToken(u.id).catch(() => undefined);
         }
       } else {
         setAuth(null);
-        // Signed out: drop the cached token so the next user re-registers theirs.
-        resetPushRegistration();
       }
     });
 

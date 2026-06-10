@@ -10,7 +10,7 @@ import { Card } from '../../../components/Card';
 import { Body, Eyebrow, SerifHeadline } from '../../../theme/typography';
 import { colors, spacing } from '../../../theme/tokens';
 import { useProcessingStatus } from '../../../lib/upload/processingStatus';
-import { notifyProcessingComplete } from '../../../lib/notifications/local';
+import { handleNightReady } from '../../../lib/nights/onNightReady';
 import { useSession } from '../../../state/session';
 
 type Props = {
@@ -24,7 +24,7 @@ export function ProcessingCard({ sessionId, onReady }: Props) {
 
   useEffect(() => {
     if (status.state === 'ready') {
-      notifyProcessingComplete(status.session.id).catch(() => undefined);
+      handleNightReady(status.session);
       setProcessingSessionId(null);
       onReady();
     }

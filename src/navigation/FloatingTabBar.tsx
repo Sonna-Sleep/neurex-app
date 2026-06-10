@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 
 import { TabIcon } from '../components/TabIcon';
+import { useSession } from '../state/session';
 import { colors, radii, spacing, systemFontFamily } from '../theme/tokens';
 
 // Vertical space the floating bar occupies — screens reserve this much bottom
@@ -20,6 +21,8 @@ const ICONS: Record<string, 'sleep' | 'journal' | 'profile'> = {
 
 export function FloatingTabBar({ state, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
+  // A night finished processing but hasn't been opened → dot on the Journal tab.
+  const hasNewNight = useSession((s) => s.unviewedNightIds.length > 0);
   return (
     <View style={[styles.wrap, { bottom: insets.bottom + spacing.sm }]} pointerEvents="box-none">
       <View style={styles.pill}>
@@ -34,11 +37,13 @@ export function FloatingTabBar({ state, navigation }: BottomTabBarProps) {
             if (!focused && !event.defaultPrevented) navigation.navigate(route.name);
           };
           const color = focused ? colors.textPrimary : colors.textTertiary;
+          const showDot = route.name === 'Journal' && hasNewNight;
           return (
             <Pressable key={route.key} onPress={onPress} hitSlop={6}>
               <View style={[styles.item, focused && styles.itemActive]}>
                 <TabIcon name={ICONS[route.name] ?? 'sleep'} color={color} size={21} />
                 <Text style={[styles.label, { color }]}>{route.name}</Text>
+                {showDot ? <View style={styles.dot} /> : null}
               </View>
             </Pressable>
           );
@@ -88,5 +93,16 @@ const styles = StyleSheet.create({
     fontFamily: systemFontFamily,
     fontSize: 11,
     fontWeight: '600',
+  },
+  dot: {
+    position: 'absolute',
+    top: 2,
+    right: 8,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.accent,
+    borderWidth: 1,
+    borderColor: colors.bgSurface,
   },
 });

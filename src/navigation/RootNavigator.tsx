@@ -7,7 +7,7 @@ import { colors } from '../theme/tokens';
 import { OnboardingNavigator } from './OnboardingNavigator';
 import { TabNavigator } from './TabNavigator';
 import { navigationRef } from './navigationRef';
-import { usePushDeepLinks } from '../lib/push/usePushDeepLinks';
+import { NotificationRouter } from './NotificationRouter';
 import { useRecoverOnLaunch } from '../lib/cloud/useRecoverOnLaunch';
 import type { RootStackParamList } from './types';
 
@@ -30,17 +30,14 @@ export function RootNavigator() {
   const onboardingComplete = useSession((s) => s.onboardingComplete);
   const hydrated = useSession((s) => s.hydrated);
 
-  // Handle a tapped "report ready" notification (deep-links to the Journal tab).
-  // Called unconditionally before any early return so hook order stays stable.
-  usePushDeepLinks();
-
   // Recover + upload any night left on disk by a crash/kill/failed upload.
+  // Called unconditionally before any early return so hook order stays stable.
   useRecoverOnLaunch();
 
   if (!hydrated) return null;
 
   return (
-    <NavigationContainer ref={navigationRef} theme={navTheme}>
+    <NavigationContainer theme={navTheme} ref={navigationRef}>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         {onboardingComplete ? (
           <Stack.Screen name="Main" component={TabNavigator} />
@@ -48,6 +45,7 @@ export function RootNavigator() {
           <Stack.Screen name="Onboarding" component={OnboardingNavigator} />
         )}
       </Stack.Navigator>
+      <NotificationRouter />
     </NavigationContainer>
   );
 }

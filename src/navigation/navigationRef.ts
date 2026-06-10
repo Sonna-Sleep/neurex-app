@@ -1,17 +1,18 @@
-// Imperative navigation handle, used from outside React components — e.g. a
-// push-notification tap that must deep-link to the user's nights, even on a
-// cold start. Wired into the NavigationContainer in RootNavigator.
-
+// Imperative navigation handle so code outside the React tree (a notification
+// tap handler) can route into the app. Attached to the NavigationContainer in
+// RootNavigator.
 import { createNavigationContainerRef } from '@react-navigation/native';
+
 import type { RootStackParamList } from './types';
 
 export const navigationRef = createNavigationContainerRef<RootStackParamList>();
 
-/** Open the user's nights after tapping a "report ready" push. Deep-links to the
- * Journal tab, where the just-staged night surfaces via the focus-refetch.
- * No-op until the navigator is mounted. */
-export function openSession(sessionId: string): void {
+// Open one night's SessionDetail inside the Journal tab. No-ops until the
+// container is ready and the main (post-onboarding) navigator is mounted.
+export function openNight(sessionId: string): void {
   if (!navigationRef.isReady()) return;
-  if (__DEV__) console.log('[push] opening night', sessionId);
-  navigationRef.navigate('Main', { screen: 'Journal' });
+  navigationRef.navigate('Main', {
+    screen: 'Journal',
+    params: { screen: 'SessionDetail', params: { sessionId } },
+  });
 }

@@ -19,6 +19,7 @@ import { useSession } from '../../../state/session';
 import { startSession, stopSession } from '../../../lib/ble/streamController';
 import { EEG_SAMPLE_RATE_HZ } from '../../../lib/ble/constants';
 import { transmitSession, subscribeToResult } from '../../../lib/cloud/cloudSync';
+import { handleNightReady } from '../../../lib/nights/onNightReady';
 import type { Session } from '../../../lib/repos/types';
 import { ageFromDob } from '../../../lib/profile';
 import { PreBedCheck } from './PreBedCheck';
@@ -179,6 +180,8 @@ export function RecordingCard() {
         (s) => {
           setSummary(s);
           setSync('done');
+          // Notify + flag the night as new (no-op banner when foregrounded).
+          handleNightReady(s);
         },
         {
           // Don't spin on "Analyzing…" forever if the backend never flips the

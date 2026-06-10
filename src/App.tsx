@@ -3,6 +3,7 @@ import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as SplashScreen from 'expo-splash-screen';
+import * as Notifications from 'expo-notifications';
 import { View } from 'react-native';
 
 // Side-effect import: constructs the singleton BleManager at module-load
@@ -17,6 +18,18 @@ import { useAuthListener } from './lib/auth/useAuthListener';
 import { useSession } from './state/session';
 
 SplashScreen.preventAutoHideAsync().catch(() => undefined);
+
+// Surface notifications that arrive while the app is foregrounded (e.g. a
+// backend "night is ready" push landing while the user is in the app) instead
+// of silently dropping them.
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowBanner: true,
+    shouldShowList: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+  }),
+});
 
 export default function App() {
   useAuthListener();

@@ -20,12 +20,14 @@
       "infoPlist": {
         "NSBluetoothAlwaysUsageDescription": "Neurex uses Bluetooth to sync your sleep data from the sleep mask.",
         "NSBluetoothPeripheralUsageDescription": "Neurex uses Bluetooth to communicate with your sleep mask.",
+        "NSPhotoLibraryUsageDescription": "Neurex uses your photos so you can set a profile picture.",
         "UIBackgroundModes": [
           "bluetooth-central",
           "fetch"
         ]
       },
       "config": { "usesNonExemptEncryption": false },
+      "entitlements": { "aps-environment": "production" },
       "privacyManifests": {
         "NSPrivacyTracking": false,
         "NSPrivacyTrackingDomains": [],
@@ -75,7 +77,14 @@
           "bluetoothAlwaysPermission": "Neurex uses Bluetooth to sync your sleep data from the sleep mask."
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Neurex uses your photos so you can set a profile picture."
+        }
+      ],
+      "expo-notifications"
     ],
     "web": {
       "favicon": "./assets/favicon.png"
