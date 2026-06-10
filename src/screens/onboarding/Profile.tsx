@@ -1,13 +1,19 @@
 import React, { useState } from 'react';
-import { Alert, StyleSheet, TextInput, View } from 'react-native';
+import { Alert, StyleSheet, TextInput } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 
-import { Button } from '../../components/Button';
+import { Segmented } from '../../components/Segmented';
 import { colors, spacing } from '../../theme/tokens';
 import type { OnboardingStackParamList } from '../../navigation/types';
 import { ProfileCard } from './components/ProfileCard';
 import { DateOfBirthInput } from './components/DateOfBirthInput';
 import { saveProfile, type Sex } from '../../lib/profile';
+
+const SEX_OPTIONS: { value: Sex; label: string }[] = [
+  { value: 'male', label: 'male' },
+  { value: 'female', label: 'female' },
+  { value: 'unspecified', label: 'other' },
+];
 
 type Props = NativeStackScreenProps<OnboardingStackParamList, 'Profile'>;
 
@@ -55,14 +61,7 @@ export function Profile({ navigation }: Props) {
     <ProfileCard eyebrow="about you" title="Biological sex"
       subtitle="Improves sleep-staging accuracy. You can skip this."
       canContinue={sex !== null} onContinue={done} onSkip={done} isLast>
-      <View style={styles.choices}>
-        {(['male', 'female', 'unspecified'] as Sex[]).map((opt) => (
-          <Button key={opt}
-            label={opt === 'unspecified' ? 'prefer not to say' : opt}
-            variant={sex === opt ? 'primary' : 'ghost'}
-            onPress={() => setSex(opt)} />
-        ))}
-      </View>
+      <Segmented options={SEX_OPTIONS} value={sex} onChange={setSex} />
     </ProfileCard>
   );
 }
@@ -70,5 +69,4 @@ export function Profile({ navigation }: Props) {
 const styles = StyleSheet.create({
   text: { color: colors.textPrimary, fontSize: 22, paddingVertical: spacing.sm,
     borderBottomWidth: 1, borderBottomColor: colors.borderDivider },
-  choices: { gap: spacing.sm },
 });

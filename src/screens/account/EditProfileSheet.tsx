@@ -3,8 +3,9 @@ import { Alert, Modal, Pressable, StyleSheet, Text, TextInput, View } from 'reac
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '../../components/Button';
+import { Segmented } from '../../components/Segmented';
 import { SerifHeadline, Eyebrow } from '../../theme/typography';
-import { colors, layout, radii, spacing, systemFontFamily } from '../../theme/tokens';
+import { colors, layout, spacing, systemFontFamily } from '../../theme/tokens';
 import { useSession } from '../../state/session';
 import { saveProfile, type Sex } from '../../lib/profile';
 import { DateOfBirthInput } from '../onboarding/components/DateOfBirthInput';
@@ -68,20 +69,7 @@ export function EditProfileSheet({ visible, onClose }: { visible: boolean; onClo
 
         <View style={styles.field}>
           <Eyebrow>biological sex</Eyebrow>
-          <View style={styles.segment}>
-            {SEX_OPTIONS.map((opt) => {
-              const active = sex === opt.value;
-              return (
-                <Pressable
-                  key={opt.value}
-                  onPress={() => setSex(opt.value)}
-                  style={[styles.seg, active && styles.segActive]}
-                >
-                  <Text style={[styles.segText, active && styles.segTextActive]}>{opt.label}</Text>
-                </Pressable>
-              );
-            })}
-          </View>
+          <Segmented options={SEX_OPTIONS} value={sex} onChange={setSex} />
         </View>
 
         <View style={styles.actions}>
@@ -115,32 +103,6 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     borderBottomWidth: 1,
     borderBottomColor: colors.borderDivider,
-  },
-  segment: {
-    flexDirection: 'row',
-    backgroundColor: colors.bgSurface,
-    borderRadius: radii.button,
-    padding: 4,
-    gap: 4,
-  },
-  seg: {
-    flex: 1,
-    paddingVertical: spacing.sm + 2,
-    borderRadius: radii.small,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  segActive: {
-    backgroundColor: colors.ctaBg,
-  },
-  segText: {
-    fontFamily: systemFontFamily,
-    fontSize: 15,
-    fontWeight: '600',
-    color: colors.textSecondary,
-  },
-  segTextActive: {
-    color: colors.ctaText,
   },
   actions: {
     marginTop: 'auto',

@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-  Image,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -9,8 +8,6 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
-
-const SLEEP_MASK = require('../../../assets/images/sleep-mask.png');
 
 import { Logo } from '../../components/Logo';
 import { StatusPill } from '../../components/StatusPill';
@@ -93,8 +90,8 @@ export function HomeScreen() {
             <Skeleton.Card />
           ) : (
             <View style={styles.empty}>
-              <Image source={SLEEP_MASK} style={styles.maskImage} resizeMode="contain" />
               <SerifHeadline style={styles.emptyTitle}>Your first night awaits</SerifHeadline>
+              <Secondary style={styles.emptySub}>Wear your mask tonight to see your sleep.</Secondary>
             </View>
           )}
         </View>
@@ -152,15 +149,14 @@ const styles = StyleSheet.create({
   },
   empty: {
     alignItems: 'center',
-    gap: spacing.lg,
-  },
-  maskImage: {
-    width: '70%',
-    height: 160,
-    opacity: 0.45,
+    gap: spacing.sm,
   },
   emptyTitle: {
     textAlign: 'center',
+  },
+  emptySub: {
+    textAlign: 'center',
+    color: colors.textSecondary,
   },
   footer: {
     paddingTop: spacing.lg,

@@ -199,8 +199,7 @@ export function ConnectDeviceCard() {
 
         {state === 'scan-timeout' ? (
           <Body style={styles.subtext}>
-            Nothing yet. Make sure the sleep mask is powered on and the button is
-            held for 4 seconds.
+            Nothing yet. Make sure your mask is on — press the button to turn it on.
           </Body>
         ) : null}
 

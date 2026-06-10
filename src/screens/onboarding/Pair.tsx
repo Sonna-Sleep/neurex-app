@@ -1,14 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Image,
   Pressable,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
-
-const SLEEP_MASK = require('../../../assets/images/sleep-mask.png');
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 
@@ -146,15 +143,9 @@ export function Pair({ navigation }: Props) {
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <View style={styles.center}>
-        <Image
-          source={SLEEP_MASK}
-          style={styles.deviceImage}
-          resizeMode="contain"
-        />
-
         <SerifDisplay style={styles.headline}>Pair your sleep mask</SerifDisplay>
         <Body style={styles.subtext}>
-          Hold the button until the light pulses.
+          Press the button to turn your mask on.
         </Body>
 
         <Card style={styles.card}>
@@ -200,8 +191,7 @@ export function Pair({ navigation }: Props) {
             <View style={styles.foundCol}>
               <Eyebrow>nothing yet</Eyebrow>
               <Body style={styles.cardText}>
-                Make sure the sleep mask is powered on and the button is held
-                for 4 seconds.
+                Make sure your mask is on — press the button to turn it on.
               </Body>
             </View>
           ) : null}
@@ -286,11 +276,6 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  deviceImage: {
-    width: '100%',
-    height: 180,
-    marginBottom: spacing.xl,
   },
   headline: {
     marginBottom: spacing.md,

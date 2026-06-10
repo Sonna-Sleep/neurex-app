@@ -7,9 +7,7 @@
 // to pull the file off in the morning (Drive / email / USB).
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Image, Pressable, StyleSheet, Text, View } from 'react-native';
-
-const SLEEP_MASK = require('../../../../assets/images/sleep-mask.png');
+import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import * as Sharing from 'expo-sharing';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 
@@ -323,8 +321,8 @@ export function RecordingCard() {
   if (!pairedDeviceId) return null;
   return (
     <View style={styles.idle}>
-      <Image source={SLEEP_MASK} style={styles.mask} resizeMode="contain" />
       <View style={styles.idleHead}>
+        <Eyebrow>sleep mask · paired</Eyebrow>
         <SerifHeadline style={styles.idleTitle}>Ready when you are</SerifHeadline>
         <Secondary style={styles.idleSub}>Put on your mask, then start.</Secondary>
       </View>
@@ -399,13 +397,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.xl,
   },
-  mask: {
-    width: '78%',
-    height: 200,
-  },
   idleHead: {
     alignItems: 'center',
-    gap: spacing.xs,
+    gap: spacing.sm,
   },
   idleTitle: {
     textAlign: 'center',
