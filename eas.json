@@ -16,6 +16,7 @@
     "production": {
       "channel": "production",
       "autoIncrement": true,
+      "credentialsSource": "local",
       "env": {
         "EXPO_PUBLIC_SUPABASE_URL": "https://uunerbrscbswbzyxtdpg.supabase.co",
         "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_g7T0SDF7LgJ3kjhRCQ7ToQ_ofPwMVOt",
@@ -25,6 +26,13 @@
     }
   },
   "submit": {
-    "production": {}
+    "production": {
+      "ios": {
+        "ascAppId": "6778255946",
+        "ascApiKeyPath": "C:/Users/Lenovo/.neurex-secrets/AuthKey_S4A7ZAG96F.p8",
+        "ascApiKeyId": "S4A7ZAG96F",
+        "ascApiKeyIssuerId": "bca2c8b7-1c6e-44e5-aea2-dc2cc5d61767"
+      }
+    }
   }
 }
