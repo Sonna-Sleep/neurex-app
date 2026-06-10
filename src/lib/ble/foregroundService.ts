@@ -9,14 +9,24 @@ import { NeurexForegroundServiceModule } from '../../../modules/neurex-foregroun
 const DEFAULT_TITLE = 'Neurex';
 const DEFAULT_BODY = 'Recording your sleep…';
 
-export function startForegroundService(opts?: { title?: string; body?: string }): void {
+/**
+ * Start the Android keep-alive foreground service. Returns whether background
+ * recording is protected:
+ *   - true  on iOS/web/Expo Go (module absent — nothing to start, not a failure;
+ *           iOS background is handled by the bluetooth-central mode + restore).
+ *   - the native result on Android: true if the start intent dispatched, false
+ *     if it threw (e.g. ForegroundServiceStartNotAllowed) — the caller surfaces
+ *     a warning so the night doesn't die silently when the screen locks.
+ */
+export function startForegroundService(opts?: { title?: string; body?: string }): boolean {
+  const mod = NeurexForegroundServiceModule;
+  if (!mod) return true; // iOS / web / Expo Go — no Android service to start
   try {
-    NeurexForegroundServiceModule?.start(
-      opts?.title ?? DEFAULT_TITLE,
-      opts?.body ?? DEFAULT_BODY,
-    );
+    const ok = mod.start(opts?.title ?? DEFAULT_TITLE, opts?.body ?? DEFAULT_BODY);
+    return ok !== false; // older builds returned void → treat undefined as ok
   } catch (e) {
     if (__DEV__) console.warn('[fgs] start failed:', e);
+    return false;
   }
 }
 

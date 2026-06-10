@@ -30,6 +30,10 @@ export type Streaming = {
   lastSeq: number | null;
   generation: number;
   connection: 'connected' | 'reconnecting' | 'lost';
+  // Set with a user-facing message on a FATAL, non-recoverable stream error
+  // (e.g. storage full). The recording is stopped; whatever was written stays
+  // on disk for upload. null in normal operation.
+  error?: string | null;
 };
 
 type SessionState = {

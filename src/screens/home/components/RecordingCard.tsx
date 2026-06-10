@@ -52,7 +52,9 @@ export function RecordingCard() {
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState<SavedRecording | null>(null);
   // Cloud sync of the just-finished recording (transmit → analyze → summary).
-  const [sync, setSync] = useState<'idle' | 'uploading' | 'analyzing' | 'done' | 'error'>('idle');
+  const [sync, setSync] = useState<'idle' | 'uploading' | 'analyzing' | 'slow' | 'done' | 'error'>(
+    'idle',
+  );
   const [summary, setSummary] = useState<Session | null>(null);
   const unsubRef = useRef<(() => void) | null>(null);
   useEffect(() => () => unsubRef.current?.(), []);
@@ -85,7 +87,7 @@ export function RecordingCard() {
     setError(null);
     setBusy('starting');
     try {
-      await startSession(pairedDeviceId);
+      await startSession(pairedDeviceId, pairedSerial);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -173,12 +175,22 @@ export function RecordingCard() {
       });
       setSync('analyzing');
       unsubRef.current?.();
-      unsubRef.current = subscribeToResult(saved.sessionId, (s) => {
-        setSummary(s);
-        setSync('done');
-        // Notify + flag the night as new (no-op banner when foregrounded).
-        handleNightReady(s);
-      });
+      unsubRef.current = subscribeToResult(
+        saved.sessionId,
+        (s) => {
+          setSummary(s);
+          setSync('done');
+          // Notify + flag the night as new (no-op banner when foregrounded).
+          handleNightReady(s);
+        },
+        {
+          // Don't spin on "Analyzing…" forever if the backend never flips the
+          // row to ready (flaky webhook). After this, switch to a reassuring
+          // message — the scheduled reconcile + push still deliver the result.
+          timeoutMs: 3 * 60_000,
+          onSlow: () => setSync((cur) => (cur === 'analyzing' ? 'slow' : cur)),
+        },
+      );
     } catch (e) {
       setSync('error');
       setError((e as Error).message);
@@ -243,10 +255,11 @@ export function RecordingCard() {
             </View>
           ) : null}
 
+          {streaming.error ? <Text style={styles.error}>{streaming.error}</Text> : null}
           {error ? <Text style={styles.error}>{error}</Text> : null}
 
           <Button
-            label={busy === 'stopping' ? 'Saving…' : 'Stop session'}
+            label={busy === 'stopping' ? 'Saving…' : streaming.error ? 'Save & stop' : 'Stop session'}
             variant="ghost"
             onPress={onStop}
             loading={busy === 'stopping'}
@@ -263,28 +276,34 @@ export function RecordingCard() {
     const syncing = sync === 'uploading' || sync === 'analyzing';
     const eyebrow = syncing
       ? 'recording · syncing'
-      : sync === 'done'
-        ? 'recording · ready'
-        : sync === 'error'
-          ? 'recording · sync failed'
-          : 'recording · saved on phone';
+      : sync === 'slow'
+        ? 'recording · still analyzing'
+        : sync === 'done'
+          ? 'recording · ready'
+          : sync === 'error'
+            ? 'recording · sync failed'
+            : 'recording · saved on phone';
     const headline =
       sync === 'uploading'
         ? 'Uploading your night…'
         : sync === 'analyzing'
           ? 'Analyzing your night…'
-          : sync === 'done'
-            ? 'Your night is ready'
-            : sync === 'error'
-              ? "Couldn't sync"
-              : 'Night saved';
+          : sync === 'slow'
+            ? 'Still analyzing…'
+            : sync === 'done'
+              ? 'Your night is ready'
+              : sync === 'error'
+                ? "Couldn't sync"
+                : 'Night saved';
     const sub = syncing
       ? 'This usually takes under a minute.'
-      : sync === 'done'
-        ? 'Saved to your journal.'
-        : !hasDob
-          ? 'Add your birth date in Account to analyze this night.'
-          : `Your recording is saved${saved.durationSec > 0 ? ` · ${mins}m ${secs}s` : ''}.`;
+      : sync === 'slow'
+        ? 'This one is taking a little longer — we’ll notify you when it’s ready. You can close the app.'
+        : sync === 'done'
+          ? 'Saved to your journal.'
+          : !hasDob
+            ? 'Add your birth date in Account to analyze this night.'
+            : `Your recording is saved${saved.durationSec > 0 ? ` · ${mins}m ${secs}s` : ''}.`;
     return (
       <View style={styles.wrap}>
         <Eyebrow>{eyebrow}</Eyebrow>

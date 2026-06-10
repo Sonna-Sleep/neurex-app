@@ -75,6 +75,8 @@ export function useAuthListener() {
       const u = data.session?.user;
       if (u) {
         setAuth(toUser(u));
+        // Cold start with a live session → register this device's push token so
+        // "report ready" notifications can reach it. Best-effort.
         registerPushToken(u.id).catch(() => undefined);
       }
       // Auth is now settled — screens can safely query Supabase.
@@ -91,9 +93,12 @@ export function useAuthListener() {
         // or a cold-start with a lingering session would silently revoke it.
         if (event === 'SIGNED_IN') {
           cancelPendingDeletion().catch(() => undefined);
+          // Register this device for "report ready" push on a fresh sign-in.
           registerPushToken(u.id).catch(() => undefined);
         }
-      } else setAuth(null);
+      } else {
+        setAuth(null);
+      }
     });
 
     const handleUrl = async (url: string) => {

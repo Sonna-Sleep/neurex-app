@@ -29,32 +29,42 @@ export function JournalScreen() {
   const [selectedKey, setSelectedKey] = useState<string>(todayKey());
   const [weekStart, setWeekStart] = useState<Date>(weekStartOf(new Date(Date.now())));
   const [loaded, setLoaded] = useState(false);
+  const [loadError, setLoadError] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const initialized = useRef(false);
 
   const load = useCallback(async () => {
-    const list = await sessionRepo.list();
-    setSessions(list);
-    setLoaded(true);
-    // Select the most recent night ONCE — a later refetch must not yank the
-    // user off the day/week they're viewing.
-    if (!initialized.current && list.length > 0) {
-      initialized.current = true;
-      const latest = list.reduce((a, b) => (a.endMs > b.endMs ? a : b));
-      const k = dateKey(new Date(latest.endMs));
-      setSelectedKey(k);
-      setWeekStart(weekStartOf(keyToDate(k)));
+    try {
+      const list = await sessionRepo.list();
+      setSessions(list);
+      setLoadError(false);
+      setLoaded(true);
+      // Select the most recent night ONCE — a later refetch must not yank the
+      // user off the day/week they're viewing.
+      if (!initialized.current && list.length > 0) {
+        initialized.current = true;
+        const latest = list.reduce((a, b) => (a.endMs > b.endMs ? a : b));
+        const k = dateKey(new Date(latest.endMs));
+        setSelectedKey(k);
+        setWeekStart(weekStartOf(keyToDate(k)));
+      }
+    } catch {
+      // Fetch failed (network/db) — keep any sessions we already have and flag
+      // the error so the empty state offers a retry instead of a misleading
+      // "no sleep recorded".
+      setLoadError(true);
+      setLoaded(true);
     }
   }, []);
 
   // Refetch when auth settles (cold start) and whenever the tab regains focus —
   // so a night recorded on the Sleep tab appears here without an app restart.
   useEffect(() => {
-    load().catch(() => undefined);
+    void load();
   }, [authReady, load]);
   useFocusEffect(
     useCallback(() => {
-      load().catch(() => undefined);
+      void load();
     }, [load]),
   );
 
@@ -135,6 +145,13 @@ export function JournalScreen() {
 
         {selected ? (
           <NightReport session={selected} />
+        ) : loadError && sessions.length === 0 ? (
+          <View style={styles.empty}>
+            <Secondary style={styles.emptyText}>Couldn’t load your sleep history.</Secondary>
+            <Pressable onPress={onRefresh} hitSlop={8}>
+              <Secondary style={styles.retryText}>Tap to retry</Secondary>
+            </Pressable>
+          </View>
         ) : (
           <View style={styles.empty}>
             <Secondary style={styles.emptyText}>
@@ -178,5 +195,10 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     color: colors.textSecondary,
+  },
+  retryText: {
+    color: colors.textPrimary,
+    paddingTop: spacing.sm,
+    textDecorationLine: 'underline',
   },
 });

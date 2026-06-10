@@ -59,8 +59,11 @@ class SupabaseSessionRepo implements SessionRepo {
       .select(COLUMNS)
       .order('start_ms', { ascending: false });
     if (error) {
+      // THROW (don't swallow → []). The Journal needs to tell "load failed"
+      // (show retry) apart from "genuinely no sessions" (show empty). The old
+      // []-on-error rendered a misleading "no sleep" on a transient hiccup.
       console.warn('[sessions] list failed:', error.message);
-      return [];
+      throw new Error(`sessions list failed: ${error.message}`);
     }
     return ((data as unknown as Row[] | null) ?? []).map(toSession);
   }

@@ -57,6 +57,7 @@ export function PreBedCheck({ deviceId, onProceed, onCancel }: Props) {
   const [samples, setSamples] = useState<number[]>([]);
   const [quality, setQuality] = useState<SignalQuality | null>(null);
   const [plotW, setPlotW] = useState(320);
+  const [starting, setStarting] = useState(false);
 
   const deviceRef = useRef<ConnectedDevice | null>(null);
   const handleRef = useRef<PreviewHandle | null>(null);
@@ -80,6 +81,21 @@ export function PreBedCheck({ deviceId, onProceed, onCancel }: Props) {
     }
     deviceRef.current = null;
   }, []);
+
+  // Hand off to the real recording. CRITICAL: fully tear down THIS check's BLE
+  // connection (stop preview + disconnect) and WAIT for it before telling the
+  // parent to start the session. The recording opens its own connection to the
+  // same device; if the check's disconnect (cancelDeviceConnection by deviceId)
+  // runs concurrently with startSession's connect, it tears the recording's link
+  // down — the "stuck after the signal check" bug. Sequencing restores the
+  // proven "connect fresh from a disconnected device" path. autoConnect handles
+  // the reconnect timing, so no arbitrary delay is needed.
+  const proceed = useCallback(async () => {
+    if (starting) return;
+    setStarting(true);
+    await cleanup();
+    onProceed();
+  }, [starting, cleanup, onProceed]);
 
   useEffect(() => {
     let cancelled = false;
@@ -200,11 +216,11 @@ export function PreBedCheck({ deviceId, onProceed, onCancel }: Props) {
 
       <View style={styles.actions}>
         {ready ? (
-          <Button label="Start recording" onPress={onProceed} />
+          <Button label={starting ? 'Starting…' : 'Start recording'} onPress={proceed} loading={starting} />
         ) : (
-          <Button label="Start anyway" variant="ghost" onPress={onProceed} />
+          <Button label={starting ? 'Starting…' : 'Start anyway'} variant="ghost" onPress={proceed} loading={starting} />
         )}
-        <Button label="Cancel" variant="ghost" onPress={onCancel} />
+        <Button label="Cancel" variant="ghost" onPress={onCancel} disabled={starting} />
       </View>
       {phase === 'error' ? (
         <Secondary style={styles.hint}>You can still start — the check is just a heads-up.</Secondary>

@@ -8,6 +8,7 @@ import { OnboardingNavigator } from './OnboardingNavigator';
 import { TabNavigator } from './TabNavigator';
 import { navigationRef } from './navigationRef';
 import { NotificationRouter } from './NotificationRouter';
+import { useRecoverOnLaunch } from '../lib/cloud/useRecoverOnLaunch';
 import type { RootStackParamList } from './types';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -28,6 +29,10 @@ const navTheme = {
 export function RootNavigator() {
   const onboardingComplete = useSession((s) => s.onboardingComplete);
   const hydrated = useSession((s) => s.hydrated);
+
+  // Recover + upload any night left on disk by a crash/kill/failed upload.
+  // Called unconditionally before any early return so hook order stays stable.
+  useRecoverOnLaunch();
 
   if (!hydrated) return null;
 

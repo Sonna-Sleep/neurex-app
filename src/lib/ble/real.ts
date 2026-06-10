@@ -2,9 +2,9 @@
 //
 // Flow:
 //   1. scan(): scoped by NEUREX_SERVICE_UUID (Apple-compliant for background BLE).
-//   2. connect(deviceId, { autoConnect: true }): MTU bump to fit 118 B in one PDU.
+//   2. connect(deviceId, { autoConnect: true }): MTU bump to fit a 226 B packet.
 //   3. startStream(sessionId, cb): subscribe to the notify characteristic,
-//      decode each 118-byte packet, append Fpz samples to EEG.BIN under
+//      decode each 226-byte packet, append Fpz samples to EEG.BIN under
 //      FileSystem.documentDirectory/sessions/<sessionId>/.
 //
 // On-disk format is byte-identical to tools/capture/ble_stream_recv.py in the
@@ -19,6 +19,7 @@ import { File, Directory, Paths } from 'expo-file-system';
 import type { Subscription } from 'react-native-ble-plx';
 
 import { getBleManager } from './manager';
+import { withTimeout } from './connectTimeout';
 import { useSession } from '../../state/session';
 import {
   BATTERY_LEVEL_CHAR_UUID,
@@ -45,6 +46,7 @@ import {
 import type {
   BleClient,
   ConnectedDevice,
+  ConnectOpts,
   EegSample,
   FoundDevice,
   ParsedPacket,
@@ -234,10 +236,18 @@ function encodePacketEeg(packet: ParsedPacket): Uint8Array {
 
 type FileHandleLike = {
   offset: number;
-  size: number;
+  // SDK types size as number | null (null for an edge-state handle). We seek to
+  // it for append, so guard the null rather than assume non-null.
+  size: number | null;
   writeBytes(bytes: Uint8Array): void;
   close(): void;
 };
+
+// Wall-clock flush ceiling: buffered samples never sit in JS longer than this
+// before hitting disk, even at a low packet rate. Bounds the data a crash/kill
+// can lose to at most this window (the byte threshold flushes sooner at full
+// rate). Event-driven (checked on each append), so it works while backgrounded.
+const FLUSH_INTERVAL_MS = 3000;
 
 class AppendingFile {
   readonly uri: string;
@@ -245,11 +255,13 @@ class AppendingFile {
   private pending: Uint8Array[] = [];
   private pendingBytes = 0;
   private readonly flushThresholdBytes: number;
+  private lastFlushAtMs: number;
 
   private constructor(uri: string, handle: FileHandleLike, flushThresholdBytes: number) {
     this.uri = uri;
     this.handle = handle;
     this.flushThresholdBytes = flushThresholdBytes;
+    this.lastFlushAtMs = Date.now();
   }
 
   static open(dir: Directory, filename: string, flushBytes = 2048): AppendingFile {
@@ -257,17 +269,25 @@ class AppendingFile {
     if (!file.exists) file.create();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const handle = (file as any).open() as FileHandleLike;
-    handle.offset = handle.size; // seek to end (append)
+    handle.offset = handle.size ?? 0; // seek to end (append); 0 if size unknown
     return new AppendingFile(file.uri, handle, flushBytes);
   }
 
   appendChunk(chunk: Uint8Array): void {
     this.pending.push(chunk);
     this.pendingBytes += chunk.length;
-    if (this.pendingBytes >= this.flushThresholdBytes) this.flush();
+    // Flush on size OR age — whichever comes first. The age bound caps how much
+    // recent data a crash can lose when the packet rate is low.
+    if (
+      this.pendingBytes >= this.flushThresholdBytes ||
+      Date.now() - this.lastFlushAtMs >= FLUSH_INTERVAL_MS
+    ) {
+      this.flush();
+    }
   }
 
   flush(): void {
+    this.lastFlushAtMs = Date.now();
     if (this.pending.length === 0) return;
     const merged = new Uint8Array(this.pendingBytes);
     let off = 0;
@@ -292,6 +312,16 @@ class NotReadyError extends Error {
   constructor(stage: string) {
     super(`BLE ${stage} unavailable — native module not loaded (Expo Go?)`);
     this.name = 'NotReadyError';
+  }
+}
+
+/** Thrown when appending decoded samples to disk fails (storage full / I/O
+ * error). FATAL — the recording stops; whatever was already flushed stays on
+ * disk and is still uploadable. */
+export class StorageWriteError extends Error {
+  constructor(detail?: string) {
+    super(`Storage full — recording stopped${detail ? ` (${detail})` : ''}.`);
+    this.name = 'StorageWriteError';
   }
 }
 
@@ -330,14 +360,23 @@ export const realBleClient: BleClient = {
     return () => manager.stopDeviceScan();
   },
 
-  async connect(deviceId: string): Promise<ConnectedDevice> {
+  async connect(deviceId: string, opts?: ConnectOpts): Promise<ConnectedDevice> {
     const manager = getBleManager();
     if (!manager) throw new NotReadyError('connect');
 
     // autoConnect: true → iOS maintains the connection across app suspensions
     // and the native side reconnects when the peripheral comes back in range.
-    const device = await manager.connectToDevice(deviceId, { autoConnect: true });
-    // Larger MTU fits a 118-byte packet in one PDU instead of fragmenting it.
+    // With autoConnect there is NO native timeout, so a user-initiated connect
+    // passes opts.timeoutMs to fail fast (mask off) instead of hanging forever;
+    // the background reconnect loop omits it to keep the pending-connect that
+    // lets iOS/Android finish the link whenever the device reappears.
+    const connecting = manager.connectToDevice(deviceId, { autoConnect: true });
+    // withTimeout no-ops when timeoutMs is 0/undefined (the reconnect path),
+    // and otherwise cancels the pending connect + rejects on expiry.
+    const device = await withTimeout(connecting, opts?.timeoutMs ?? 0, () => {
+      manager.cancelDeviceConnection(deviceId).catch(() => undefined);
+    });
+    // Larger MTU fits a 226-byte packet in one PDU instead of fragmenting it.
     await device.requestMTU(247).catch((e) => {
       if (__DEV__) console.warn('[ble/real] requestMTU(247) failed:', e);
     });
@@ -402,6 +441,10 @@ export const realBleClient: BleClient = {
           lastBaseMs: opts?.resumeFromBaseMs ?? null,
         };
         let stopped = false;
+        // Set on a fatal write failure (storage full). Distinct from `stopped`
+        // (user/teardown) so stop() can still flush+close what fits. Once set,
+        // further packets are ignored instead of throwing on every notify.
+        let fatal = false;
         let subscription: Subscription | null = null;
 
         // Plan 02 ACK: track the contiguous frontier and write it to the
@@ -435,7 +478,7 @@ export const realBleClient: BleClient = {
           error: unknown,
           characteristic: { value?: string | null } | null,
         ) => {
-          if (stopped) return;
+          if (stopped || fatal) return;
           if (error) {
             cb.onError?.(error as Error);
             return;
@@ -461,6 +504,22 @@ export const realBleClient: BleClient = {
             return;
           }
 
+          // Persist FIRST. Only count a sample once its bytes are handed to the
+          // file buffer — the old order bumped packets/samples BEFORE writing,
+          // so a storage-full failure looked like a healthy, climbing sample
+          // count while nothing reached disk (silent loss + misleading "green").
+          try {
+            eeg.appendChunk(encodePacketEeg(pkt));
+          } catch (e) {
+            // Fatal: storage full / I/O error. Stop processing further packets
+            // and surface it. Do NOT advance lastBaseMs (so a resume can retry
+            // this packet) and do NOT keep ticking the counters.
+            fatal = true;
+            cb.onError?.(new StorageWriteError((e as Error)?.message));
+            return;
+          }
+
+          // Bytes are on the way to disk — now advance counters + ACK frontier.
           // Detect seq wrap → generation bump.
           if (stats.lastSeq !== null) {
             const gap = (pkt.seq - stats.lastSeq - 1) & 0xff;
@@ -482,12 +541,6 @@ export const realBleClient: BleClient = {
           // tracker parks on a gap until firmware replay fills it).
           contig.feed(pkt.seq);
 
-          try {
-            eeg.appendChunk(encodePacketEeg(pkt));
-          } catch (e) {
-            cb.onError?.(e as Error);
-            return;
-          }
           cb.onPacket?.(pkt, stats);
         };
 

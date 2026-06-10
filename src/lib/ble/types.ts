@@ -95,8 +95,20 @@ export type ConnectedDevice = {
   disconnect(): Promise<void>;
 };
 
+export type ConnectOpts = {
+  /**
+   * Reject the connect if the device hasn't connected within this many ms.
+   * Used for USER-INITIATED connects (pre-bed check, session start) so a mask
+   * that's off/out of range fails fast with an error instead of an infinite
+   * spinner. OMIT it for the background reconnect loop — there we want the
+   * untimed `autoConnect` pending connection so iOS/Android can complete the
+   * link whenever the device comes back in range (even while backgrounded).
+   */
+  timeoutMs?: number;
+};
+
 export type BleClient = {
   /** Starts a scan. Returns a stop-fn the caller must invoke to release the radio. */
   scan(onFound: (device: FoundDevice) => void): () => void;
-  connect(deviceId: string): Promise<ConnectedDevice>;
+  connect(deviceId: string, opts?: ConnectOpts): Promise<ConnectedDevice>;
 };

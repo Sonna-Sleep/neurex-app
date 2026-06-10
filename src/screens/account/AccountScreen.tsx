@@ -6,11 +6,12 @@ import { colors, layout, radii, spacing, systemFontFamily } from '../../theme/to
 import { Avatar } from '../../components/Avatar';
 import { useSession } from '../../state/session';
 import { ageFromDob } from '../../lib/profile';
-import { LEGAL_URLS } from '../../lib/legal';
+import type { LegalDocKey } from '../../lib/legalContent';
 import appConfig from '../../../app.json';
 import { DebugSection } from './DebugSection';
 import { DeleteAccountSection } from './DeleteAccountSection';
 import { EditProfileSheet } from './EditProfileSheet';
+import { LegalSheet } from './LegalSheet';
 import { TAB_BAR_SPACE } from '../../navigation/FloatingTabBar';
 
 function greeting(hour: number): string {
@@ -33,6 +34,7 @@ export function AccountScreen() {
   const avatarUri = useSession((s) => s.avatarUri);
   const signOut = useSession((s) => s.signOut);
   const [editing, setEditing] = useState(false);
+  const [legalDoc, setLegalDoc] = useState<LegalDocKey | null>(null);
 
   const firstName = user?.firstName?.trim();
   const name = firstName || 'You';
@@ -58,11 +60,12 @@ export function AccountScreen() {
           </Pressable>
         </View>
 
-        {/* Links — grouped card */}
+        {/* Links — grouped card. Privacy + About render in-app (LegalSheet),
+            not external Chrome links. */}
         <View style={styles.card}>
           <Row label="Contact support" onPress={() => Linking.openURL('mailto:contact@neurex.tech')} first />
-          <Row label="Privacy policy" onPress={() => Linking.openURL(LEGAL_URLS.privacyPolicy)} />
-          <Row label="About" onPress={() => Linking.openURL(LEGAL_URLS.about)} />
+          <Row label="Privacy policy" onPress={() => setLegalDoc('privacy')} />
+          <Row label="About" onPress={() => setLegalDoc('about')} />
         </View>
 
         <DebugSection />
@@ -80,6 +83,7 @@ export function AccountScreen() {
       </ScrollView>
 
       <EditProfileSheet visible={editing} onClose={() => setEditing(false)} />
+      <LegalSheet doc={legalDoc} onClose={() => setLegalDoc(null)} />
     </SafeAreaView>
   );
 }
