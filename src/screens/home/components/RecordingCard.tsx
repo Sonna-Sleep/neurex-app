@@ -32,6 +32,10 @@ type SavedRecording = {
   startedAtMs: number;
 };
 
+// Don't auto-upload an accidental start→stop. Real nights are hours; below this
+// the user gets the manual button instead.
+const MIN_AUTOSYNC_SEC = 120;
+
 export function RecordingCard() {
   const streaming = useSession((s) => s.streaming);
   const pairedDeviceId = useSession((s) => s.pairedDeviceId);
@@ -178,6 +182,16 @@ export function RecordingCard() {
     }
   }, [saved, sync, userDob]);
 
+  // Auto-sync the moment a night is saved — no manual tap. Skipped (manual
+  // button shown) for very short recordings or when no birth date is set, since
+  // staging needs it. onSyncToCloud guards re-entry, so this fires once.
+  const hasDob = ageFromDob(userDob) !== null;
+  useEffect(() => {
+    if (saved && sync === 'idle' && saved.durationSec >= MIN_AUTOSYNC_SEC && hasDob) {
+      onSyncToCloud();
+    }
+  }, [saved, sync, hasDob, onSyncToCloud]);
+
   // ── Active recording ─────────────────────────────────────────────────────
   if (streaming) {
     const elapsedSec = Math.max(0, Math.floor((Date.now() - streaming.startedAtMs) / 1000));
@@ -243,15 +257,37 @@ export function RecordingCard() {
   if (saved) {
     const mins = Math.floor(saved.durationSec / 60);
     const secs = saved.durationSec % 60;
+    const syncing = sync === 'uploading' || sync === 'analyzing';
+    const eyebrow = syncing
+      ? 'recording · syncing'
+      : sync === 'done'
+        ? 'recording · ready'
+        : sync === 'error'
+          ? 'recording · sync failed'
+          : 'recording · saved on phone';
+    const headline =
+      sync === 'uploading'
+        ? 'Uploading your night…'
+        : sync === 'analyzing'
+          ? 'Analyzing your night…'
+          : sync === 'done'
+            ? 'Your night is ready'
+            : sync === 'error'
+              ? "Couldn't sync"
+              : 'Night saved';
+    const sub = syncing
+      ? 'This usually takes under a minute.'
+      : sync === 'done'
+        ? 'Saved to your journal.'
+        : !hasDob
+          ? 'Add your birth date in Account to analyze this night.'
+          : `Your recording is saved${saved.durationSec > 0 ? ` · ${mins}m ${secs}s` : ''}.`;
     return (
       <View style={styles.wrap}>
-        <Eyebrow>recording · saved on phone</Eyebrow>
+        <Eyebrow>{eyebrow}</Eyebrow>
         <Card style={styles.card}>
-          <SerifHeadline>Night saved</SerifHeadline>
-          <Body style={styles.subtext}>
-            Your recording is saved{saved.durationSec > 0 ? ` · ${mins}m ${secs}s` : ''}.
-            Sync it to the cloud to see your sleep results.
-          </Body>
+          <SerifHeadline>{headline}</SerifHeadline>
+          <Body style={styles.subtext}>{sub}</Body>
           {error ? <Text style={styles.error}>{error}</Text> : null}
           {sync === 'done' && summary ? (
             <View style={styles.stats}>
@@ -262,21 +298,13 @@ export function RecordingCard() {
             </View>
           ) : null}
 
-          <Button
-            label={
-              sync === 'uploading'
-                ? 'Uploading to cloud…'
-                : sync === 'analyzing'
-                  ? 'Analyzing in cloud…'
-                  : sync === 'done'
-                    ? 'Synced ✓'
-                    : sync === 'error'
-                      ? 'Retry cloud sync'
-                      : 'Sync to cloud'
-            }
-            onPress={onSyncToCloud}
-            loading={sync === 'uploading' || sync === 'analyzing'}
-          />
+          {syncing ? (
+            <ActivityIndicator color={colors.textSecondary} />
+          ) : sync === 'idle' ? (
+            <Button label="Sync to cloud" onPress={onSyncToCloud} />
+          ) : sync === 'error' ? (
+            <Button label="Retry cloud sync" onPress={onSyncToCloud} />
+          ) : null}
 
           {__DEV__ ? (
             <Button label="share EEG.BIN" variant="ghost" onPress={() => onShare(saved.eegUri)} />
