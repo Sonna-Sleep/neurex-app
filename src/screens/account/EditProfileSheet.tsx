@@ -1,12 +1,19 @@
 import React, { useEffect, useState } from 'react';
-import { Alert, Modal, StyleSheet, TextInput, View } from 'react-native';
+import { Alert, Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '../../components/Button';
 import { SerifHeadline, Eyebrow } from '../../theme/typography';
-import { colors, layout, spacing } from '../../theme/tokens';
+import { colors, layout, radii, spacing, systemFontFamily } from '../../theme/tokens';
 import { useSession } from '../../state/session';
 import { saveProfile, type Sex } from '../../lib/profile';
 import { DateOfBirthInput } from '../onboarding/components/DateOfBirthInput';
+
+const SEX_OPTIONS: { value: Sex; label: string }[] = [
+  { value: 'male', label: 'male' },
+  { value: 'female', label: 'female' },
+  { value: 'unspecified', label: 'other' },
+];
 
 export function EditProfileSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const user = useSession((s) => s.user);
@@ -40,34 +47,115 @@ export function EditProfileSheet({ visible, onClose }: { visible: boolean; onClo
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
-      <View style={styles.container}>
-        <SerifHeadline style={styles.h}>Edit profile</SerifHeadline>
-        <Eyebrow>first name</Eyebrow>
-        <TextInput style={styles.input} value={firstName} onChangeText={setFirstName}
-          placeholder="First name" placeholderTextColor={colors.textTertiary} />
-        <Eyebrow>date of birth</Eyebrow>
-        <DateOfBirthInput value={dob} onChange={setDob} />
-        <Eyebrow>biological sex</Eyebrow>
-        <View style={styles.choices}>
-          {(['male', 'female', 'unspecified'] as Sex[]).map((opt) => (
-            <Button key={opt} label={opt === 'unspecified' ? 'prefer not to say' : opt}
-              variant={sex === opt ? 'primary' : 'ghost'} onPress={() => setSex(opt)} />
-          ))}
+      <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+        <SerifHeadline style={styles.title}>Edit profile</SerifHeadline>
+
+        <View style={styles.field}>
+          <Eyebrow>first name</Eyebrow>
+          <TextInput
+            style={styles.input}
+            value={firstName}
+            onChangeText={setFirstName}
+            placeholder="First name"
+            placeholderTextColor={colors.textTertiary}
+          />
         </View>
+
+        <View style={styles.field}>
+          <Eyebrow>date of birth</Eyebrow>
+          <DateOfBirthInput value={dob} onChange={setDob} />
+        </View>
+
+        <View style={styles.field}>
+          <Eyebrow>biological sex</Eyebrow>
+          <View style={styles.segment}>
+            {SEX_OPTIONS.map((opt) => {
+              const active = sex === opt.value;
+              return (
+                <Pressable
+                  key={opt.value}
+                  onPress={() => setSex(opt.value)}
+                  style={[styles.seg, active && styles.segActive]}
+                >
+                  <Text style={[styles.segText, active && styles.segTextActive]}>{opt.label}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+
         <View style={styles.actions}>
           <Button label={busy ? 'saving…' : 'save'} onPress={save} disabled={busy} />
-          <Button label="cancel" variant="ghost" onPress={onClose} />
+          <Pressable onPress={onClose} hitSlop={8} style={styles.cancel}>
+            <Text style={styles.cancelText}>cancel</Text>
+          </Pressable>
         </View>
-      </View>
+      </SafeAreaView>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bgPrimary, padding: layout.screenPadding, gap: spacing.sm },
-  h: { marginTop: spacing.xxl, marginBottom: spacing.md },
-  input: { color: colors.textPrimary, fontSize: 18, paddingVertical: spacing.sm,
-    borderBottomWidth: 1, borderBottomColor: colors.borderDivider },
-  choices: { gap: spacing.sm },
-  actions: { marginTop: spacing.xl, gap: spacing.sm },
+  container: {
+    flex: 1,
+    backgroundColor: colors.bgPrimary,
+    paddingHorizontal: layout.screenPadding,
+  },
+  title: {
+    marginTop: spacing.lg,
+    marginBottom: spacing.xxl,
+  },
+  field: {
+    gap: spacing.sm,
+    marginBottom: spacing.xl,
+  },
+  input: {
+    color: colors.textPrimary,
+    fontSize: 18,
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderDivider,
+  },
+  segment: {
+    flexDirection: 'row',
+    backgroundColor: colors.bgSurface,
+    borderRadius: radii.button,
+    padding: 4,
+    gap: 4,
+  },
+  seg: {
+    flex: 1,
+    paddingVertical: spacing.sm + 2,
+    borderRadius: radii.small,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  segActive: {
+    backgroundColor: colors.ctaBg,
+  },
+  segText: {
+    fontFamily: systemFontFamily,
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.textSecondary,
+  },
+  segTextActive: {
+    color: colors.ctaText,
+  },
+  actions: {
+    marginTop: 'auto',
+    paddingTop: spacing.xl,
+    paddingBottom: spacing.lg,
+    gap: spacing.md,
+    alignItems: 'center',
+  },
+  cancel: {
+    paddingVertical: spacing.xs,
+  },
+  cancelText: {
+    fontFamily: systemFontFamily,
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.textSecondary,
+  },
 });
