@@ -18,6 +18,11 @@ expo-env.d.ts
 *.key
 *.mobileprovision
 
+# EAS local iOS credentials — the cert/profile files are covered above, but this
+# config holds the .p12 password + references, so it must never be committed.
+credentials.json
+/credentials/
+
 # Metro
 .metro-health-check*
 
@@ -40,6 +45,10 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# local module build output
+modules/*/android/build/
+modules/*/android/.cxx/
 
 # Supabase CLI cache (transient state, not source)
 supabase/.temp/
