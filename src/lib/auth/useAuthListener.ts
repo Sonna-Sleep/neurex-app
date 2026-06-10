@@ -29,7 +29,12 @@ function parseTokensFromUrl(url: string) {
   };
 }
 
-function toUser(u: { id: string; email?: string | null; user_metadata?: any }) {
+function toUser(u: {
+  id: string;
+  email?: string | null;
+  created_at?: string | null;
+  user_metadata?: any;
+}) {
   const m = u.user_metadata ?? {};
   return {
     id: u.id,
@@ -38,6 +43,7 @@ function toUser(u: { id: string; email?: string | null; user_metadata?: any }) {
     firstName: m.first_name ?? null,
     dob: m.dob ?? null,
     sex: m.sex ?? null,
+    memberSinceMs: u.created_at ? Date.parse(u.created_at) : null,
   };
 }
 

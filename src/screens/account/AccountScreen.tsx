@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { colors, layout, spacing, systemFontFamily } from '../../theme/tokens';
+import { colors, layout, radii, spacing, systemFontFamily } from '../../theme/tokens';
+import { Avatar } from '../../components/Avatar';
 import { useSession } from '../../state/session';
 import { ageFromDob } from '../../lib/profile';
 import { LEGAL_URLS } from '../../lib/legal';
@@ -12,37 +13,54 @@ import { DeleteAccountSection } from './DeleteAccountSection';
 import { EditProfileSheet } from './EditProfileSheet';
 import { TAB_BAR_SPACE } from '../../navigation/FloatingTabBar';
 
+function greeting(hour: number): string {
+  if (hour < 5) return 'Good night';
+  if (hour < 12) return 'Good morning';
+  if (hour < 18) return 'Good afternoon';
+  return 'Good evening';
+}
+
+function memberSinceLabel(ms: number | null | undefined): string | null {
+  if (!ms) return null;
+  return `Member since ${new Date(ms).toLocaleDateString(undefined, {
+    month: 'short',
+    year: 'numeric',
+  })}`;
+}
+
 export function AccountScreen() {
   const user = useSession((s) => s.user);
+  const avatarUri = useSession((s) => s.avatarUri);
   const signOut = useSession((s) => s.signOut);
   const [editing, setEditing] = useState(false);
 
-  const name = user?.firstName?.trim() || 'You';
-  const initial = name.charAt(0).toUpperCase();
+  const firstName = user?.firstName?.trim();
+  const name = firstName || 'You';
+  const headline = firstName ? `${greeting(new Date().getHours())}, ${firstName}` : 'Your profile';
   const age = ageFromDob(user?.dob);
   const sub = [age ? `${age}` : null, user?.sex && user.sex !== 'unspecified' ? user.sex : null]
     .filter(Boolean)
     .join(' · ');
+  const memberSince = memberSinceLabel(user?.memberSinceMs);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {/* Profile header */}
         <View style={styles.profile}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{initial}</Text>
-          </View>
-          <Text style={styles.name}>{name}</Text>
+          <Avatar uri={avatarUri} name={name} size={76} />
+          <Text style={styles.name}>{headline}</Text>
           {user?.email ? <Text style={styles.sub}>{user.email}</Text> : null}
           {sub ? <Text style={styles.sub}>{sub}</Text> : null}
+          {memberSince ? <Text style={styles.memberSince}>{memberSince}</Text> : null}
           <Pressable onPress={() => setEditing(true)} hitSlop={8} style={styles.editBtn}>
             <Text style={styles.editText}>Edit profile</Text>
           </Pressable>
         </View>
 
-        {/* Links */}
-        <View style={styles.rows}>
-          <Row label="Contact support" onPress={() => Linking.openURL('mailto:contact@neurex.tech')} />
+        {/* Links — grouped card */}
+        <View style={styles.card}>
+          <Row label="Contact support" onPress={() => Linking.openURL('mailto:contact@neurex.tech')} first />
           <Row label="Privacy policy" onPress={() => Linking.openURL(LEGAL_URLS.privacyPolicy)} />
           <Row label="About" onPress={() => Linking.openURL(LEGAL_URLS.about)} />
         </View>
@@ -54,7 +72,9 @@ export function AccountScreen() {
           <Pressable onPress={signOut} hitSlop={8}>
             <Text style={styles.logout}>Log out</Text>
           </Pressable>
-          <DeleteAccountSection />
+          <View style={styles.dangerZone}>
+            <DeleteAccountSection />
+          </View>
           <Text style={styles.version}>version {appConfig.expo.version}</Text>
         </View>
       </ScrollView>
@@ -64,9 +84,12 @@ export function AccountScreen() {
   );
 }
 
-function Row({ label, onPress }: { label: string; onPress: () => void }) {
+function Row({ label, onPress, first }: { label: string; onPress: () => void; first?: boolean }) {
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}>
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [styles.row, !first && styles.rowDivider, pressed && styles.rowPressed]}
+    >
       <Text style={styles.rowLabel}>{label}</Text>
       <Text style={styles.chevron}>›</Text>
     </Pressable>
@@ -88,32 +111,24 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
     paddingBottom: spacing.xl,
   },
-  avatar: {
-    width: 76,
-    height: 76,
-    borderRadius: 38,
-    backgroundColor: colors.bgElevated,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.sm,
-  },
-  avatarText: {
-    fontFamily: systemFontFamily,
-    fontSize: 30,
-    fontWeight: '600',
-    color: colors.textPrimary,
-  },
   name: {
     fontFamily: systemFontFamily,
     fontSize: 24,
     fontWeight: '600',
     letterSpacing: -0.3,
     color: colors.textPrimary,
+    marginTop: spacing.sm,
   },
   sub: {
     fontFamily: systemFontFamily,
     fontSize: 15,
     color: colors.textSecondary,
+  },
+  memberSince: {
+    fontFamily: systemFontFamily,
+    fontSize: 13,
+    color: colors.textTertiary,
+    marginTop: spacing.xs,
   },
   editBtn: {
     marginTop: spacing.md,
@@ -124,14 +139,19 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.accent,
   },
-  rows: {
+  card: {
     marginTop: spacing.lg,
+    backgroundColor: colors.bgSurface,
+    borderRadius: radii.card,
+    paddingHorizontal: spacing.md,
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: spacing.md,
+  },
+  rowDivider: {
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.borderSubtle,
   },
@@ -151,7 +171,6 @@ const styles = StyleSheet.create({
   footer: {
     marginTop: spacing.xxl,
     alignItems: 'flex-start',
-    gap: spacing.lg,
   },
   logout: {
     fontFamily: systemFontFamily,
@@ -159,9 +178,19 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.textSecondary,
   },
+  // Delete sits well below Log out, fenced off by a hairline + generous space
+  // so the destructive action can't be hit by muscle memory after Log out.
+  dangerZone: {
+    alignSelf: 'stretch',
+    marginTop: spacing.xl,
+    paddingTop: spacing.xl,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.borderSubtle,
+  },
   version: {
     fontFamily: systemFontFamily,
     fontSize: 12,
     color: colors.textTertiary,
+    marginTop: spacing.xxl,
   },
 });

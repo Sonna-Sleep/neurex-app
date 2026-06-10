@@ -1,13 +1,14 @@
 import React, { useEffect, useState } from 'react';
-import { Alert, Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Button } from '../../components/Button';
 import { Segmented } from '../../components/Segmented';
-import { SerifHeadline, Eyebrow } from '../../theme/typography';
+import { Avatar } from '../../components/Avatar';
+import { Eyebrow } from '../../theme/typography';
 import { colors, layout, spacing, systemFontFamily } from '../../theme/tokens';
 import { useSession } from '../../state/session';
 import { saveProfile, type Sex } from '../../lib/profile';
+import { pickAndSaveAvatar, removeAvatar } from '../../lib/avatar';
 import { DateOfBirthInput } from '../onboarding/components/DateOfBirthInput';
 
 const SEX_OPTIONS: { value: Sex; label: string }[] = [
@@ -18,6 +19,7 @@ const SEX_OPTIONS: { value: Sex; label: string }[] = [
 
 export function EditProfileSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const user = useSession((s) => s.user);
+  const avatarUri = useSession((s) => s.avatarUri);
   const [firstName, setFirstName] = useState(user?.firstName ?? '');
   const [dob, setDob] = useState<string | null>(user?.dob ?? null);
   const [sex, setSex] = useState<Sex | null>((user?.sex as Sex) ?? null);
@@ -49,35 +51,62 @@ export function EditProfileSheet({ visible, onClose }: { visible: boolean; onClo
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
       <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-        <SerifHeadline style={styles.title}>Edit profile</SerifHeadline>
-
-        <View style={styles.field}>
-          <Eyebrow>first name</Eyebrow>
-          <TextInput
-            style={styles.input}
-            value={firstName}
-            onChangeText={setFirstName}
-            placeholder="First name"
-            placeholderTextColor={colors.textTertiary}
-          />
-        </View>
-
-        <View style={styles.field}>
-          <Eyebrow>date of birth</Eyebrow>
-          <DateOfBirthInput value={dob} onChange={setDob} />
-        </View>
-
-        <View style={styles.field}>
-          <Eyebrow>biological sex</Eyebrow>
-          <Segmented options={SEX_OPTIONS} value={sex} onChange={setSex} />
-        </View>
-
-        <View style={styles.actions}>
-          <Button label={busy ? 'Saving…' : 'Save'} onPress={save} disabled={busy} />
-          <Pressable onPress={onClose} hitSlop={8} style={styles.cancel}>
-            <Text style={styles.cancelText}>Cancel</Text>
+        {/* Top bar — close on the left, Save on the right (reachable, iOS-style) */}
+        <View style={styles.topBar}>
+          <Pressable onPress={onClose} hitSlop={12} disabled={busy}>
+            <Text style={styles.close}>✕</Text>
+          </Pressable>
+          <Text style={styles.topTitle}>Edit profile</Text>
+          <Pressable onPress={save} hitSlop={12} disabled={busy}>
+            <Text style={[styles.save, busy && styles.saveDisabled]}>
+              {busy ? 'Saving…' : 'Save'}
+            </Text>
           </Pressable>
         </View>
+
+        <ScrollView
+          contentContainerStyle={styles.scroll}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* Live avatar preview — monogram updates as the name field changes */}
+          <View style={styles.avatarBlock}>
+            <Pressable onPress={pickAndSaveAvatar} hitSlop={8}>
+              <Avatar uri={avatarUri} name={firstName || 'You'} size={96} />
+            </Pressable>
+            <View style={styles.avatarActions}>
+              <Pressable onPress={pickAndSaveAvatar} hitSlop={8}>
+                <Text style={styles.photoBtn}>{avatarUri ? 'Edit photo' : 'Add photo'}</Text>
+              </Pressable>
+              {avatarUri ? (
+                <Pressable onPress={removeAvatar} hitSlop={8}>
+                  <Text style={styles.removeBtn}>Remove</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          </View>
+
+          <View style={styles.field}>
+            <Eyebrow>first name</Eyebrow>
+            <TextInput
+              style={styles.input}
+              value={firstName}
+              onChangeText={setFirstName}
+              placeholder="First name"
+              placeholderTextColor={colors.textTertiary}
+            />
+          </View>
+
+          <View style={styles.field}>
+            <Eyebrow>date of birth</Eyebrow>
+            <DateOfBirthInput value={dob} onChange={setDob} />
+          </View>
+
+          <View style={styles.field}>
+            <Eyebrow>biological sex</Eyebrow>
+            <Segmented options={SEX_OPTIONS} value={sex} onChange={setSex} />
+          </View>
+        </ScrollView>
       </SafeAreaView>
     </Modal>
   );
@@ -89,9 +118,59 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bgPrimary,
     paddingHorizontal: layout.screenPadding,
   },
-  title: {
-    marginTop: spacing.lg,
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.md,
+  },
+  close: {
+    fontFamily: systemFontFamily,
+    fontSize: 22,
+    fontWeight: '500',
+    color: colors.textSecondary,
+  },
+  topTitle: {
+    fontFamily: systemFontFamily,
+    fontSize: 17,
+    fontWeight: '600',
+    color: colors.textPrimary,
+  },
+  save: {
+    fontFamily: systemFontFamily,
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.accent,
+  },
+  saveDisabled: {
+    color: colors.textTertiary,
+  },
+  scroll: {
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.xxl,
+  },
+  avatarBlock: {
+    alignItems: 'center',
+    gap: spacing.md,
     marginBottom: spacing.xxl,
+  },
+  avatarActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.lg,
+  },
+  photoBtn: {
+    fontFamily: systemFontFamily,
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.accent,
+  },
+  removeBtn: {
+    fontFamily: systemFontFamily,
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.textTertiary,
   },
   field: {
     gap: spacing.sm,
@@ -103,21 +182,5 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     borderBottomWidth: 1,
     borderBottomColor: colors.borderDivider,
-  },
-  actions: {
-    marginTop: 'auto',
-    paddingTop: spacing.xl,
-    paddingBottom: spacing.lg,
-    gap: spacing.md,
-    alignItems: 'flex-start',
-  },
-  cancel: {
-    paddingVertical: spacing.xs,
-  },
-  cancelText: {
-    fontFamily: systemFontFamily,
-    fontSize: 15,
-    fontWeight: '600',
-    color: colors.textSecondary,
   },
 });

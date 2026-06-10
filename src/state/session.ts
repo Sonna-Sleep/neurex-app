@@ -13,6 +13,9 @@ type User = {
   firstName?: string | null;
   dob?: string | null;            // ISO 'YYYY-MM-DD'
   sex?: 'male' | 'female' | 'unspecified' | null;
+  // Account creation time from Supabase `auth.users.created_at`, surfaced as
+  // "Member since" on the profile. Derived from auth — re-set on every sign-in.
+  memberSinceMs?: number | null;
 };
 
 // Live recording state. Persists in-memory only — a stream resumes on a hot
@@ -32,6 +35,10 @@ export type Streaming = {
 type SessionState = {
   authStatus: AuthStatus;
   user: User | null;
+  // Local path to the user's chosen profile photo (copied into the app's
+  // documentDirectory). Kept OUTSIDE `user` because setAuth rebuilds `user` on
+  // every auth event and would otherwise wipe it. Device-local, persisted.
+  avatarUri: string | null;
   pairedSerial: string | null;
   // Platform-stable BLE identifier (UUID on iOS, MAC on Android) returned by
   // ble-plx scan. We need this — not just the serial — to reconnect without
@@ -53,6 +60,7 @@ type SessionState = {
   deviceBattery: number | null;
   setAuth: (user: User | null) => void;
   patchUser: (patch: Partial<User>) => void;
+  setAvatar: (uri: string | null) => void;
   setPaired: (serial: string | null, deviceId?: string | null) => void;
   completeOnboarding: () => void;
   signOut: () => void;
@@ -67,6 +75,7 @@ export const useSession = create<SessionState>()(
     (set) => ({
       authStatus: 'unknown',
       user: null,
+      avatarUri: null,
       pairedSerial: null,
       pairedDeviceId: null,
       onboardingComplete: false,
@@ -84,6 +93,8 @@ export const useSession = create<SessionState>()(
 
       patchUser: (patch) =>
         set((s) => (s.user ? { user: { ...s.user, ...patch } } : {})),
+
+      setAvatar: (uri) => set({ avatarUri: uri }),
 
       setPaired: (serial, deviceId) => {
         if (serial) deviceRepo.pair(serial);
@@ -107,6 +118,7 @@ export const useSession = create<SessionState>()(
         set({
           authStatus: 'signed-out',
           user: null,
+          avatarUri: null,
           pairedSerial: null,
           pairedDeviceId: null,
           onboardingComplete: false,
@@ -132,6 +144,7 @@ export const useSession = create<SessionState>()(
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (s) => ({
         user: s.user,
+        avatarUri: s.avatarUri,
         pairedSerial: s.pairedSerial,
         pairedDeviceId: s.pairedDeviceId,
         onboardingComplete: s.onboardingComplete,
