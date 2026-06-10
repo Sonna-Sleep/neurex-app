@@ -1,6 +1,6 @@
 // Circular sleep-score ring with the number + descriptor inside. Score bands
 // use our own calm colors (the reference's orange is just layout inspiration).
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 
@@ -33,7 +33,7 @@ export function ScoreRing({ score, size = 160, stroke = 11, showLabel = true }: 
   const isScored = score != null;
   const progress = isScored ? Math.max(0, Math.min(1, (score as number) / 99)) : 0;
 
-  const anim = useRef(new Animated.Value(0)).current;
+  const [anim] = useState(() => new Animated.Value(0));
   useEffect(() => {
     if (!isScored) return;
     anim.setValue(0);

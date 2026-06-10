@@ -20,14 +20,14 @@ function keyToDate(key: string): Date {
 }
 
 function todayKey(): string {
-  return dateKey(new Date(Date.now()));
+  return dateKey(new Date());
 }
 
 export function JournalScreen() {
   const authReady = useSession((s) => s.authReady);
   const [sessions, setSessions] = useState<Session[]>([]);
-  const [selectedKey, setSelectedKey] = useState<string>(todayKey());
-  const [weekStart, setWeekStart] = useState<Date>(weekStartOf(new Date(Date.now())));
+  const [selectedKey, setSelectedKey] = useState<string>(() => todayKey());
+  const [weekStart, setWeekStart] = useState<Date>(() => weekStartOf(new Date()));
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState(false);
   const [refreshing, setRefreshing] = useState(false);

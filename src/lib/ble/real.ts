@@ -62,7 +62,6 @@ import type {
 // Hermes (RN 0.81 default) provides global atob; fall back to a manual decoder
 // only in environments that don't (e.g. older Jest runners).
 function b64ToBytes(b64: string): Uint8Array {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const g = globalThis as any;
   const bin: string = typeof g.atob === 'function' ? g.atob(b64) : manualAtob(b64);
   const bytes = new Uint8Array(bin.length);
@@ -267,7 +266,6 @@ class AppendingFile {
   static open(dir: Directory, filename: string, flushBytes = 2048): AppendingFile {
     const file = new File(dir, filename);
     if (!file.exists) file.create();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const handle = (file as any).open() as FileHandleLike;
     handle.offset = handle.size ?? 0; // seek to end (append); 0 if size unknown
     return new AppendingFile(file.uri, handle, flushBytes);

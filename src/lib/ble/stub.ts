@@ -1,8 +1,8 @@
 // Synthetic BLE implementation for Expo Go / web / hardware-free dev.
 //
 // Matches the streaming contract exactly: scan finds a fake "Neurex-EEG"
-// device after ~1.8 s; startStream synthesizes 4-sample packets at ~62.5
-// Hz (real cadence: 250 Hz / 4) and writes them to per-session EEG.BIN in the
+// device after ~1.8 s; startStream synthesizes packets at the same sample
+// grouping as the real BLE path and writes them to per-session EEG.BIN in the
 // canonical on-disk format. The Home screen + upload pipeline therefore work
 // end-to-end without hardware.
 
@@ -15,7 +15,6 @@ import {
 import type {
   BleClient,
   ConnectedDevice,
-  ConnectOpts,
   EegSample,
   FoundDevice,
   ParsedPacket,
@@ -55,8 +54,7 @@ type FileHandleLike = {
 function openAppending(dir: Directory, name: string): { uri: string; handle: FileHandleLike } {
   const file = new File(dir, name);
   if (!file.exists) file.create();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const handle = (file as any).open() as FileHandleLike;
+  const handle = file.open() as unknown as FileHandleLike;
   handle.offset = handle.size ?? 0;
   return { uri: file.uri, handle };
 }

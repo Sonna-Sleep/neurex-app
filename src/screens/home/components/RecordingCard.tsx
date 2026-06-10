@@ -59,11 +59,11 @@ export function RecordingCard() {
   const unsubRef = useRef<(() => void) | null>(null);
   useEffect(() => () => unsubRef.current?.(), []);
   // Re-render once per second so the elapsed timer ticks even when no
-  // packet arrives. Reading Date.now() inside render gives us live time.
-  const [, setTick] = useState(0);
+  // packet arrives, while keeping render pure.
+  const [nowMs, setNowMs] = useState(() => Date.now());
   useEffect(() => {
     if (!streaming) return;
-    const t = setInterval(() => setTick((n) => n + 1), 1000);
+    const t = setInterval(() => setNowMs(Date.now()), 1000);
     return () => clearInterval(t);
   }, [streaming]);
 
@@ -93,7 +93,7 @@ export function RecordingCard() {
     } finally {
       setBusy('idle');
     }
-  }, [pairedDeviceId]);
+  }, [pairedDeviceId, pairedSerial]);
 
   const onUnpair = useCallback(() => {
     Alert.alert(
@@ -209,7 +209,7 @@ export function RecordingCard() {
 
   // ── Active recording ─────────────────────────────────────────────────────
   if (streaming) {
-    const elapsedSec = Math.max(0, Math.floor((Date.now() - streaming.startedAtMs) / 1000));
+    const elapsedSec = Math.max(0, Math.floor((nowMs - streaming.startedAtMs) / 1000));
     const realRateHz =
       elapsedSec > 0 ? Math.round(streaming.samples / elapsedSec) : 0;
     const lossPct =

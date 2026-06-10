@@ -1,12 +1,11 @@
 // Public entry for the BLE module.
 //
-// Side-effect import of `./manager` constructs the singleton BleManager
+// Importing `getBleManager` constructs the singleton BleManager
 // at module load time — this MUST happen before React mounts so iOS
 // state restoration works when the OS cold-starts the app in the
 // background. Apps that defer manager construction to a useEffect / hook
 // miss the restoration callback entirely.
 
-import './manager';
 import { getBleManager } from './manager';
 import { realBleClient } from './real';
 import { stubBleClient } from './stub';

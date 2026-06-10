@@ -5,7 +5,7 @@
 // Uses React Native's built-in Animated API with native driver — no extra
 // deps, no perf cost on older devices.
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Animated, StyleSheet, View, ViewStyle } from 'react-native';
 
 import { colors, radii, spacing } from '../theme/tokens';
@@ -22,7 +22,7 @@ type BlockProps = {
  * the building block for composed skeletons (Card / Row).
  */
 function Block({ width = '100%', height = 16, borderRadius = 6, style }: BlockProps) {
-  const opacity = useRef(new Animated.Value(0.4)).current;
+  const [opacity] = useState(() => new Animated.Value(0.4));
 
   useEffect(() => {
     const loop = Animated.loop(

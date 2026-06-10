@@ -14,16 +14,16 @@ type Props = {
 
 export function Avatar({ uri, name, size }: Props) {
   // Fall back to the monogram if the stored photo can't be loaded (file deleted,
-  // unreadable uri). Reset the flag whenever the uri changes.
-  const [failed, setFailed] = React.useState(false);
-  React.useEffect(() => setFailed(false), [uri]);
+  // unreadable uri). Track the failed URI itself so a new URI gets a fresh try
+  // without needing a reset effect.
+  const [failedUri, setFailedUri] = React.useState<string | null>(null);
 
   const initial = (name.trim().charAt(0) || 'Y').toUpperCase();
   const shape = { width: size, height: size, borderRadius: size / 2 };
 
-  if (uri && !failed) {
+  if (uri && failedUri !== uri) {
     return (
-      <Image source={{ uri }} style={[styles.photo, shape]} onError={() => setFailed(true)} />
+      <Image source={{ uri }} style={[styles.photo, shape]} onError={() => setFailedUri(uri)} />
     );
   }
 

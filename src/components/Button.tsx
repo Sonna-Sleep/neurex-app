@@ -1,9 +1,8 @@
 import React from 'react';
-import { Pressable, StyleSheet, View, ActivityIndicator } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
 
 import { colors, radii, spacing, typeScale } from '../theme/tokens';
-import { Text } from 'react-native';
 
 type Variant = 'primary' | 'ghost' | 'tonal';
 
