@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
-import { Alert, Pressable, StyleSheet, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text } from 'react-native';
 
-import { Body, Eyebrow } from '../../theme/typography';
-import { colors, spacing } from '../../theme/tokens';
+import { colors, systemFontFamily } from '../../theme/tokens';
 import { useSession } from '../../state/session';
 import {
   requestScheduledDeletion, deleteImmediately,
@@ -57,26 +56,16 @@ export function DeleteAccountSection() {
   };
 
   return (
-    <View style={styles.section}>
-      <Eyebrow>close account</Eyebrow>
-      <View style={styles.body}>
-        <Pressable onPress={confirm} disabled={busy} hitSlop={8}>
-          <Body style={styles.delete}>
-            {busy ? 'working…' : 'delete account'}
-          </Body>
-        </Pressable>
-      </View>
-    </View>
+    <Pressable onPress={confirm} disabled={busy} hitSlop={8}>
+      <Text style={styles.delete}>{busy ? 'working…' : 'delete account'}</Text>
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  section: {
-    paddingVertical: spacing.lg,
-    borderTopWidth: 1,
-    borderTopColor: colors.borderSubtle,
-    gap: spacing.sm,
+  delete: {
+    fontFamily: systemFontFamily,
+    fontSize: 15,
+    color: colors.danger,
   },
-  body: { paddingTop: spacing.sm },
-  delete: { color: colors.danger },
 });

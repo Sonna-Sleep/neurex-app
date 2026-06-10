@@ -1,8 +1,8 @@
 import React, { useMemo, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import Svg, { Line, Rect, Text as SvgText } from 'react-native-svg';
 
-import { colors, spacing, stageColors, STAGE_META } from '../../../theme/tokens';
+import { colors, stageColors } from '../../../theme/tokens';
 import type { Epoch, SleepStage } from '../../../lib/repos';
 
 type Props = {
@@ -52,14 +52,6 @@ export function Hypnogram({ epochs, startMs, endMs }: Props) {
 
   return (
     <View style={styles.container}>
-      <View style={styles.legend}>
-        {STAGE_META.map((s) => (
-          <View key={s.key} style={styles.legendItem}>
-            <View style={[styles.swatch, { backgroundColor: stageColors[s.key] }]} />
-            <Text style={styles.legendLabel}>{s.label}</Text>
-          </View>
-        ))}
-      </View>
       <View
         style={styles.chart}
         onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
@@ -211,26 +203,7 @@ function fmt(ms: number) {
 
 const styles = StyleSheet.create({
   container: {
-    gap: spacing.md,
-  },
-  legend: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.md,
-  },
-  legendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
-  swatch: {
-    width: 10,
-    height: 10,
-    borderRadius: 3,
-  },
-  legendLabel: {
-    fontSize: 12,
-    color: colors.textSecondary,
+    width: '100%',
   },
   chart: {
     width: '100%',

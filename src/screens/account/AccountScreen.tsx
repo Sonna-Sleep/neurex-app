@@ -1,10 +1,8 @@
 import React, { useState } from 'react';
-import { Linking, ScrollView, StyleSheet, View } from 'react-native';
+import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Button } from '../../components/Button';
-import { SerifHeadline, Body, Eyebrow } from '../../theme/typography';
-import { colors, layout, spacing } from '../../theme/tokens';
+import { colors, layout, spacing, systemFontFamily } from '../../theme/tokens';
 import { useSession } from '../../state/session';
 import { ageFromDob } from '../../lib/profile';
 import { LEGAL_URLS } from '../../lib/legal';
@@ -18,47 +16,45 @@ export function AccountScreen() {
   const signOut = useSession((s) => s.signOut);
   const [editing, setEditing] = useState(false);
 
+  const name = user?.firstName?.trim() || 'You';
+  const initial = name.charAt(0).toUpperCase();
+  const age = ageFromDob(user?.dob);
+  const sub = [age ? `${age}` : null, user?.sex && user.sex !== 'unspecified' ? user.sex : null]
+    .filter(Boolean)
+    .join(' · ');
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <ScrollView
-        contentContainerStyle={styles.scroll}
-        showsVerticalScrollIndicator={false}
-      >
-        <SerifHeadline style={styles.headline}>Account</SerifHeadline>
-
-        <Section eyebrow="account">
-          <View style={styles.col}>
-            <Body>{user?.firstName ?? 'add your name'}</Body>
-            <Body style={styles.muted}>{user?.email ?? 'guest'}</Body>
-            <Body style={styles.muted}>
-              {ageFromDob(user?.dob) ? `${ageFromDob(user?.dob)} years` : 'add birth date'}
-              {user?.sex && user.sex !== 'unspecified' ? ` · ${user.sex}` : ''}
-            </Body>
-            <Body style={styles.link} onPress={() => setEditing(true)}>edit</Body>
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        {/* Profile header */}
+        <View style={styles.profile}>
+          <View style={styles.avatar}>
+            <Text style={styles.avatarText}>{initial}</Text>
           </View>
-        </Section>
+          <Text style={styles.name}>{name}</Text>
+          {user?.email ? <Text style={styles.sub}>{user.email}</Text> : null}
+          {sub ? <Text style={styles.sub}>{sub}</Text> : null}
+          <Pressable onPress={() => setEditing(true)} hitSlop={8} style={styles.editBtn}>
+            <Text style={styles.editText}>edit profile</Text>
+          </Pressable>
+        </View>
 
-        <Section eyebrow="support">
-          <Body style={styles.link} onPress={() => Linking.openURL('mailto:contact@neurex.tech')}>contact@neurex.tech</Body>
-        </Section>
-
-        <Section eyebrow="legal">
-          <View style={styles.col}>
-            <Body style={styles.link} onPress={() => Linking.openURL(LEGAL_URLS.privacyPolicy)}>privacy policy</Body>
-            <Body style={styles.link} onPress={() => Linking.openURL(LEGAL_URLS.about)}>about</Body>
-          </View>
-        </Section>
-
-        <Section eyebrow="app">
-          <Body style={styles.muted}>version {appConfig.expo.version}</Body>
-        </Section>
+        {/* Links */}
+        <View style={styles.rows}>
+          <Row label="contact support" onPress={() => Linking.openURL('mailto:contact@neurex.tech')} />
+          <Row label="privacy policy" onPress={() => Linking.openURL(LEGAL_URLS.privacyPolicy)} />
+          <Row label="about" onPress={() => Linking.openURL(LEGAL_URLS.about)} />
+        </View>
 
         <DebugSection />
 
-        <DeleteAccountSection />
-
-        <View style={styles.actions}>
-          <Button label="log out" variant="ghost" onPress={signOut} />
+        {/* Footer */}
+        <View style={styles.footer}>
+          <Pressable onPress={signOut} hitSlop={8}>
+            <Text style={styles.logout}>log out</Text>
+          </Pressable>
+          <DeleteAccountSection />
+          <Text style={styles.version}>version {appConfig.expo.version}</Text>
         </View>
       </ScrollView>
 
@@ -67,18 +63,12 @@ export function AccountScreen() {
   );
 }
 
-function Section({
-  eyebrow,
-  children,
-}: {
-  eyebrow: string;
-  children: React.ReactNode;
-}) {
+function Row({ label, onPress }: { label: string; onPress: () => void }) {
   return (
-    <View style={styles.section}>
-      <Eyebrow>{eyebrow}</Eyebrow>
-      <View style={styles.sectionBody}>{children}</View>
-    </View>
+    <Pressable onPress={onPress} style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}>
+      <Text style={styles.rowLabel}>{label}</Text>
+      <Text style={styles.chevron}>›</Text>
+    </Pressable>
   );
 }
 
@@ -89,29 +79,88 @@ const styles = StyleSheet.create({
     paddingHorizontal: layout.screenPadding,
   },
   scroll: {
-    paddingTop: spacing.xl,
+    paddingTop: spacing.xxl,
     paddingBottom: spacing.xxxl,
   },
-  headline: {
-    marginBottom: spacing.xl,
-  },
-  section: {
-    paddingVertical: spacing.lg,
-    borderTopWidth: 1,
-    borderTopColor: colors.borderSubtle,
-    gap: spacing.sm,
-  },
-  sectionBody: {
-    paddingTop: spacing.sm,
-  },
-  col: {
+  profile: {
+    alignItems: 'center',
     gap: spacing.xs,
+    paddingBottom: spacing.xl,
   },
-  muted: {
+  avatar: {
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    backgroundColor: colors.bgElevated,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.sm,
+  },
+  avatarText: {
+    fontFamily: systemFontFamily,
+    fontSize: 30,
+    fontWeight: '600',
+    color: colors.textPrimary,
+  },
+  name: {
+    fontFamily: systemFontFamily,
+    fontSize: 24,
+    fontWeight: '600',
+    letterSpacing: -0.3,
+    color: colors.textPrimary,
+  },
+  sub: {
+    fontFamily: systemFontFamily,
+    fontSize: 15,
     color: colors.textSecondary,
   },
-  link: { color: colors.textSecondary, textDecorationLine: 'underline' },
-  actions: {
-    paddingTop: spacing.xl,
+  editBtn: {
+    marginTop: spacing.md,
+  },
+  editText: {
+    fontFamily: systemFontFamily,
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.accent,
+  },
+  rows: {
+    marginTop: spacing.lg,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: spacing.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.borderSubtle,
+  },
+  rowPressed: {
+    opacity: 0.5,
+  },
+  rowLabel: {
+    fontFamily: systemFontFamily,
+    fontSize: 16,
+    color: colors.textPrimary,
+  },
+  chevron: {
+    fontFamily: systemFontFamily,
+    fontSize: 22,
+    color: colors.textTertiary,
+  },
+  footer: {
+    marginTop: spacing.xxl,
+    alignItems: 'center',
+    gap: spacing.lg,
+  },
+  logout: {
+    fontFamily: systemFontFamily,
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.textSecondary,
+  },
+  version: {
+    fontFamily: systemFontFamily,
+    fontSize: 12,
+    color: colors.textTertiary,
   },
 });
