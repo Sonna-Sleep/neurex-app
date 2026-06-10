@@ -36,11 +36,9 @@ export function RootNavigator() {
         {onboardingComplete ? (
           <>
             <Stack.Screen name="Main" component={TabNavigator} />
-            <Stack.Screen
-              name="Record"
-              component={RecordScreen}
-              options={{ presentation: 'fullScreenModal' }}
-            />
+            <Stack.Screen name="Record" component={RecordScreen} />
+            {/* Standard push (not a modal) so it never traps: iOS edge-swipe
+                back works and BackButton returns to the tabs. */}
           </>
         ) : (
           <Stack.Screen name="Onboarding" component={OnboardingNavigator} />

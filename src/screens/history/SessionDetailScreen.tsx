@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import { Body, Eyebrow, SerifHeadline } from '../../theme/typography';
+import { BackButton } from '../../components/BackButton';
 import { colors, layout, spacing } from '../../theme/tokens';
 import { sessionRepo, type Session } from '../../lib/repos';
 import { Skeleton } from '../../components/Skeleton';
@@ -34,9 +35,7 @@ export function SessionDetailScreen({ navigation, route }: Props) {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.topBar}>
-        <Pressable onPress={() => navigation.goBack()} hitSlop={12}>
-          <Body style={styles.back}>‹ history</Body>
-        </Pressable>
+        <BackButton label="history" />
       </View>
 
       <ScrollView
