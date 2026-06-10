@@ -4,6 +4,7 @@ import * as Linking from 'expo-linking';
 import { getSupabase } from './supabase';
 import { useSession } from '../../state/session';
 import { cancelPendingDeletion } from '../accountDeletion';
+import { registerPushToken } from '../push/registerPushToken';
 
 function parseTokensFromUrl(url: string) {
   const hashIndex = url.indexOf('#');
@@ -72,7 +73,10 @@ export function useAuthListener() {
     supabase.auth.getSession().then(({ data }) => {
       if (!mounted) return;
       const u = data.session?.user;
-      if (u) setAuth(toUser(u));
+      if (u) {
+        setAuth(toUser(u));
+        registerPushToken(u.id).catch(() => undefined);
+      }
       // Auth is now settled — screens can safely query Supabase.
       useSession.setState({ authReady: true });
     });
@@ -87,6 +91,7 @@ export function useAuthListener() {
         // or a cold-start with a lingering session would silently revoke it.
         if (event === 'SIGNED_IN') {
           cancelPendingDeletion().catch(() => undefined);
+          registerPushToken(u.id).catch(() => undefined);
         }
       } else setAuth(null);
     });

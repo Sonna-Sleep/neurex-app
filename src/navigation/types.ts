@@ -10,14 +10,14 @@ export type OnboardingStackParamList = {
   NotificationsPermission: undefined;
 };
 
-export type HistoryStackParamList = {
-  HistoryList: undefined;
+export type JournalStackParamList = {
+  JournalHome: undefined;
   SessionDetail: { sessionId: string };
 };
 
 export type TabParamList = {
   Sleep: undefined;
-  Journal: undefined;
+  Journal: NavigatorScreenParams<JournalStackParamList>;
   Profile: undefined;
 };
 

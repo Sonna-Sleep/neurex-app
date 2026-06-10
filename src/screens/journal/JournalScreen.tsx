@@ -6,26 +6,17 @@ import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'r
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 
-import { Eyebrow, SerifDisplay, Secondary } from '../../theme/typography';
+import { SerifDisplay, Secondary } from '../../theme/typography';
 import { colors, layout, spacing, systemFontFamily } from '../../theme/tokens';
 import { sessionRepo, type Session } from '../../lib/repos';
 import { useSession } from '../../state/session';
-import { ScoreRing } from '../../components/ScoreRing';
 import { WeekStrip, dateKey, weekStartOf } from '../../components/WeekStrip';
-import { Hypnogram } from '../home/components/Hypnogram';
-import { StageBreakdown } from '../home/components/StageBreakdown';
+import { NightReport } from './NightReport';
 import { TAB_BAR_SPACE } from '../../navigation/FloatingTabBar';
 
 function keyToDate(key: string): Date {
   const [y, m, d] = key.split('-').map(Number);
   return new Date(y, m - 1, d);
-}
-
-function fmtDur(min: number | null): string {
-  if (min == null) return '—';
-  const h = Math.floor(min / 60);
-  const m = Math.floor(min % 60);
-  return h > 0 ? `${h}h ${m}m` : `${m}m`;
 }
 
 function todayKey(): string {
@@ -98,6 +89,14 @@ export function JournalScreen() {
   }, [byDate]);
 
   const selected = byDate[selectedKey] ?? null;
+
+  // Seeing a night's report — inline here or on SessionDetail — clears its
+  // "new" dot on the Journal tab.
+  const markNightViewed = useSession((s) => s.markNightViewed);
+  useEffect(() => {
+    if (selected) markNightViewed(selected.id);
+  }, [selected, markNightViewed]);
+
   const selectedDate = keyToDate(selectedKey);
   const headerLabel = `${selectedDate.toLocaleDateString(undefined, { weekday: 'long' })} ${selectedDate.getDate()} ${selectedDate.toLocaleDateString(undefined, { month: 'short' })}`;
 
@@ -135,46 +134,7 @@ export function JournalScreen() {
         />
 
         {selected ? (
-          <View style={styles.report}>
-            {/* Score ring + in-bed / asleep */}
-            <View style={styles.scoreRow}>
-              <ScoreRing score={selected.score} size={150} showLabel={false} />
-              <View style={styles.stats}>
-                <Stat value={fmtDur(selected.tib)} label="In bed" />
-                <Stat value={fmtDur(selected.tst)} label="Asleep" />
-              </View>
-            </View>
-
-            {selected.score != null ? (
-              <>
-                <View style={styles.section}>
-                  <Eyebrow>sleep stages</Eyebrow>
-                  <Hypnogram epochs={selected.epochs} startMs={selected.startMs} endMs={selected.endMs} />
-                </View>
-                <StageBreakdown stageMinutes={selected.stageMinutes} />
-
-                <View style={styles.section}>
-                  <Eyebrow>details</Eyebrow>
-                  <View style={styles.detailRows}>
-                    <DetailRow
-                      label="Fell asleep in"
-                      value={selected.sol != null ? `${Math.round(selected.sol)} min` : '—'}
-                    />
-                    <DetailRow
-                      label="Signal quality"
-                      value={
-                        selected.confidence != null
-                          ? `${Math.round(selected.confidence * 100)}%`
-                          : '—'
-                      }
-                    />
-                  </View>
-                </View>
-              </>
-            ) : (
-              <Secondary style={styles.processing}>Analyzing this night…</Secondary>
-            )}
-          </View>
+          <NightReport session={selected} />
         ) : (
           <View style={styles.empty}>
             <Secondary style={styles.emptyText}>
@@ -184,24 +144,6 @@ export function JournalScreen() {
         )}
       </ScrollView>
     </SafeAreaView>
-  );
-}
-
-function Stat({ value, label }: { value: string; label: string }) {
-  return (
-    <View style={styles.stat}>
-      <Text style={styles.statValue}>{value}</Text>
-      <Secondary style={styles.statLabel}>{label}</Secondary>
-    </View>
-  );
-}
-
-function DetailRow({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.detailRow}>
-      <Secondary style={styles.detailLabel}>{label}</Secondary>
-      <Text style={styles.detailValue}>{value}</Text>
-    </View>
   );
 }
 
@@ -229,54 +171,6 @@ const styles = StyleSheet.create({
     fontFamily: systemFontFamily,
     fontSize: 26,
     fontWeight: '600',
-    color: colors.textSecondary,
-  },
-  report: {
-    gap: spacing.xl,
-  },
-  scoreRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xl,
-  },
-  stats: {
-    flex: 1,
-    gap: spacing.lg,
-  },
-  stat: {
-    gap: 2,
-  },
-  statValue: {
-    fontFamily: systemFontFamily,
-    fontSize: 26,
-    fontWeight: '600',
-    letterSpacing: -0.5,
-    color: colors.textPrimary,
-  },
-  statLabel: {
-    color: colors.textSecondary,
-  },
-  section: {
-    gap: spacing.md,
-  },
-  detailRows: {
-    gap: spacing.sm,
-  },
-  detailRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  detailLabel: {
-    color: colors.textSecondary,
-  },
-  detailValue: {
-    fontFamily: systemFontFamily,
-    fontSize: 15,
-    fontWeight: '600',
-    color: colors.textPrimary,
-  },
-  processing: {
     color: colors.textSecondary,
   },
   empty: {

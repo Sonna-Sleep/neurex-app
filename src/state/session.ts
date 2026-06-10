@@ -58,9 +58,14 @@ type SessionState = {
   // Live battery % from the paired sleep mask (notified via BLE Battery Service).
   // null while disconnected or before the first notify. Transient.
   deviceBattery: number | null;
+  // Session ids that became "ready" but the user hasn't opened yet. Drives the
+  // "new" dot on the Journal tab. Persisted so the dot survives an app restart.
+  unviewedNightIds: string[];
   setAuth: (user: User | null) => void;
   patchUser: (patch: Partial<User>) => void;
   setAvatar: (uri: string | null) => void;
+  markNightUnviewed: (id: string) => void;
+  markNightViewed: (id: string) => void;
   setPaired: (serial: string | null, deviceId?: string | null) => void;
   completeOnboarding: () => void;
   signOut: () => void;
@@ -84,6 +89,7 @@ export const useSession = create<SessionState>()(
       processingSessionId: null,
       streaming: null,
       deviceBattery: null,
+      unviewedNightIds: [],
 
       setAuth: (user) =>
         set(() => ({
@@ -95,6 +101,20 @@ export const useSession = create<SessionState>()(
         set((s) => (s.user ? { user: { ...s.user, ...patch } } : {})),
 
       setAvatar: (uri) => set({ avatarUri: uri }),
+
+      markNightUnviewed: (id) =>
+        set((s) =>
+          s.unviewedNightIds.includes(id)
+            ? {}
+            : { unviewedNightIds: [...s.unviewedNightIds, id] },
+        ),
+
+      markNightViewed: (id) =>
+        set((s) =>
+          s.unviewedNightIds.includes(id)
+            ? { unviewedNightIds: s.unviewedNightIds.filter((x) => x !== id) }
+            : {},
+        ),
 
       setPaired: (serial, deviceId) => {
         if (serial) deviceRepo.pair(serial);
@@ -125,6 +145,7 @@ export const useSession = create<SessionState>()(
           processingSessionId: null,
           streaming: null,
           deviceBattery: null,
+          unviewedNightIds: [],
         });
       },
 
@@ -145,6 +166,7 @@ export const useSession = create<SessionState>()(
       partialize: (s) => ({
         user: s.user,
         avatarUri: s.avatarUri,
+        unviewedNightIds: s.unviewedNightIds,
         pairedSerial: s.pairedSerial,
         pairedDeviceId: s.pairedDeviceId,
         onboardingComplete: s.onboardingComplete,

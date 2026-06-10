@@ -6,6 +6,8 @@ import { useSession } from '../state/session';
 import { colors } from '../theme/tokens';
 import { OnboardingNavigator } from './OnboardingNavigator';
 import { TabNavigator } from './TabNavigator';
+import { navigationRef } from './navigationRef';
+import { NotificationRouter } from './NotificationRouter';
 import type { RootStackParamList } from './types';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -30,7 +32,7 @@ export function RootNavigator() {
   if (!hydrated) return null;
 
   return (
-    <NavigationContainer theme={navTheme}>
+    <NavigationContainer theme={navTheme} ref={navigationRef}>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         {onboardingComplete ? (
           <Stack.Screen name="Main" component={TabNavigator} />
@@ -38,6 +40,7 @@ export function RootNavigator() {
           <Stack.Screen name="Onboarding" component={OnboardingNavigator} />
         )}
       </Stack.Navigator>
+      <NotificationRouter />
     </NavigationContainer>
   );
 }
