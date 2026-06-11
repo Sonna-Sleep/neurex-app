@@ -1,4 +1,4 @@
-// Public contract for talking to the Neurex sleep mask over BLE.
+// Public contract for talking to the Neurex device over BLE.
 //
 // Live-stream model: scan → connect → startStream(sessionId, callbacks).
 // The firmware notifies 226-byte packets at ~31.25 Hz (8 samples/packet @ 250
@@ -81,7 +81,7 @@ export type ConnectedDevice = {
 export type ConnectOpts = {
   /**
    * Reject the connect if the device hasn't connected within this many ms.
-   * Used for USER-INITIATED session starts so a mask that's off/out of range
+   * Used for USER-INITIATED session starts so a device that's off/out of range
    * fails fast with an error instead of an infinite spinner. OMIT it for the
    * background reconnect loop — there we want the untimed `autoConnect` pending
    * connection so iOS/Android can complete the link whenever the device comes

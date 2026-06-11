@@ -55,7 +55,7 @@ type SessionState = {
   authReady: boolean;
   // Live stream state for the in-progress recording. null when idle. Transient.
   streaming: Streaming | null;
-  // Live battery % from the paired sleep mask (notified via BLE Battery Service).
+  // Live battery % from the paired Neurex device (notified via BLE Battery Service).
   // null while disconnected or before the first notify. Transient.
   deviceBattery: number | null;
   // Session ids that became "ready" but the user hasn't opened yet. Drives the

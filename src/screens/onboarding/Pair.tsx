@@ -144,9 +144,9 @@ export function Pair({ navigation }: Props) {
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <View style={styles.center}>
-        <SerifDisplay style={styles.headline}>Pair your sleep mask</SerifDisplay>
+        <SerifDisplay style={styles.headline}>Pair your Neurex device</SerifDisplay>
         <Body style={styles.subtext}>
-          Press the button to turn your mask on.
+          Press the button to turn your device on.
         </Body>
 
         <Card style={styles.card}>
@@ -162,7 +162,7 @@ export function Pair({ navigation }: Props) {
               <ActivityIndicator color={colors.textSecondary} />
               <Body style={styles.cardText}>
                 {sortedDevices.length === 0
-                  ? 'Searching for your sleep mask…'
+                  ? 'Searching for your Neurex device…'
                   : `Found ${sortedDevices.length} — keep scanning…`}
               </Body>
             </View>
@@ -192,7 +192,7 @@ export function Pair({ navigation }: Props) {
             <View style={styles.foundCol}>
               <Eyebrow>nothing yet</Eyebrow>
               <Body style={styles.cardText}>
-                Make sure your mask is on — press the button to turn it on.
+                Make sure your Neurex device is on — press the button to turn it on.
               </Body>
             </View>
           ) : null}
@@ -210,7 +210,7 @@ export function Pair({ navigation }: Props) {
             <View style={styles.foundCol}>
               <Eyebrow>permission needed</Eyebrow>
               <Body style={styles.cardText}>
-                Neurex needs Bluetooth permission to find your sleep mask. Open
+                Neurex needs Bluetooth permission to find your Neurex device. Open
                 Settings to grant it.
               </Body>
             </View>

@@ -1,5 +1,5 @@
-// Live-recording card on Home. Shows the in-progress stream when one is
-// active, otherwise renders a "Start session" CTA when a device is paired.
+// Live-recording card on Sleep. Shows the in-progress stream when one is
+// active, otherwise renders a richer "start recording" surface when paired.
 // Owns the start/stop orchestration via streamController.
 //
 // On stop, the raw EEG.BIN is uploaded to Supabase Storage for staging. In dev,
@@ -12,8 +12,8 @@ import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 
 import { Button } from '../../../components/Button';
 import { Card } from '../../../components/Card';
-import { Body, Eyebrow, SerifHeadline, Secondary } from '../../../theme/typography';
-import { colors, spacing, typeScale } from '../../../theme/tokens';
+import { Body, Eyebrow, SerifDisplay, SerifHeadline, Secondary } from '../../../theme/typography';
+import { colors, radii, spacing, typeScale } from '../../../theme/tokens';
 import { useSession } from '../../../state/session';
 import { startSession, stopSession } from '../../../lib/ble/streamController';
 import { EEG_SAMPLE_RATE_HZ } from '../../../lib/ble/constants';
@@ -73,7 +73,7 @@ export function RecordingCard() {
 
   const onStart = useCallback(async () => {
     if (!pairedDeviceId) {
-      setError('Pair your sleep mask first.');
+      setError('Pair your Neurex device first.');
       return;
     }
     setError(null);
@@ -87,10 +87,10 @@ export function RecordingCard() {
     }
   }, [pairedDeviceId, pairedSerial]);
 
-  const onUnpair = useCallback(() => {
+  const onForgetDevice = useCallback(() => {
     Alert.alert(
-      'Forget this sleep mask?',
-      `${pairedSerial ?? 'The paired sleep mask'} will be removed. You can pair again from Home.`,
+      'Forget this Neurex device?',
+      `${pairedSerial ?? 'The paired Neurex device'} will be removed. You can pair again from Sleep.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -226,10 +226,10 @@ export function RecordingCard() {
           <View style={styles.row}>
             <ActivityIndicator color={colors.textSecondary} />
             <View style={styles.titleCol}>
-              <SerifHeadline>Streaming from {pairedSerial ?? 'sleep mask'}</SerifHeadline>
+              <SerifHeadline>Recording from {pairedSerial ?? 'Neurex device'}</SerifHeadline>
               <Body style={styles.subtext}>
                 {isReconnecting
-                  ? 'Reconnecting to your sleep mask…'
+                  ? 'Reconnecting to your Neurex device…'
                   : `${formatElapsed(elapsedSec)} elapsed`}
               </Body>
             </View>
@@ -255,7 +255,7 @@ export function RecordingCard() {
           {error ? <Text style={styles.error}>{error}</Text> : null}
 
           <Button
-            label={busy === 'stopping' ? 'Saving…' : streaming.error ? 'Save & stop' : 'Stop session'}
+            label={busy === 'stopping' ? 'Saving…' : streaming.error ? 'Save & stop' : 'Stop recording'}
             variant="ghost"
             onPress={onStop}
             loading={busy === 'stopping'}
@@ -345,26 +345,52 @@ export function RecordingCard() {
     );
   }
 
-  // ── Idle (paired but not streaming) — flat, editorial, mask as the hero ──
+  // ── Idle (paired but not streaming) — quiet bedtime control surface ───────
   if (!pairedDeviceId) return null;
+  const batteryLabel = deviceBattery !== null ? `${deviceBattery}%` : '—';
   return (
     <View style={styles.idle}>
-      <View style={styles.idleHead}>
-        <Eyebrow>sleep mask · paired</Eyebrow>
-        <SerifHeadline style={styles.idleTitle}>Ready when you are</SerifHeadline>
-        <Secondary style={styles.idleSub}>Put on your mask, then start.</Secondary>
+      <View style={styles.idleMain}>
+        <View style={styles.idleHead}>
+          <Eyebrow>tonight</Eyebrow>
+          <SerifDisplay style={styles.idleTitle}>Ready to record</SerifDisplay>
+          <Secondary style={styles.idleSub}>
+            Wear your Neurex device and keep your phone nearby.
+          </Secondary>
+        </View>
+
+        <View style={styles.readinessPanel}>
+          <ReadyRow label="Device" value={pairedSerial ?? 'Paired'} />
+          <View style={styles.divider} />
+          <ReadyRow label="Battery" value={batteryLabel} />
+          <View style={styles.divider} />
+          <ReadyRow label="Analysis" value="Records over 5 min can be staged" />
+        </View>
       </View>
+
       {error ? <Text style={styles.error}>{error}</Text> : null}
-      <View style={styles.idleActions}>
+
+      <View style={styles.bedtimeActions}>
         <Button
-          label={busy === 'starting' ? 'Connecting…' : 'Start session'}
+          label={busy === 'starting' ? 'Connecting…' : 'Start recording'}
           onPress={onStart}
           loading={busy === 'starting'}
         />
-        <Pressable onPress={onUnpair} hitSlop={8} style={styles.unpair}>
-          <Secondary style={styles.unpairText}>Unpair</Secondary>
+        <Pressable onPress={onForgetDevice} hitSlop={8} style={styles.unpair}>
+          <Secondary style={styles.unpairText}>Forget device</Secondary>
         </Pressable>
       </View>
+    </View>
+  );
+}
+
+function ReadyRow({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={styles.readyRow}>
+      <Secondary style={styles.readyLabel}>{label}</Secondary>
+      <Text style={styles.readyValue} numberOfLines={2}>
+        {value}
+      </Text>
     </View>
   );
 }
@@ -419,21 +445,66 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
   },
   idle: {
-    alignItems: 'flex-start',
+    flexGrow: 1,
+    justifyContent: 'space-between',
+    alignItems: 'stretch',
+    gap: spacing.xxl,
+    paddingTop: spacing.xl,
+    paddingBottom: spacing.md,
+  },
+  idleMain: {
     gap: spacing.xl,
   },
   idleHead: {
     alignItems: 'flex-start',
-    gap: spacing.sm,
+    gap: spacing.md,
+    maxWidth: 330,
   },
-  idleTitle: {},
+  idleTitle: {
+    fontSize: 36,
+    lineHeight: 41,
+  },
   idleSub: {
     color: colors.textSecondary,
+    fontSize: 16,
+    lineHeight: 23,
   },
-  idleActions: {
+  readinessPanel: {
     alignSelf: 'stretch',
-    alignItems: 'flex-start',
-    gap: spacing.md,
+    borderRadius: radii.button,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    backgroundColor: colors.bgSurface,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  readyRow: {
+    minHeight: 50,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.lg,
+  },
+  readyLabel: {
+    color: colors.textTertiary,
+    fontSize: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+  },
+  readyValue: {
+    flex: 1,
+    textAlign: 'right',
+    color: colors.textPrimary,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  divider: {
+    height: 1,
+    backgroundColor: colors.borderSubtle,
+  },
+  bedtimeActions: {
+    alignSelf: 'stretch',
+    gap: spacing.lg,
   },
   stats: {
     flexDirection: 'row',

@@ -278,10 +278,10 @@ export const realBleClient: BleClient = {
     // discovery still works). Android foreground scanning here matches the
     // name in the advertising packet — simpler than a two-packet UUID filter
     // and still excludes earbuds/phones/watches/etc, so the user only sees
-    // Neurex sleep masks in the Pair UI.
+    // Neurex devices in the Pair UI.
     //
     // No dedupe here: every advertisement fires onFound so the UI can
-    // refresh RSSI for ranking when multiple sleep masks are in range.
+    // refresh RSSI for ranking when multiple Neurex devices are in range.
     manager.startDeviceScan(null, null, (error, device) => {
       if (error) {
         if (__DEV__) console.warn('[ble/real] scan error:', error);
@@ -306,7 +306,7 @@ export const realBleClient: BleClient = {
     // autoConnect: true → iOS maintains the connection across app suspensions
     // and the native side reconnects when the peripheral comes back in range.
     // With autoConnect there is NO native timeout, so a user-initiated connect
-    // passes opts.timeoutMs to fail fast (mask off) instead of hanging forever;
+    // passes opts.timeoutMs to fail fast (device off) instead of hanging forever;
     // the background reconnect loop omits it to keep the pending-connect that
     // lets iOS/Android finish the link whenever the device reappears.
     const connecting = manager.connectToDevice(deviceId, { autoConnect: true });

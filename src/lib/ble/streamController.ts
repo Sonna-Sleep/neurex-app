@@ -22,7 +22,7 @@ import {
 } from '../cloud/recovery';
 import type { Subscription } from 'react-native-ble-plx';
 
-// User-initiated session start: time-bounded so a mask that's off or out of
+// User-initiated session start: time-bounded so a device that's off or out of
 // range fails fast with an error instead of an infinite spinner. The background
 // reconnect loop deliberately omits this.
 const CONNECT_TIMEOUT_MS = 20_000;
@@ -116,7 +116,7 @@ export async function startSession(
 
   const sessionId = generateSessionId();
   const startedAtMs = Date.now();
-  // Time-bounded so a mask that's off fails fast instead of hanging forever.
+  // Time-bounded so a device that's off fails fast instead of hanging forever.
   const device = await bleClient.connect(deviceId, { timeoutMs: CONNECT_TIMEOUT_MS });
 
   const statsRef: StatsRef = { current: freshStats() };
@@ -324,7 +324,7 @@ async function reconnectLoop(): Promise<void> {
 }
 
 // Fatal, non-recoverable stream error (storage full). Stop writing + free the
-// keep-alive, but KEEP `active` so the user's "Stop session" still finalizes
+// keep-alive, but KEEP `active` so the user's "Stop recording" still finalizes
 // the partial recording into the saved/upload flow. Whatever was flushed is
 // safe on disk; the surfaced error explains why it stopped.
 async function failSession(message: string): Promise<void> {

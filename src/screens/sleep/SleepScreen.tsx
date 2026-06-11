@@ -57,10 +57,11 @@ const styles = StyleSheet.create({
   scroll: {
     flexGrow: 1,
     paddingHorizontal: layout.screenPadding,
-    paddingBottom: TAB_BAR_SPACE,
+    paddingTop: spacing.lg,
+    paddingBottom: TAB_BAR_SPACE + spacing.lg,
   },
   body: {
     flex: 1,
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
   },
 });

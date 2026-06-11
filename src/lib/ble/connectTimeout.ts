@@ -3,12 +3,12 @@
 // backoff.ts / boundedPool.ts. real.ts consumes it for the user-initiated
 // connect path.
 
-/** Thrown when a user-initiated connect exceeds its timeout (mask off / out of
+/** Thrown when a user-initiated connect exceeds its timeout (device off / out of
  * range) so the UI can show an error + retry instead of an infinite spinner. */
 export class BleTimeoutError extends Error {
   constructor(ms: number) {
     super(
-      `Couldn't reach your sleep mask (timed out after ${Math.round(ms / 1000)}s). ` +
+      `Couldn't reach your Neurex device (timed out after ${Math.round(ms / 1000)}s). ` +
         `Make sure it's on and nearby, then try again.`,
     );
     this.name = 'BleTimeoutError';

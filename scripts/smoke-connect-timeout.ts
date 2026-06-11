@@ -1,4 +1,4 @@
-// Smoke assertions for the pure connect-timeout helper (M2 fix: a mask that's
+// Smoke assertions for the pure connect-timeout helper (M2 fix: a device that's
 // off must fail fast instead of hanging the UI forever).
 // Run: npm run smoke:connect-timeout
 import { withTimeout, BleTimeoutError } from '../src/lib/ble/connectTimeout';

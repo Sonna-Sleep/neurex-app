@@ -13,10 +13,10 @@ function ok(cond: boolean, label: string) {
 
 // Happy path: trims both fields, lowercases nothing, passes through.
 {
-  const r = validateSupport('  user@neurex.tech  ', '  My mask will not pair.  ');
+  const r = validateSupport('  user@neurex.tech  ', '  My device will not pair.  ');
   ok(r.ok, 'valid input accepted');
   ok(r.ok && r.email === 'user@neurex.tech', 'email trimmed');
-  ok(r.ok && r.message === 'My mask will not pair.', 'message trimmed');
+  ok(r.ok && r.message === 'My device will not pair.', 'message trimmed');
 }
 
 // Email shapes.

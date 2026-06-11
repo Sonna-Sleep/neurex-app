@@ -1,9 +1,9 @@
-// In-app "connect a device" card on the Home screen for when no sleep mask
+// In-app "connect a device" card on the Sleep screen for when no Neurex device
 // is paired yet. Mirrors the permission/scan flow from Pair.tsx but renders
-// inline so the user never leaves Home.
+// inline so the user never leaves Sleep.
 //
 // Supports multiple Cerelogs in range — shows a live list sorted by signal
-// strength (strongest first), so the user can pick the sleep mask they
+// strength (strongest first), so the user can pick the Neurex device they
 // physically have in hand.
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -136,7 +136,7 @@ export function ConnectDeviceCard() {
     setPairingId(null);
   };
 
-  // Sorted strongest-signal-first so the sleep mask in your hand sits on top.
+  // Sorted strongest-signal-first so the Neurex device in your hand sits on top.
   const sortedDevices = useMemo(
     () => Object.values(devices).sort((a, b) => b.rssi - a.rssi),
     [devices],
@@ -145,9 +145,9 @@ export function ConnectDeviceCard() {
   if (state === 'idle') {
     return (
       <View style={styles.wrap}>
-        <Eyebrow>no sleep mask</Eyebrow>
+        <Eyebrow>no device</Eyebrow>
         <Card style={styles.card}>
-          <SerifHeadline>Connect your mask</SerifHeadline>
+          <SerifHeadline>Connect your Neurex device</SerifHeadline>
           <Body style={styles.subtext}>Power it on, then tap connect.</Body>
           <Button label="Connect" onPress={beginScan} />
         </Card>
@@ -171,7 +171,7 @@ export function ConnectDeviceCard() {
             <ActivityIndicator color={colors.textSecondary} />
             <Body style={styles.subtext}>
               {sortedDevices.length === 0
-                ? 'Searching for your sleep mask…'
+                ? 'Searching for your Neurex device…'
                 : `Found ${sortedDevices.length} — keep scanning…`}
             </Body>
           </View>
@@ -199,7 +199,7 @@ export function ConnectDeviceCard() {
 
         {state === 'scan-timeout' ? (
           <Body style={styles.subtext}>
-            Nothing yet. Make sure your mask is on — press the button to turn it on.
+            Nothing yet. Make sure your Neurex device is on — press the button to turn it on.
           </Body>
         ) : null}
 
@@ -211,7 +211,7 @@ export function ConnectDeviceCard() {
 
         {state === 'permission-denied' ? (
           <Body style={styles.subtext}>
-            Neurex needs Bluetooth permission to find your sleep mask. Open
+            Neurex needs Bluetooth permission to find your Neurex device. Open
             Settings to grant it.
           </Body>
         ) : null}

@@ -18,8 +18,8 @@
       "icon": "./assets/icon-ios.png",
       "bundleIdentifier": "tech.neurex.app",
       "infoPlist": {
-        "NSBluetoothAlwaysUsageDescription": "Neurex uses Bluetooth to sync your sleep data from the sleep mask.",
-        "NSBluetoothPeripheralUsageDescription": "Neurex uses Bluetooth to communicate with your sleep mask.",
+        "NSBluetoothAlwaysUsageDescription": "Neurex uses Bluetooth to sync your sleep data from your Neurex device.",
+        "NSBluetoothPeripheralUsageDescription": "Neurex uses Bluetooth to communicate with your Neurex device.",
         "NSPhotoLibraryUsageDescription": "Neurex uses your photos so you can set a profile picture.",
         "UIBackgroundModes": [
           "bluetooth-central",
@@ -74,7 +74,7 @@
           "modes": [
             "central"
           ],
-          "bluetoothAlwaysPermission": "Neurex uses Bluetooth to sync your sleep data from the sleep mask."
+          "bluetoothAlwaysPermission": "Neurex uses Bluetooth to sync your sleep data from your Neurex device."
         }
       ],
       "expo-secure-store",
