@@ -4,7 +4,7 @@
 // screen (opened from the "Your night is ready" notification).
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import Svg, { Circle, Line, Path, Rect } from 'react-native-svg';
+import Svg, { Circle, Path } from 'react-native-svg';
 
 import { Eyebrow, Secondary } from '../../theme/typography';
 import { colors, spacing, systemFontFamily } from '../../theme/tokens';
@@ -50,23 +50,17 @@ export function NightReport({ session }: { session: Session }) {
           <View style={styles.section}>
             <Eyebrow>details</Eyebrow>
             <View style={styles.detailGrid}>
-              <DetailTile
-                icon="regularity"
-                value={session.efficiency != null ? `${Math.round(session.efficiency)}%` : '—'}
-                label="Efficiency"
-              />
+              <DetailTile icon="moon" value={fmtTime(session.startMs)} label="Went to bed" />
+              <DetailTile icon="alarm" value={fmtTime(session.endMs)} label="Woke up" />
               <DetailTile
                 icon="asleep"
                 value={session.sol != null ? `${Math.round(session.sol)} min` : '—'}
                 label="Asleep after"
               />
-              <DetailTile icon="moon" value={fmtTime(session.startMs)} label="Went to bed" />
-              <DetailTile icon="alarm" value={fmtTime(session.endMs)} label="Woke up" />
-              <DetailTile icon="awake" value={fmtDur(session.waso)} label="Awake time" />
               <DetailTile
-                icon="awakenings"
-                value={session.awakenings != null ? `${session.awakenings}` : '—'}
-                label="Awakenings"
+                icon="confidence"
+                value={session.confidence != null ? `${Math.round(session.confidence * 100)}%` : '—'}
+                label="Confidence"
               />
             </View>
           </View>
@@ -87,7 +81,7 @@ function Stat({ value, label }: { value: string; label: string }) {
   );
 }
 
-type DetailIconName = 'regularity' | 'asleep' | 'moon' | 'alarm' | 'awake' | 'awakenings';
+type DetailIconName = 'asleep' | 'moon' | 'alarm' | 'confidence';
 
 function DetailTile({ icon, value, label }: { icon: DetailIconName; value: string; label: string }) {
   return (
@@ -104,14 +98,6 @@ function DetailTile({ icon, value, label }: { icon: DetailIconName; value: strin
 function DetailIcon({ name }: { name: DetailIconName }) {
   const c = '#77D2E5';
   switch (name) {
-    case 'regularity':
-      return (
-        <Svg width={44} height={44} viewBox="0 0 44 44" fill="none">
-          {[8, 16, 24, 32].map((x, i) => (
-            <Rect key={x} x={x} y={10 + i * 3} width={5} height={24 - i * 4} rx={2.5} fill={c} />
-          ))}
-        </Svg>
-      );
     case 'asleep':
       return (
         <Svg width={44} height={44} viewBox="0 0 44 44" fill="none">
@@ -134,17 +120,11 @@ function DetailIcon({ name }: { name: DetailIconName }) {
           <Path d="M15 24L20 29L30 18" stroke={colors.bgPrimary} strokeWidth={4} strokeLinecap="round" strokeLinejoin="round" />
         </Svg>
       );
-    case 'awake':
+    case 'confidence':
       return (
         <Svg width={44} height={44} viewBox="0 0 44 44" fill="none">
-          <Path d="M8 14H24L17 22H34L20 36L24 26H10L8 14Z" fill={c} />
-        </Svg>
-      );
-    case 'awakenings':
-      return (
-        <Svg width={44} height={44} viewBox="0 0 44 44" fill="none">
-          <Path d="M11 32L21 12L25 24L33 18" stroke={c} strokeWidth={5} strokeLinecap="round" strokeLinejoin="round" />
-          <Line x1={10} y1={34} x2={34} y2={34} stroke={c} strokeWidth={4} strokeLinecap="round" />
+          <Circle cx={22} cy={22} r={17} fill={c} />
+          <Path d="M14 23L20 29L31 16" stroke={colors.bgPrimary} strokeWidth={4} strokeLinecap="round" strokeLinejoin="round" />
         </Svg>
       );
   }
