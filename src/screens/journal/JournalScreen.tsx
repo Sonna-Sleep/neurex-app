@@ -9,6 +9,11 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Secondary, SerifDisplay } from '../../theme/typography';
 import { colors, layout, spacing, systemFontFamily } from '../../theme/tokens';
 import { sessionRepo, type Session } from '../../lib/repos';
+import {
+  betterJournalSession,
+  isCompletedSession,
+  isJournalVisibleSession,
+} from '../../lib/repos/sessionStatus';
 import { useSession } from '../../state/session';
 import { dateKey, weekStartOf } from '../../components/WeekStrip';
 import { scoreBand } from '../../components/ScoreRing';
@@ -54,9 +59,10 @@ export function JournalScreen({ navigation }: Props) {
       setSessions(list);
       setLoadError(false);
       setLoaded(true);
-      if (!initialized.current && list.length > 0) {
+      const visible = list.filter(isJournalVisibleSession);
+      if (!initialized.current && visible.length > 0) {
         initialized.current = true;
-        const latest = list.reduce((a, b) => (a.endMs > b.endMs ? a : b));
+        const latest = visible.reduce((a, b) => betterJournalSession(a, b));
         const k = dateKey(new Date(latest.endMs));
         setSelectedKey(k);
         setWeekStart(weekStartOf(keyToDate(k)));
@@ -86,14 +92,16 @@ export function JournalScreen({ navigation }: Props) {
     }
   }, [load]);
 
+  const journalSessions = useMemo(() => sessions.filter(isJournalVisibleSession), [sessions]);
+
   const byDate = useMemo(() => {
     const map: Record<string, Session> = {};
-    for (const s of sessions) {
+    for (const s of journalSessions) {
       const k = dateKey(new Date(s.endMs));
-      if (!map[k] || s.endMs > map[k].endMs) map[k] = s;
+      map[k] = map[k] ? betterJournalSession(s, map[k]) : s;
     }
     return map;
-  }, [sessions]);
+  }, [journalSessions]);
 
   const selected = byDate[selectedKey] ?? null;
 
@@ -139,7 +147,7 @@ export function JournalScreen({ navigation }: Props) {
             const key = dateKey(d);
             const session = byDate[key] ?? null;
             const selectedDay = key === selectedKey;
-            const band = session ? scoreBand(session.score) : null;
+            const band = session && isCompletedSession(session) ? scoreBand(session.score) : null;
             return (
               <Pressable
                 key={key}
@@ -151,7 +159,9 @@ export function JournalScreen({ navigation }: Props) {
                 <View
                   style={[
                     styles.dayCircle,
-                    session && band ? { borderColor: band.color, borderWidth: 2 } : null,
+                    session
+                      ? { borderColor: band?.color ?? colors.textTertiary, borderWidth: 2 }
+                      : null,
                     selectedDay && styles.dayCircleSelected,
                   ]}
                 >

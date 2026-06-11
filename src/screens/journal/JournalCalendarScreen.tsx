@@ -11,6 +11,12 @@ import { colors, layout, radii, spacing, systemFontFamily } from '../../theme/to
 import { dateKey } from '../../components/WeekStrip';
 import { scoreBand } from '../../components/ScoreRing';
 import { sessionRepo, type Session } from '../../lib/repos';
+import {
+  betterJournalSession,
+  isCompletedSession,
+  isJournalVisibleSession,
+  isPendingAnalysisSession,
+} from '../../lib/repos/sessionStatus';
 import { TAB_BAR_SPACE } from '../../navigation/FloatingTabBar';
 import type { JournalStackParamList } from '../../navigation/types';
 
@@ -53,7 +59,7 @@ function buildCalendarDays(monthStart: Date): Date[] {
 
 function latestSession(sessions: Session[]): Session | null {
   if (sessions.length === 0) return null;
-  return sessions.reduce((a, b) => (a.endMs > b.endMs ? a : b));
+  return sessions.reduce((a, b) => betterJournalSession(a, b));
 }
 
 export function JournalCalendarScreen({ navigation }: Props) {
@@ -71,7 +77,7 @@ export function JournalCalendarScreen({ navigation }: Props) {
       setSessions(list);
       setLoadError(false);
       setLoaded(true);
-      const latest = latestSession(list);
+      const latest = latestSession(list.filter(isJournalVisibleSession));
       if (!initialized.current && latest) {
         initialized.current = true;
         const k = dateKey(new Date(latest.endMs));
@@ -103,14 +109,16 @@ export function JournalCalendarScreen({ navigation }: Props) {
     }
   }, [load]);
 
+  const journalSessions = useMemo(() => sessions.filter(isJournalVisibleSession), [sessions]);
+
   const byDate = useMemo(() => {
     const map: Record<string, Session> = {};
-    for (const s of sessions) {
+    for (const s of journalSessions) {
       const k = dateKey(new Date(s.endMs));
-      if (!map[k] || s.endMs > map[k].endMs) map[k] = s;
+      map[k] = map[k] ? betterJournalSession(s, map[k]) : s;
     }
     return map;
-  }, [sessions]);
+  }, [journalSessions]);
 
   const calendarDays = useMemo(() => buildCalendarDays(visibleMonth), [visibleMonth]);
   const selectedSession = byDate[selectedKey] ?? null;
@@ -183,7 +191,8 @@ export function JournalCalendarScreen({ navigation }: Props) {
               const session = byDate[key] ?? null;
               const selectedDay = key === selectedKey;
               const inMonth = d.getMonth() === visibleMonth.getMonth();
-              const band = session ? scoreBand(session.score) : null;
+              const band = session && isCompletedSession(session) ? scoreBand(session.score) : null;
+              const pending = session ? isPendingAnalysisSession(session) : false;
               return (
                 <Pressable
                   key={key}
@@ -191,7 +200,7 @@ export function JournalCalendarScreen({ navigation }: Props) {
                     styles.dayCell,
                     !inMonth && styles.dayCellMuted,
                     selectedDay && styles.dayCellSelected,
-                    session && band ? { borderColor: band.color } : null,
+                    session ? { borderColor: band?.color ?? colors.textTertiary } : null,
                   ]}
                   onPress={() => selectDate(d)}
                   accessibilityRole="button"
@@ -199,7 +208,7 @@ export function JournalCalendarScreen({ navigation }: Props) {
                     weekday: 'long',
                     month: 'long',
                     day: 'numeric',
-                  })}${session ? ', sleep recorded' : ', no recording'}`}
+                  })}${session ? (pending ? ', analysis pending' : ', sleep recorded') : ', no recording'}`}
                 >
                   <Text
                     style={[
@@ -210,7 +219,9 @@ export function JournalCalendarScreen({ navigation }: Props) {
                   >
                     {d.getDate()}
                   </Text>
-                  {session ? <View style={[styles.recordingDot, band ? { backgroundColor: band.color } : null]} /> : null}
+                  {session ? (
+                    <View style={[styles.recordingDot, { backgroundColor: band?.color ?? colors.textTertiary }]} />
+                  ) : null}
                 </Pressable>
               );
             })}
@@ -227,7 +238,9 @@ export function JournalCalendarScreen({ navigation }: Props) {
             </>
           ) : selectedSession ? (
             <>
-              <Text style={styles.footerTitle}>Recorded</Text>
+              <Text style={styles.footerTitle}>
+                {isPendingAnalysisSession(selectedSession) ? 'Analyzing' : 'Recorded'}
+              </Text>
               <Secondary style={styles.footerText}>{selectedDateLabel(selectedKey)}</Secondary>
             </>
           ) : (
