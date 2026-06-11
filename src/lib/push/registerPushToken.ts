@@ -22,7 +22,7 @@ async function upsertToken(userId: string, token: string): Promise<void> {
     .from('user_push_tokens')
     .upsert(
       { user_id: userId, token, platform: Platform.OS, updated_at: new Date().toISOString() },
-      { onConflict: 'user_id,token' },
+      { onConflict: 'token' },
     );
 }
 
