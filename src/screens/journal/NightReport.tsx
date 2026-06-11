@@ -9,6 +9,7 @@ import Svg, { Circle, Path } from 'react-native-svg';
 import { Eyebrow, Secondary } from '../../theme/typography';
 import { colors, spacing, systemFontFamily } from '../../theme/tokens';
 import type { Session } from '../../lib/repos';
+import { isCompletedSession, isPendingAnalysisSession } from '../../lib/repos/sessionStatus';
 import { ScoreRing } from '../../components/ScoreRing';
 import { Hypnogram } from '../home/components/Hypnogram';
 import { StageBreakdown } from '../home/components/StageBreakdown';
@@ -28,6 +29,8 @@ function fmtTime(ms: number): string {
 }
 
 export function NightReport({ session }: { session: Session }) {
+  const completed = isCompletedSession(session);
+  const pending = isPendingAnalysisSession(session);
   return (
     <View style={styles.report}>
       {/* Score ring + in-bed / asleep */}
@@ -39,7 +42,7 @@ export function NightReport({ session }: { session: Session }) {
         </View>
       </View>
 
-      {session.score != null ? (
+      {completed ? (
         <>
           <View style={styles.section}>
             <Eyebrow>sleep stages</Eyebrow>
@@ -70,7 +73,9 @@ export function NightReport({ session }: { session: Session }) {
           Analysis failed. Contact support at contact@neurex.tech.
         </Secondary>
       ) : (
-        <Secondary style={styles.processing}>Analyzing this night…</Secondary>
+        <Secondary style={styles.processing}>
+          {pending ? 'Analyzing this night…' : 'This recording could not be analyzed.'}
+        </Secondary>
       )}
     </View>
   );
