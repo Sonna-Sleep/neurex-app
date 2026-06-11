@@ -6,7 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
-import { Eyebrow, Secondary, SerifDisplay } from '../../theme/typography';
+import { Secondary, SerifDisplay } from '../../theme/typography';
 import { colors, layout, spacing, systemFontFamily } from '../../theme/tokens';
 import { sessionRepo, type Session } from '../../lib/repos';
 import { useSession } from '../../state/session';
@@ -121,7 +121,6 @@ export function JournalScreen({ navigation }: Props) {
       >
         <View style={styles.top}>
           <View style={styles.titleBlock}>
-            <Eyebrow>journal</Eyebrow>
             <SerifDisplay>{selectedLabel}</SerifDisplay>
           </View>
           <View style={styles.weekNav}>
