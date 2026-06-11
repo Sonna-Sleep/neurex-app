@@ -1,18 +1,17 @@
-// Journal home — latest-night report first, with Calendar as a secondary browse
-// action. Recording/storage/staging behavior stays outside this UI layer.
+// Journal home — latest-night summary first. Detailed graphs stay one tap
+// deeper in SessionDetail so the landing screen stays calm.
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
-import { Eyebrow, Secondary, SerifDisplay } from '../../theme/typography';
+import { Eyebrow, Secondary } from '../../theme/typography';
 import { colors, layout, radii, spacing, systemFontFamily } from '../../theme/tokens';
 import { sessionRepo, type Session } from '../../lib/repos';
 import { useSession } from '../../state/session';
-import { scoreBand } from '../../components/ScoreRing';
+import { ScoreRing, scoreBand } from '../../components/ScoreRing';
 import { TabIcon } from '../../components/TabIcon';
-import { NightReport } from './NightReport';
 import { TAB_BAR_SPACE } from '../../navigation/FloatingTabBar';
 import type { JournalStackParamList } from '../../navigation/types';
 
@@ -30,20 +29,29 @@ function latestSession(sessions: Session[]): Session | null {
   return sessions.reduce((a, b) => (a.endMs > b.endMs ? a : b));
 }
 
-function statusFor(session: Session): { label: string; color: string; value: string } {
+function fmtDur(min: number | null): string {
+  if (min == null) return '—';
+  const h = Math.floor(min / 60);
+  const m = Math.floor(min % 60);
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
+
+function fmtSol(min: number | null): string {
+  if (min == null) return '—';
+  return `${Math.round(min)}m`;
+}
+
+function statusLabel(session: Session): { label: string; color: string } {
   if (session.score != null) {
     const band = scoreBand(session.score);
-    return { label: band.label, color: band.color, value: `${session.score}` };
+    return { label: band.label, color: band.color };
   }
-  if (session.status === 'failed') {
-    return { label: 'Needs review', color: colors.warning, value: '—' };
-  }
-  return { label: 'Analyzing', color: colors.textTertiary, value: '—' };
+  if (session.status === 'failed') return { label: 'Needs review', color: colors.warning };
+  return { label: 'Analyzing', color: colors.textTertiary };
 }
 
 export function JournalScreen({ navigation }: Props) {
   const authReady = useSession((s) => s.authReady);
-  const markNightViewed = useSession((s) => s.markNightViewed);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState(false);
@@ -81,12 +89,7 @@ export function JournalScreen({ navigation }: Props) {
   }, [load]);
 
   const latest = useMemo(() => latestSession(sessions), [sessions]);
-
-  useEffect(() => {
-    if (latest) markNightViewed(latest.id);
-  }, [latest, markNightViewed]);
-
-  const latestStatus = latest ? statusFor(latest) : null;
+  const status = latest ? statusLabel(latest) : null;
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -98,41 +101,51 @@ export function JournalScreen({ navigation }: Props) {
         }
       >
         <View style={styles.header}>
-          <View style={styles.titleBlock}>
-            <Eyebrow>journal</Eyebrow>
-            <SerifDisplay>Latest night</SerifDisplay>
-          </View>
+          <Eyebrow>journal</Eyebrow>
           <Pressable
             onPress={() => navigation.navigate('JournalCalendar')}
-            style={({ pressed }) => [styles.calendarButton, pressed && styles.pressed]}
+            style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}
             accessibilityRole="button"
             accessibilityLabel="Open calendar"
           >
-            <TabIcon name="journal" color={colors.textPrimary} size={18} />
-            <Text style={styles.calendarButtonText}>Calendar</Text>
+            <TabIcon name="journal" color={colors.textPrimary} size={20} />
           </Pressable>
         </View>
 
-        {latest && latestStatus ? (
-          <>
-            <View style={styles.latestIntro}>
-              <View style={styles.latestText}>
-                <Text style={styles.latestDate}>{dateLabel(latest.endMs)}</Text>
-                <Secondary style={styles.latestMeta}>
-                  {latest.score != null ? 'Sleep score' : 'Recording received'}
+        {latest && status ? (
+          <View style={styles.summary}>
+            <View style={styles.dateBlock}>
+              <Secondary style={styles.kicker}>Latest night</Secondary>
+              <Text style={styles.date}>{dateLabel(latest.endMs)}</Text>
+            </View>
+
+            <View style={styles.scoreRow}>
+              <ScoreRing score={latest.score} size={132} stroke={10} showLabel={false} />
+              <View style={styles.scoreText}>
+                <Text style={[styles.scoreLabel, { color: status.color }]}>{status.label}</Text>
+                <Secondary style={styles.scoreSubtext}>
+                  {latest.score != null ? 'Sleep score' : 'Report pending'}
                 </Secondary>
               </View>
-              <View style={[styles.statusBadge, { borderColor: latestStatus.color }]}>
-                <Text style={[styles.statusValue, { color: latestStatus.color }]}>{latestStatus.value}</Text>
-                <Text style={[styles.statusLabel, { color: latestStatus.color }]}>{latestStatus.label}</Text>
-              </View>
             </View>
-            <NightReport session={latest} />
-          </>
+
+            <View style={styles.metrics}>
+              <Metric label="Asleep" value={fmtDur(latest.tst)} />
+              <Metric label="In bed" value={fmtDur(latest.tib)} />
+              <Metric label="Fell asleep" value={fmtSol(latest.sol)} />
+            </View>
+
+            <Pressable
+              onPress={() => navigation.navigate('SessionDetail', { sessionId: latest.id })}
+              style={({ pressed }) => [styles.reportButton, pressed && styles.pressed]}
+              accessibilityRole="button"
+            >
+              <Text style={styles.reportButtonText}>View report</Text>
+            </Pressable>
+          </View>
         ) : loadError && sessions.length === 0 ? (
           <View style={styles.empty}>
-            <Text style={styles.emptyTitle}>Couldn’t load your sleep history.</Text>
-            <Secondary style={styles.emptyText}>Check your connection, then try again.</Secondary>
+            <Text style={styles.emptyTitle}>Couldn’t load journal.</Text>
             <Pressable onPress={onRefresh} hitSlop={8}>
               <Text style={styles.retryText}>Retry</Text>
             </Pressable>
@@ -140,13 +153,20 @@ export function JournalScreen({ navigation }: Props) {
         ) : (
           <View style={styles.empty}>
             <Text style={styles.emptyTitle}>{loaded ? 'No recordings yet.' : ''}</Text>
-            <Secondary style={styles.emptyText}>
-              {loaded ? 'Start a recording from Sleep, then your night will appear here.' : ''}
-            </Secondary>
+            <Secondary style={styles.emptyText}>{loaded ? 'Record from Sleep to fill your journal.' : ''}</Secondary>
           </View>
         )}
       </ScrollView>
     </SafeAreaView>
+  );
+}
+
+function Metric({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={styles.metric}>
+      <Text style={styles.metricValue}>{value}</Text>
+      <Secondary style={styles.metricLabel}>{label}</Secondary>
+    </View>
   );
 }
 
@@ -159,91 +179,110 @@ const styles = StyleSheet.create({
     paddingHorizontal: layout.screenPadding,
     paddingTop: spacing.md,
     paddingBottom: TAB_BAR_SPACE,
-    gap: spacing.lg,
+    gap: spacing.xl,
   },
   header: {
+    minHeight: 48,
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     justifyContent: 'space-between',
     gap: spacing.md,
   },
-  titleBlock: {
-    flex: 1,
-  },
-  calendarButton: {
-    minHeight: 42,
-    flexDirection: 'row',
+  iconButton: {
+    width: 44,
+    height: 44,
     alignItems: 'center',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.md,
-    borderRadius: radii.button,
+    justifyContent: 'center',
+    borderRadius: 22,
     borderWidth: 1,
     borderColor: colors.borderDivider,
     backgroundColor: colors.bgElevated,
-  },
-  calendarButtonText: {
-    fontFamily: systemFontFamily,
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.textPrimary,
   },
   pressed: {
     opacity: 0.85,
     transform: [{ scale: 0.98 }],
   },
-  latestIntro: {
+  summary: {
+    gap: spacing.xl,
+  },
+  dateBlock: {
+    gap: spacing.sm,
+    paddingTop: spacing.lg,
+  },
+  kicker: {
+    color: colors.textTertiary,
+  },
+  date: {
+    fontFamily: systemFontFamily,
+    fontSize: 38,
+    lineHeight: 44,
+    fontWeight: '600',
+    color: colors.textPrimary,
+  },
+  scoreRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.md,
+    gap: spacing.xl,
     paddingVertical: spacing.md,
+  },
+  scoreText: {
+    flex: 1,
+    gap: spacing.xs,
+  },
+  scoreLabel: {
+    fontFamily: systemFontFamily,
+    fontSize: 28,
+    lineHeight: 34,
+    fontWeight: '600',
+  },
+  scoreSubtext: {
+    color: colors.textSecondary,
+  },
+  metrics: {
+    flexDirection: 'row',
     borderTopWidth: 1,
     borderBottomWidth: 1,
     borderColor: colors.borderSubtle,
   },
-  latestText: {
+  metric: {
     flex: 1,
+    minHeight: 84,
+    justifyContent: 'center',
     gap: spacing.xs,
   },
-  latestDate: {
+  metricValue: {
     fontFamily: systemFontFamily,
     fontSize: 22,
+    lineHeight: 26,
     fontWeight: '600',
     color: colors.textPrimary,
   },
-  latestMeta: {
+  metricLabel: {
     color: colors.textSecondary,
   },
-  statusBadge: {
-    minWidth: 84,
+  reportButton: {
+    height: 56,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.sm,
     borderRadius: radii.button,
-    borderWidth: 1,
-    backgroundColor: colors.bgSurface,
+    backgroundColor: colors.ctaBg,
   },
-  statusValue: {
+  reportButtonText: {
     fontFamily: systemFontFamily,
-    fontSize: 24,
-    lineHeight: 28,
+    fontSize: 16,
+    lineHeight: 20,
     fontWeight: '600',
-  },
-  statusLabel: {
-    fontFamily: systemFontFamily,
-    fontSize: 11,
-    lineHeight: 14,
-    fontWeight: '600',
+    color: colors.ctaText,
   },
   empty: {
-    minHeight: 260,
+    minHeight: 320,
     justifyContent: 'center',
     gap: spacing.sm,
   },
   emptyTitle: {
     fontFamily: systemFontFamily,
-    fontSize: 22,
+    fontSize: 28,
+    lineHeight: 34,
     fontWeight: '600',
     color: colors.textPrimary,
   },
@@ -255,6 +294,5 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     color: colors.textPrimary,
-    paddingTop: spacing.sm,
   },
 });
