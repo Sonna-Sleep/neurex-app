@@ -29,7 +29,8 @@ const EDGE_CLEARANCE_PX = 56;
 export function Hypnogram({ epochs, startMs, endMs }: Props) {
   const [width, setWidth] = useState(0);
   const drawH = HEIGHT - PADDING_TOP - PADDING_BOTTOM;
-  const totalMs = endMs - startMs || 1;
+  const chartEndMs = useMemo(() => stagedEndMs(epochs, startMs, endMs), [epochs, startMs, endMs]);
+  const totalMs = Math.max(chartEndMs - startMs, 1);
 
   // Chart plots in [LABEL_W, width]; the left gutter holds lane labels.
   const chartLeft = LABEL_W;
@@ -48,7 +49,7 @@ export function Hypnogram({ epochs, startMs, endMs }: Props) {
 
   // Collapse epochs into contiguous runs of the same stage.
   const runs = useMemo(() => collapseRuns(epochs), [epochs]);
-  const ticks = useMemo(() => axisTicks(startMs, endMs), [startMs, endMs]);
+  const ticks = useMemo(() => axisTicks(startMs, chartEndMs), [startMs, chartEndMs]);
 
   return (
     <View style={styles.container}>
@@ -112,7 +113,7 @@ export function Hypnogram({ epochs, startMs, endMs }: Props) {
             );
           })}
 
-          {/* Bottom time axis: bedtime + waketime at the edges, hours between */}
+          {/* Bottom time axis: staged EEG coverage at the edges, hours between. */}
           <SvgText
             x={chartLeft}
             y={axisY}
@@ -131,7 +132,7 @@ export function Hypnogram({ epochs, startMs, endMs }: Props) {
             textAnchor="end"
             fontWeight="600"
           >
-            {fmt(endMs)}
+            {fmt(chartEndMs)}
           </SvgText>
           {ticks
             .map((tick) => ({ tick, x: xAt(tick.ms) }))
@@ -175,6 +176,15 @@ function collapseRuns(epochs: Epoch[]) {
     }
   }
   return runs;
+}
+
+function stagedEndMs(epochs: Epoch[], startMs: number, fallbackEndMs: number) {
+  if (!epochs.length) return fallbackEndMs;
+  const lastOffsetMs = epochs.reduce(
+    (max, e) => Math.max(max, e.startMs + e.durationSec * 1000),
+    0,
+  );
+  return lastOffsetMs > 0 ? startMs + lastOffsetMs : fallbackEndMs;
 }
 
 function axisTicks(startMs: number, endMs: number) {
