@@ -1,6 +1,6 @@
 import {
   BYTES_PER_FRAME,
-  CH_FPZ,
+  CH_FP1,
   EEG_UV_PER_LSB,
   PACKET_END_HI,
   PACKET_END_LO,
@@ -53,7 +53,7 @@ export function parsePacket(bytes: Uint8Array, generation: number): ParseOutcome
     const ms = (baseMs + s) >>> 0;
     samples[s] = {
       ms,
-      fpz_uV: i24be(bytes, o + CH_FPZ * 3) * EEG_UV_PER_LSB,
+      fp1_uV: i24be(bytes, o + CH_FP1 * 3) * EEG_UV_PER_LSB,
     };
   }
   return { ok: true, packet: { generation, seq, baseMs, samples } };

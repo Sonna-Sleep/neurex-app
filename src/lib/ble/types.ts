@@ -2,8 +2,8 @@
 //
 // Live-stream model: scan → connect → startStream(sessionId, callbacks).
 // The firmware notifies 226-byte packets at ~31.25 Hz (8 samples/packet @ 250
-// Hz). We append the decoded Fpz samples to a per-session EEG.BIN file in the
-// canonical on-disk format the existing analysis pipelines expect.
+// Hz). We append decoded FP1-active / FP2-reference samples to a per-session
+// EEG.BIN file in the canonical on-disk format the analysis pipelines expect.
 
 export type FoundDevice = {
   /** Platform-stable identifier — UUID on iOS, MAC address on Android. */
@@ -17,7 +17,7 @@ export type FoundDevice = {
 /** One decoded sample (250 Hz). All values in true µV. */
 export type EegSample = {
   ms: number;
-  fpz_uV: number;
+  fp1_uV: number;
 };
 
 /** One decoded 226-byte BLE notification, all 8 samples included. */

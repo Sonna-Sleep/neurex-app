@@ -87,6 +87,6 @@ export const PKT_IDX_DATA = 10;
 export const BYTES_PER_FRAME = 27;
 export const PKT_IDX_CHECKSUM = 223; // 7 (header) + 8 × 27 (samples)
 
-// Channel layout (beta hardware wiring): export Fpz from CH1 for the current
-// one-device EEG-only beta.
-export const CH_FPZ = 0;
+// Channel layout (beta hardware wiring): CH1 is FP1 active, referenced to FP2.
+// FPz is bias/DRL and is not exported as an EEG channel.
+export const CH_FP1 = 0;

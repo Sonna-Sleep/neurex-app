@@ -4,7 +4,7 @@
 //   1. scan(): scoped by NEUREX_SERVICE_UUID (Apple-compliant for background BLE).
 //   2. connect(deviceId, { autoConnect: true }): MTU bump to fit a 226 B packet.
 //   3. startStream(sessionId, cb): subscribe to the notify characteristic,
-//      decode each 226-byte packet, append Fpz samples to EEG.BIN under
+//      decode each 226-byte packet, append FP1 samples to EEG.BIN under
 //      FileSystem.documentDirectory/sessions/<sessionId>/.
 //
 // On-disk format is byte-identical to tools/capture/ble_stream_recv.py in the
@@ -155,7 +155,7 @@ class ContigTracker {
 
 // ── on-disk encoder (matches Python struct '<If') ─────────────────────────
 
-const EEG_RECORD_BYTES = 8; // uint32 ms + float32 fpz_uV
+const EEG_RECORD_BYTES = 8; // uint32 ms + float32 fp1_uV
 
 function encodePacketEeg(packet: ParsedPacket): Uint8Array {
   const buf = new ArrayBuffer(SAMPLES_PER_PACKET * EEG_RECORD_BYTES);
@@ -163,7 +163,7 @@ function encodePacketEeg(packet: ParsedPacket): Uint8Array {
   for (let i = 0; i < SAMPLES_PER_PACKET; i++) {
     const s = packet.samples[i];
     view.setUint32(i * EEG_RECORD_BYTES + 0, s.ms, true);
-    view.setFloat32(i * EEG_RECORD_BYTES + 4, s.fpz_uV, true);
+    view.setFloat32(i * EEG_RECORD_BYTES + 4, s.fp1_uV, true);
   }
   return new Uint8Array(buf);
 }

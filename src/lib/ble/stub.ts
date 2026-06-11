@@ -39,7 +39,7 @@ function encodePacketEeg(packet: ParsedPacket): Uint8Array {
   for (let i = 0; i < SAMPLES_PER_PACKET; i++) {
     const s = packet.samples[i];
     view.setUint32(i * EEG_RECORD_BYTES + 0, s.ms, true);
-    view.setFloat32(i * EEG_RECORD_BYTES + 4, s.fpz_uV, true);
+    view.setFloat32(i * EEG_RECORD_BYTES + 4, s.fp1_uV, true);
   }
   return new Uint8Array(buf);
 }
@@ -103,7 +103,7 @@ export const stubBleClient: BleClient = {
             const t = ms / 1000;
             samples.push({
               ms,
-              fpz_uV: 30 * Math.sin(2 * Math.PI * 10 * t),
+              fp1_uV: 30 * Math.sin(2 * Math.PI * 10 * t),
             });
           }
           const pkt: ParsedPacket = {
