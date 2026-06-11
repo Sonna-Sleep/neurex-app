@@ -1,103 +1,83 @@
 # App Store Review Notes — Neurex
 
-Use this when filling out the **App Review Information** form in App Store
-Connect. Keep it current as features change.
+Use this when filling out the App Review Information form in App Store Connect.
+Keep it current as features change.
 
-## Background Bluetooth (Core Bluetooth central mode)
+## Background Bluetooth
 
-Paste this into the **Notes** field on the App Review submission:
+Paste this into the Notes field on the App Review submission:
 
-```
+```text
 Bluetooth background usage:
 
-The Neurex app uses Core Bluetooth in central mode to sync sleep
-recordings from a paired Neurex EEG headband (our companion hardware
-device). When the user takes the headband off in the morning, the
-headband advertises that recorded data is ready for transfer. The app
-uses standard Core Bluetooth state preservation/restoration
-(CBCentralManagerOptionRestoreIdentifierKey) so iOS can wake the app
-briefly, pull the recording over a custom GATT service, upload it to our
-cloud backend, and surface a local notification to the user.
+Neurex is a companion app for the Neurex EEG sleep mask. During a sleep session,
+the app connects to the paired mask over Core Bluetooth central mode and streams
+EEG data while the user sleeps. The app writes the recording locally on the
+phone, uploads it to our cloud backend when the session stops or is recovered,
+and notifies the user when the staged sleep report is ready.
 
 Implementation details for review:
-- restoreStateIdentifier is set on the central manager (constant
-  "neurex-ble-bg")
-- All scans specify our proprietary Neurex GATT service UUID — we never
-  scan for arbitrary peripherals
-- File transfers are wrapped in beginBackgroundTask so we respect iOS
-  background time limits
-- Bluetooth permission strings (NSBluetoothAlwaysUsageDescription and
-  NSBluetoothPeripheralUsageDescription) are user-facing and explain the
-  data flow
-- If Bluetooth is off or the permission is denied, the app surfaces a
-  dedicated screen with a link to Settings rather than failing silently
+- restoreStateIdentifier is set on the central manager ("neurex-ble-bg")
+- Scans specify the proprietary Neurex GATT service UUID
+- The app declares bluetooth-central so iOS can preserve/restore the BLE central
+  connection during an overnight recording
+- The app declares fetch for periodic refresh/recovery of session data
+- Bluetooth permission strings explain that the app communicates with the sleep
+  mask and syncs sleep data
+- If Bluetooth is off or permission is denied, the app surfaces a dedicated
+  screen with a link to Settings
 
 Test account credentials:
 [FILL IN: test email + magic link or test password]
 
-Reproducing background sync (review tip):
-1. Sign in with the test account
-2. Complete the pairing flow with the provided test headband
-3. Close (but do not force-quit) the app
-4. Press the headband button to start a brief test recording (≈60 s)
-5. After the recording ends, the headband begins advertising; iOS
-   relaunches the Neurex app into the background, the app pulls the
-   recording over BLE, uploads it, and triggers a local notification
-   "Your night is ready"
+Review path:
+1. Sign in with the test account.
+2. If review hardware is available, pair the Neurex sleep mask and start a
+   session from Home. Let it run at least 5 minutes, then stop it.
+3. The app uploads the EEG recording, the backend analyzes it, and the staged
+   night appears in Journal.
+4. If hardware is unavailable, use the demo account above to view a preloaded
+   completed night in Journal. Account deletion is available at
+   Account -> delete account.
 
-If review hardware is unavailable, please contact us
-(contact@neurex.tech) — we can ship a test headband for review.
+If review hardware is unavailable, please contact contact@neurex.tech and we can
+coordinate hardware access.
 ```
 
-## Permission strings (current copy in app.json)
+## Permission Strings
+
+Current copy in `app.json`:
 
 | Key | Copy |
 |---|---|
-| `NSBluetoothAlwaysUsageDescription` | "Neurex uses Bluetooth to sync your sleep data from the headband." |
-| `NSBluetoothPeripheralUsageDescription` | "Neurex uses Bluetooth to communicate with your headband." |
+| `NSBluetoothAlwaysUsageDescription` | "Neurex uses Bluetooth to sync your sleep data from the sleep mask." |
+| `NSBluetoothPeripheralUsageDescription` | "Neurex uses Bluetooth to communicate with your sleep mask." |
+| `NSPhotoLibraryUsageDescription` | "Neurex uses your photos so you can set a profile picture." |
 
-Both are user-facing in the permission prompt — keep them clear and
-specific to the actual usage. Apple rejects vague strings like "for
-features" or "for the app to work."
+## Background Modes
 
-## Background modes declared (current `app.json`)
+Current `app.json`:
 
 ```json
-"UIBackgroundModes": ["bluetooth-central", "fetch", "processing"]
+"UIBackgroundModes": ["bluetooth-central", "fetch"]
 ```
 
-- `bluetooth-central` — required for state preservation/restoration
-- `fetch` — used for periodic refresh of session data from Supabase
-- `processing` — reserved for future on-device post-processing
+- `bluetooth-central` — Core Bluetooth central state preservation/restoration
+- `fetch` — periodic refresh/recovery of session data from Supabase
 
-## Submission screenshot checklist
+## Submission Screenshot Checklist
 
-Apple wants to see the BLE permission prompt in your screenshots if
-that's a primary user flow. For Neurex:
+- [ ] Onboarding/pairing screen for the sleep mask
+- [ ] iOS Bluetooth permission prompt after tapping Pair
+- [ ] Home screen
+- [ ] Journal with a processed night
+- [ ] Account screen with delete-account entry point
 
-- [ ] Onboarding "Pair your headband" screen
-- [ ] iOS Bluetooth permission prompt (after tapping "Pair")
-- [ ] Home screen showing a processed night
-- [ ] "Bluetooth needed" screen (the fallback when permission is denied)
+## Rejection-Trigger Checklist
 
-## Other review-relevant features
-
-When you add these, document them in this file BEFORE submitting:
-
-- [ ] Push notifications (NSNotifications usage, server-side trigger)
-- [ ] HealthKit integration (if you ship Apple Health export)
-- [ ] In-app purchases (RevenueCat / Pro tier)
-- [ ] Account deletion endpoint (Apple now requires this in-app)
-
-## Rejection-trigger checklist (review before each submission)
-
-- [ ] Every entitlement / background mode used is justified in the
-      Notes field above
-- [ ] Permission strings are specific (not generic)
-- [ ] Silent BLE failures are impossible — every error path leads to a
-      user-visible screen
-- [ ] No background scans without service UUIDs
-- [ ] App still works (degraded) when Bluetooth is off
-- [ ] Test account works (Apple actually logs in)
-- [ ] Reproduction steps in the Notes field are actionable in <5
-      minutes
+- [ ] Every entitlement/background mode is justified in the Notes field
+- [ ] Permission strings are specific to the sleep mask and profile photo usage
+- [ ] BLE error paths show a user-visible message or fallback screen
+- [ ] Scans use the Neurex service UUID
+- [ ] App works in demo mode for review when hardware is not available
+- [ ] Test account works and can reach Account -> delete account

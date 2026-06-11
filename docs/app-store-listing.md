@@ -35,7 +35,7 @@ WHAT YOU GET
 • A full-night hypnogram — see exactly when you were in light, deep, and REM sleep
 • Sleep stages, time-in-bed, total sleep time, and sleep efficiency
 • A nightly sleep score to spot trends across nights
-• A simple history of your nights, kept in sync to your account
+• A simple journal of your nights, kept in sync to your account
 
 PRIVACY
 Your account is an email address; your recordings and results are stored securely in your account. We don't sell your data and we don't track you across other apps. You can delete your account and all of your data from inside the app at any time (Account → delete account).
@@ -73,12 +73,12 @@ Answer the questionnaire as below. These **must match** the privacy manifest in 
 ## App Review information (the part that prevents a "can't test it" rejection)
 The app is a companion to a **hardware EEG sleep mask** the reviewer won't have. Without help they can't pair a device or generate a recording, so:
 
-1. **Demo account:** create a real account and pre-load it with at least one completed night (so History shows a hypnogram + score). Put its email/password in the "Sign-In required" demo fields.
+1. **Demo account:** create a real account and pre-load it with at least one completed night (so Journal shows a hypnogram + score). Put its email/password in the "Sign-In required" demo fields.
 2. **Notes for reviewer (suggested):**
    ```
    Neurex is a companion app for the Neurex EEG sleep mask (hardware). Recording
    requires the physical sleep mask, which reviewers won't have. Please sign in with the
-   demo account above to view a previously recorded night: open History to see the
+   demo account above to view a previously recorded night: open Journal to see the
    hypnogram, sleep stages, and sleep score. Account deletion is available at
    Account → delete account (works without the hardware).
    ```

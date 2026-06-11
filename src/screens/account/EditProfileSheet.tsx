@@ -32,7 +32,6 @@ export function EditProfileSheet({ visible, onClose }: { visible: boolean; onClo
   useEffect(() => {
     if (!visible) return;
     // Intentional modal-open draft reset.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setFirstName(user?.firstName ?? '');
     setDob(user?.dob ?? null);
     setSex((user?.sex as Sex) ?? null);

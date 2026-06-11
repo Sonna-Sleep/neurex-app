@@ -82,7 +82,7 @@ function Card() {
 }
 
 /**
- * History list row placeholder — same shape as a HistoryScreen Row
+ * Journal list row placeholder — same shape as a Journal row
  * (date + duration on left, score on right, stage bar below).
  */
 function Row() {

@@ -2,9 +2,8 @@
 // active, otherwise renders a "Start session" CTA when a device is paired.
 // Owns the start/stop orchestration via streamController.
 //
-// 2026-06-01: LOCAL-ONLY recording for the Android full-night test. On stop
-// the raw EEG.BIN stays on the phone; the user gets a "share recording" button
-// to pull the file off in the morning (Drive / email / USB).
+// On stop, the raw EEG.BIN is uploaded to Supabase Storage for staging. In dev,
+// the local file can still be shared manually for diagnostics.
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
@@ -21,7 +20,6 @@ import { EEG_SAMPLE_RATE_HZ } from '../../../lib/ble/constants';
 import { transmitSession, subscribeToResult } from '../../../lib/cloud/cloudSync';
 import { handleNightReady } from '../../../lib/nights/onNightReady';
 import type { Session } from '../../../lib/repos/types';
-import { ageFromDob } from '../../../lib/profile';
 import { PreBedCheck } from './PreBedCheck';
 
 // Holds the just-finished local recording so the UI can offer a share button.
@@ -33,9 +31,8 @@ type SavedRecording = {
   startedAtMs: number;
 };
 
-// Don't auto-upload an accidental start→stop. Real nights are hours; below this
-// the user gets the manual button instead.
-const MIN_AUTOSYNC_SEC = 120;
+// Backend staging needs at least ten 30-second epochs.
+const MIN_STAGING_SEC = 5 * 60;
 
 export function RecordingCard() {
   const streaming = useSession((s) => s.streaming);
@@ -43,7 +40,6 @@ export function RecordingCard() {
   const pairedSerial = useSession((s) => s.pairedSerial);
   const setPaired = useSession((s) => s.setPaired);
   const deviceBattery = useSession((s) => s.deviceBattery);
-  const userDob = useSession((s) => s.user?.dob);
 
   const [busy, setBusy] = useState<'idle' | 'starting' | 'stopping'>('idle');
   // True while the pre-bed signal check is on screen (between tapping
@@ -117,8 +113,8 @@ export function RecordingCard() {
       const result = await stopSession();
       if (!result) return;
       // The raw EEG.BIN is already written to the phone
-      // (documentDirectory/sessions/<id>/) and persists across app restarts.
-      // Surface a share button so the file can be pulled off in the morning.
+      // (documentDirectory/sessions/<id>/) and persists across app restarts until
+      // transmitSession confirms cloud upload + finalize.
       const elapsedSec =
         streaming != null
           ? Math.max(0, Math.floor((Date.now() - streaming.startedAtMs) / 1000))
@@ -160,8 +156,8 @@ export function RecordingCard() {
   // deleting), so nothing is lost.
   const onSyncToCloud = useCallback(async () => {
     if (!saved || sync === 'uploading' || sync === 'analyzing' || sync === 'done') return;
-    if (ageFromDob(userDob) === null) {
-      setError('Add your birth date in Account before syncing to cloud. The recording is still saved on this phone.');
+    if (saved.durationSec < MIN_STAGING_SEC) {
+      setError('Record at least 5 minutes before syncing. This short recording is still saved on this phone.');
       return;
     }
     setError(null);
@@ -189,25 +185,27 @@ export function RecordingCard() {
           // message — the scheduled reconcile + push still deliver the result.
           timeoutMs: 3 * 60_000,
           onSlow: () => setSync((cur) => (cur === 'analyzing' ? 'slow' : cur)),
+          onFailed: (message) => {
+            setSync('error');
+            setError(message ?? 'Analysis failed. The raw recording is safely stored in cloud.');
+          },
         },
       );
     } catch (e) {
       setSync('error');
       setError((e as Error).message);
     }
-  }, [saved, sync, userDob]);
+  }, [saved, sync]);
 
   // Auto-sync the moment a night is saved — no manual tap. Skipped (manual
-  // button shown) for very short recordings or when no birth date is set, since
-  // staging needs it. onSyncToCloud guards re-entry, so this fires once.
-  const hasDob = ageFromDob(userDob) !== null;
+  // button shown) for very short recordings because the backend needs at least
+  // five minutes of EEG. onSyncToCloud guards re-entry, so this fires once.
   useEffect(() => {
-    if (saved && sync === 'idle' && saved.durationSec >= MIN_AUTOSYNC_SEC && hasDob) {
+    if (saved && sync === 'idle' && saved.durationSec >= MIN_STAGING_SEC) {
       // Intentional transition side-effect: once a recording becomes saved, start upload.
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       onSyncToCloud();
     }
-  }, [saved, sync, hasDob, onSyncToCloud]);
+  }, [saved, sync, onSyncToCloud]);
 
   // ── Active recording ─────────────────────────────────────────────────────
   if (streaming) {
@@ -276,6 +274,7 @@ export function RecordingCard() {
     const mins = Math.floor(saved.durationSec / 60);
     const secs = saved.durationSec % 60;
     const syncing = sync === 'uploading' || sync === 'analyzing';
+    const canStage = saved.durationSec >= MIN_STAGING_SEC;
     const eyebrow = syncing
       ? 'recording · syncing'
       : sync === 'slow'
@@ -301,11 +300,11 @@ export function RecordingCard() {
       ? 'This usually takes under a minute.'
       : sync === 'slow'
         ? 'This one is taking a little longer — we’ll notify you when it’s ready. You can close the app.'
-        : sync === 'done'
-          ? 'Saved to your journal.'
-          : !hasDob
-            ? 'Add your birth date in Account to analyze this night.'
-            : `Your recording is saved${saved.durationSec > 0 ? ` · ${mins}m ${secs}s` : ''}.`;
+      : sync === 'done'
+        ? 'Saved to your journal.'
+        : canStage
+          ? `Your recording is saved${saved.durationSec > 0 ? ` · ${mins}m ${secs}s` : ''}.`
+          : `Your recording is saved · ${mins}m ${secs}s. Record at least 5 minutes to analyze.`;
     return (
       <View style={styles.wrap}>
         <Eyebrow>{eyebrow}</Eyebrow>
@@ -324,9 +323,9 @@ export function RecordingCard() {
 
           {syncing ? (
             <ActivityIndicator color={colors.textSecondary} />
-          ) : sync === 'idle' ? (
+          ) : sync === 'idle' && canStage ? (
             <Button label="Sync to cloud" onPress={onSyncToCloud} />
-          ) : sync === 'error' ? (
+          ) : sync === 'error' && canStage ? (
             <Button label="Retry cloud sync" onPress={onSyncToCloud} />
           ) : null}
 

@@ -36,7 +36,6 @@ export function SupportSheet({ visible, onClose }: { visible: boolean; onClose: 
   useEffect(() => {
     if (!visible) return;
     // Intentional modal-open draft reset.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setEmail(accountEmail ?? '');
     setMessage('');
     setError(null);

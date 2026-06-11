@@ -17,17 +17,10 @@ module.exports = defineConfig([
     ],
   },
   {
-    // Tune the defaults to be useful rather than noisy. The newer
-    // eslint-plugin-react-hooks ships React-Compiler *readiness* advisories
-    // (refs/purity/set-state-in-effect) that flag many legitimate patterns —
-    // keep them as warnings, not blocking errors. Apostrophes in display copy
-    // are fine. The classic correctness rules (rules-of-hooks, exhaustive-deps)
-    // stay at their config-expo defaults.
+    // Tune the defaults to be useful rather than noisy. Apostrophes in display
+    // copy are fine; keep the SDK-compatible Expo hook rules at their defaults.
     rules: {
       'react/no-unescaped-entities': 'off',
-      'react-hooks/set-state-in-effect': 'warn',
-      'react-hooks/refs': 'warn',
-      'react-hooks/purity': 'warn',
     },
   },
 ]);

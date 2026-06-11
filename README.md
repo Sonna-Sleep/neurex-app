@@ -19,7 +19,7 @@ Built with React Native + Expo (SDK 54, new architecture). iOS and Android.
 - **Sleep staging** — a serverless backend ([neurex-backend](https://github.com/aleksaspetro/neurex-backend))
   runs YASA on the uploaded EEG, writes a session row back to Supabase, and the
   app renders the hypnogram, stage breakdown, and score.
-- **History** — past nights with per-device tags and a detail view per session.
+- **Journal** — past nights with a detail view per session.
 - **Email auth** — passwordless magic-link login via Supabase Auth.
 
 ## Tech stack
@@ -39,13 +39,12 @@ Built with React Native + Expo (SDK 54, new architecture). iOS and Android.
 
 ```
 src/
-  screens/        onboarding, home, history, account
+  screens/        onboarding, home, journal, account
   lib/
     ble/          BLE connect + single-device streaming
     cloud/        segment upload + resume to Supabase Storage
     auth/         Supabase magic-link auth
     repos/        Supabase data access
-    upload/        recording → cloud orchestration
     notifications/ local notifications
   state/          Zustand stores
   theme/          design tokens (colors, layout)
@@ -53,8 +52,8 @@ src/
   navigation/     navigators
 modules/
   neurex-foreground-service/   native Android module (keep recording alive)
-scripts/          smoke tests (auth, BLE backoff)
-docs/             design specs + implementation plans
+scripts/          smoke tests (BLE, recovery, profile, support)
+docs/             Supabase, app review, listing, and legal notes
 ```
 
 ## Prerequisites
@@ -110,8 +109,15 @@ Install with `adb install -r <apk>` (in-place `-r` preserves app data).
 | Command | Purpose |
 |---|---|
 | `npm run typecheck` | `tsc --noEmit` |
+| `npm run lint` | ESLint |
 | `npm run smoke:auth` | Auth flow smoke test |
+| `npm run smoke:ble-packet` | BLE packet decoder smoke test |
 | `npm run smoke:backoff` | BLE reconnect/backoff smoke test |
+| `npm run smoke:connect-timeout` | BLE connection timeout smoke test |
+| `npm run smoke:recovery` | Local recording recovery smoke test |
+| `npm run smoke:account-deletion` | Account deletion API smoke test |
+| `npm run smoke:profile` | Profile state smoke test |
+| `npm run smoke:support` | Support message smoke test |
 
 ## How a night flows
 
@@ -120,7 +126,7 @@ Install with `adb install -r <apk>` (in-place `-r` preserves app data).
 2. In the morning, the recording uploads to Supabase Storage as resumable
    segments.
 3. The Modal backend stages the EEG with YASA and writes a `sessions` row.
-4. The app reads that row and renders the hypnogram + score in History.
+4. The app reads that row and renders the hypnogram + score in Journal.
 
 ## License
 

@@ -278,6 +278,8 @@ export type SubscribeResultOpts = {
    * live, so a late 'ready' still delivers via `onReady`. */
   timeoutMs?: number;
   onSlow?: () => void;
+  /** Called when the backend marks staging as failed. */
+  onFailed?: (message?: string) => void;
 };
 
 export function subscribeToResult(
@@ -299,8 +301,18 @@ export function subscribeToResult(
   // Only fire for a row the backend has actually staged. byId returns the row at
   // ANY status (including the just-inserted 'uploaded'), so without this guard
   // the immediate read below would flip the UI to "done" before YASA ever runs.
+  const fail = (message?: string) => {
+    if (!done) {
+      done = true;
+      clearSlow();
+      opts?.onFailed?.(message);
+    }
+  };
   const finish = (s: Session | null) => {
-    if (s && s.status === 'ready' && !done) {
+    if (!s || done) return;
+    if (s.status === 'failed') {
+      fail();
+    } else if (s.status === 'ready') {
       done = true;
       clearSlow();
       onReady(s);
@@ -316,9 +328,11 @@ export function subscribeToResult(
       'postgres_changes',
       { event: 'UPDATE', schema: 'public', table: 'sessions', filter: `id=eq.${sessionId}` },
       (payload) => {
-        const row = payload.new as { status?: string } | null;
+        const row = payload.new as { status?: string; error?: string | null } | null;
         if (row?.status === 'ready') {
           supabaseSessionRepo.byId(sessionId).then(finish).catch(() => {});
+        } else if (row?.status === 'failed') {
+          fail(row.error ?? undefined);
         }
       },
     )

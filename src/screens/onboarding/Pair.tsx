@@ -109,7 +109,6 @@ export function Pair({ navigation }: Props) {
 
   useEffect(() => {
     // Intentional mount side-effect: start BLE discovery when this screen opens.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     void beginScan();
     return clearScan;
     // eslint-disable-next-line react-hooks/exhaustive-deps

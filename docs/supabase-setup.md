@@ -1,64 +1,59 @@
 # Supabase Setup
 
-The Neurex app uses Supabase for auth, Postgres, storage, and (later) realtime.
-Project lives in EU region (Frankfurt or Dublin) for GDPR.
+The Neurex app uses Supabase for Auth, Postgres, Storage, and Realtime session
+updates. The live beta project is configured through EAS/app env vars and the
+database schema is owned by the `neurex-backend` migrations.
 
-## Local dev
+## Live Project
 
-1. Copy `.env.example` to `.env`
-2. Get URL + anon key from Supabase dashboard → Project Settings → API
-3. Paste into `.env`
-4. Run smoke test:
-   ```
-   npm run smoke:auth -- your@email.com
-   ```
-   Expected: magic-link email arrives within ~10s.
+- Supabase URL: `https://uunerbrscbswbzyxtdpg.supabase.co`
+- Region: US East (`us-east-1`)
+- Storage bucket: `recordings`
+- Backend source of truth: `/Users/goda/neurex-backend/supabase/migrations`
 
-## Dashboard settings (must be configured ONCE per project)
+Do not copy one-off SQL from this app repo into production. Add schema changes
+as backend migrations, apply them to Supabase, then deploy the Modal backend.
 
-- Authentication → Providers → Email: enabled, with email confirmations ON
-- Authentication → URL Configuration:
+## App Environment
+
+Set these in `.env` for local development and in EAS for release builds:
+
+| Variable | What it is |
+|---|---|
+| `EXPO_PUBLIC_SUPABASE_URL` | Supabase project URL |
+| `EXPO_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon/public key |
+| `EXPO_PUBLIC_MODAL_ENDPOINT_URL` | Deployed `neurex-backend` endpoint |
+| `EXPO_PUBLIC_DEV_BYPASS` | Optional. `1` shows a dev-only skip-login button |
+
+## Current Data Flow
+
+1. The phone streams one EEG channel from the sleep mask and writes
+   `documentDirectory/sessions/<sessionId>/EEG.BIN`.
+2. On stop or crash recovery, the app uploads the EEG file to
+   `{user_id}/{readable-label}/segments/eeg/segNNNN.bin` in the `recordings`
+   bucket.
+3. The app inserts a `sessions` row with `status='uploaded'`.
+4. The backend webhook/reconcile job assembles the segments into `eeg.bin`, runs
+   staging, and updates the row to `status='ready'` or `status='failed'`.
+5. The app listens to the session row over Realtime and renders ready nights in
+   Journal.
+
+The app uploads one EEG stream.
+
+## Dashboard Settings
+
+- Authentication -> Providers -> Email: enabled, email confirmations on.
+- Authentication -> URL Configuration:
   - Site URL: `neurex://auth-callback`
   - Additional Redirect URLs:
     - `neurex://auth-callback`
     - `https://neurex.tech/auth-callback`
     - `exp://localhost:19000/--/auth-callback`
 
-## Region
+## Smoke Test
 
-- Primary: `eu-central-1` (Frankfurt)
-- Fallback: `eu-west-1` (Dublin)
-- US region added in v2 when justified by US user count.
-
-## Migrations
-
-Run these in the Supabase dashboard → SQL editor (one-off, per project).
-
-### `user_push_tokens` — Expo push tokens for "Your night is ready" push
-
-Lets the backend look up a user's device tokens and POST the overnight push
-when a session flips to `status='ready'`. RLS-scoped so a user only sees/writes
-their own tokens; the backend reads it with the service-role key.
-
-```sql
-create table public.user_push_tokens (
-  id uuid primary key default gen_random_uuid(),
-  user_id uuid not null references auth.users(id) on delete cascade,
-  token text not null,
-  platform text not null,
-  updated_at timestamptz not null default now(),
-  unique (user_id, token)
-);
-alter table public.user_push_tokens enable row level security;
-create policy "own tokens" on public.user_push_tokens
-  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+```bash
+npm run smoke:auth -- your@email.com
 ```
 
-The app upserts here on sign-in via `src/lib/push/registerPushToken.ts`
-(`onConflict: 'user_id,token'`).
-
-## What's gitignored
-
-- `.env` — never commit this
-- Anything with `service_role` — that key bypasses RLS, must never leave the
-  server side
+Expected: a magic-link email arrives within about 10 seconds.
