@@ -3,6 +3,8 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { deviceRepo } from '../lib/repos';
 import { getSupabase } from '../lib/auth/supabase';
+import { localWipe } from '../lib/accountDeletion';
+import { clearActiveRecording } from '../lib/cloud/recovery';
 
 export type AuthStatus = 'unknown' | 'signed-out' | 'signed-in';
 
@@ -76,7 +78,7 @@ type SessionState = {
 
 export const useSession = create<SessionState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       authStatus: 'unknown',
       user: null,
       avatarUri: null,
@@ -132,6 +134,7 @@ export const useSession = create<SessionState>()(
       completeOnboarding: () => set({ onboardingComplete: true }),
 
       signOut: () => {
+        const isStreaming = get().streaming !== null;
         getSupabase()?.auth.signOut().catch(() => undefined);
         set({
           authStatus: 'signed-out',
@@ -144,6 +147,9 @@ export const useSession = create<SessionState>()(
           deviceBattery: null,
           unviewedNightIds: [],
         });
+        if (!isStreaming) {
+          void Promise.all([localWipe(), clearActiveRecording()]);
+        }
       },
 
       setStreaming: (s) => set({ streaming: s }),
