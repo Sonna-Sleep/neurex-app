@@ -28,6 +28,8 @@ type SavedRecording = {
   samples: number;
   durationSec: number;
   startedAtMs: number;
+  endMs: number;
+  endedEarly?: boolean;
 };
 
 // Backend staging needs at least ten 30-second epochs.
@@ -111,17 +113,22 @@ export function RecordingCard() {
       // The raw EEG.BIN is already written to the phone
       // (documentDirectory/sessions/<id>/) and persists across app restarts until
       // transmitSession confirms cloud upload + finalize.
-      const elapsedSec =
+      const sampleDurationSec = result.stats.samples / EEG_SAMPLE_RATE_HZ;
+      const startedAtMs = streaming?.startedAtMs ?? Date.now() - Math.round(sampleDurationSec * 1000);
+      const endMs = startedAtMs + Math.round(sampleDurationSec * 1000);
+      const wallClockSec =
         streaming != null
-          ? Math.max(0, Math.floor((Date.now() - streaming.startedAtMs) / 1000))
-          : 0;
-      const startedAtMs = streaming?.startedAtMs ?? Date.now() - elapsedSec * 1000;
+          ? Math.max(0, (Date.now() - streaming.startedAtMs) / 1000)
+          : sampleDurationSec;
+      const endedEarly = wallClockSec - sampleDurationSec > 10 * 60;
       setSaved({
         sessionId: result.sessionId,
         eegUri: result.eegUri,
         samples: result.stats.samples,
-        durationSec: elapsedSec,
+        durationSec: Math.floor(sampleDurationSec),
         startedAtMs,
+        endMs,
+        endedEarly,
       });
     } catch (e) {
       setError((e as Error).message);
@@ -163,7 +170,7 @@ export function RecordingCard() {
       await transmitSession({
         sessionId: saved.sessionId,
         startMs: saved.startedAtMs,
-        endMs: saved.startedAtMs + saved.durationSec * 1000,
+        endMs: saved.endMs,
       });
       setSync('analyzing');
       unsubRef.current?.();
@@ -307,6 +314,11 @@ export function RecordingCard() {
         <Card style={styles.card}>
           <SerifHeadline>{headline}</SerifHeadline>
           <Body style={styles.subtext}>{sub}</Body>
+          {saved.endedEarly ? (
+            <Secondary style={styles.subtext}>
+              The headband stopped sending data earlier than expected — only the received data was saved.
+            </Secondary>
+          ) : null}
           {error ? <Text style={styles.error}>{error}</Text> : null}
           {sync === 'done' && summary ? (
             <View style={styles.stats}>
