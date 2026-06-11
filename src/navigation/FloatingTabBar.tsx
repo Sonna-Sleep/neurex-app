@@ -1,6 +1,6 @@
 // Floating pill tab bar (reference-inspired): a rounded bar hovering above the
 // bottom safe-area, the active tab highlighted by a lighter inner pill.
-import React from 'react';
+import React, { useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Rect } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -24,6 +24,41 @@ const ICONS: Record<string, 'sleep' | 'journal' | 'profile'> = {
 // rounding minus its 6px padding, so the highlight nests evenly inside.
 const HIGHLIGHT_RADIUS = 26;
 
+// Active-tab pill, drawn with SVG instead of a View background: toggling
+// backgroundColor on a mounted View loses its corner rounding on Android's
+// renderer (the square-highlight bug). The Svg needs EXPLICIT pixel dimensions
+// — percentage sizing resolves against a default tiny viewport, not the
+// absolute-fill — so measure the item once and draw at that exact size.
+function TabHighlight() {
+  const [size, setSize] = useState<{ w: number; h: number } | null>(null);
+  return (
+    <View
+      style={StyleSheet.absoluteFill}
+      pointerEvents="none"
+      onLayout={(e) => {
+        const { width, height } = e.nativeEvent.layout;
+        if (width > 0 && height > 0 && (size?.w !== width || size?.h !== height)) {
+          setSize({ w: width, h: height });
+        }
+      }}
+    >
+      {size ? (
+        <Svg width={size.w} height={size.h}>
+          <Rect
+            x={0}
+            y={0}
+            width={size.w}
+            height={size.h}
+            rx={HIGHLIGHT_RADIUS}
+            ry={HIGHLIGHT_RADIUS}
+            fill={colors.bgElevated}
+          />
+        </Svg>
+      ) : null}
+    </View>
+  );
+}
+
 export function FloatingTabBar({ state, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
   // A night finished processing but hasn't been opened → dot on the Journal tab.
@@ -46,24 +81,7 @@ export function FloatingTabBar({ state, navigation }: BottomTabBarProps) {
           return (
             <Pressable key={route.key} onPress={onPress} hitSlop={6}>
               <View style={styles.item}>
-                {/* Active highlight drawn with SVG, not a View background:
-                    toggling backgroundColor on a mounted View loses its corner
-                    rounding on Android's renderer (the square-highlight bug).
-                    The Svg mounts fresh on each switch, so it always takes the
-                    first-paint path and the pill stays rounded. */}
-                {focused ? (
-                  <Svg style={StyleSheet.absoluteFill} pointerEvents="none">
-                    <Rect
-                      x={0}
-                      y={0}
-                      width="100%"
-                      height="100%"
-                      rx={HIGHLIGHT_RADIUS}
-                      ry={HIGHLIGHT_RADIUS}
-                      fill={colors.bgElevated}
-                    />
-                  </Svg>
-                ) : null}
+                {focused ? <TabHighlight /> : null}
                 <TabIcon name={ICONS[route.name] ?? 'sleep'} color={color} size={21} />
                 <Text style={[styles.label, { color }]}>{route.name}</Text>
                 {showDot ? <View style={styles.dot} /> : null}
