@@ -175,7 +175,7 @@ const styles = StyleSheet.create({
     fontFamily: systemFontFamily,
     fontSize: 16,
     fontWeight: '600',
-    color: colors.accent,
+    color: colors.textPrimary,
   },
   sendDisabled: {
     color: colors.textTertiary,
@@ -242,6 +242,6 @@ const styles = StyleSheet.create({
     fontFamily: systemFontFamily,
     fontSize: 16,
     fontWeight: '600',
-    color: colors.accent,
+    color: colors.textPrimary,
   },
 });

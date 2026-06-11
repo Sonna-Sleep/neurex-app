@@ -11,9 +11,9 @@ const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 export function scoreBand(score: number | null): { label: string; color: string } {
   if (score == null) return { label: 'Analyzing…', color: colors.textTertiary };
   if (score >= 85) return { label: 'Optimal', color: colors.positive };
-  if (score >= 70) return { label: 'Good', color: '#7FB3E0' };
+  if (score >= 70) return { label: 'Good', color: colors.positive };
   if (score >= 55) return { label: 'Fair', color: colors.warning };
-  return { label: 'Pay attention', color: '#D98C6A' };
+  return { label: 'Pay attention', color: colors.danger };
 }
 
 type Props = {

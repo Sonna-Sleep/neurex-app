@@ -2,7 +2,6 @@ import React, { useCallback, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
-import Svg, { Circle, Path, Rect } from 'react-native-svg';
 
 import { colors, layout, radii, spacing, systemFontFamily } from '../../theme/tokens';
 import { Avatar } from '../../components/Avatar';
@@ -16,13 +15,6 @@ import { EditProfileSheet } from './EditProfileSheet';
 import { LegalSheet } from './LegalSheet';
 import { SupportSheet } from './SupportSheet';
 import { TAB_BAR_SPACE } from '../../navigation/FloatingTabBar';
-
-function greeting(hour: number): string {
-  if (hour < 5) return 'Good night';
-  if (hour < 12) return 'Good morning';
-  if (hour < 18) return 'Good afternoon';
-  return 'Good evening';
-}
 
 function memberSinceLabel(ms: number | null | undefined): string | null {
   if (!ms) return null;
@@ -79,12 +71,12 @@ export function AccountScreen() {
 
   const firstName = user?.firstName?.trim();
   const name = firstName || 'You';
-  const headline = firstName ? `${greeting(new Date().getHours())}, ${firstName}` : 'Your profile';
   const age = ageFromDob(user?.dob);
   const sub = [age ? `${age}` : null, user?.sex && user.sex !== 'unspecified' ? user.sex : null]
     .filter(Boolean)
     .join(' · ');
   const memberSince = memberSinceLabel(user?.memberSinceMs);
+  const profileMeta = [sub || null, memberSince].filter(Boolean).join(' · ');
   const stats = useMemo(() => profileStats(sessions), [sessions]);
 
   return (
@@ -92,25 +84,32 @@ export function AccountScreen() {
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <View style={styles.profileHeader}>
           <View style={styles.identityRow}>
-            <Avatar uri={avatarUri} name={name} size={72} />
+            <Avatar uri={avatarUri} name={name} size={64} />
             <View style={styles.identityText}>
-              <Text style={styles.name}>{headline}</Text>
-              {user?.email ? <Text style={styles.sub}>{user.email}</Text> : null}
+              <Text style={styles.name} numberOfLines={1}>
+                {name}
+              </Text>
+              {user?.email ? (
+                <Text style={styles.sub} numberOfLines={1}>
+                  {user.email}
+                </Text>
+              ) : null}
             </View>
+            <Pressable onPress={() => setEditing(true)} hitSlop={8} style={styles.editBtn}>
+              <Text style={styles.editText}>Edit profile</Text>
+            </Pressable>
           </View>
-          <View style={styles.metaRow}>
-            {sub ? <Text style={styles.meta}>{sub}</Text> : null}
-            {memberSince ? <Text style={styles.meta}>{memberSince}</Text> : null}
-          </View>
-          <Pressable onPress={() => setEditing(true)} hitSlop={8} style={styles.editBtn}>
-            <Text style={styles.editText}>Edit profile</Text>
-          </Pressable>
+          {profileMeta ? (
+            <Text style={styles.meta} numberOfLines={1}>
+              {profileMeta}
+            </Text>
+          ) : null}
         </View>
 
         <View style={styles.statsPanel}>
-          <ProfileStat icon="moon" value={stats.nights} label="Nights" />
-          <ProfileStat icon="clock" value={stats.avgAsleep} label="Avg. asleep" />
-          <ProfileStat icon="score" value={stats.avgScore} label="Avg. score" />
+          <ProfileStat value={stats.nights} label="Nights" first />
+          <ProfileStat value={stats.avgAsleep} label="Avg. asleep" />
+          <ProfileStat value={stats.avgScore} label="Avg. score" />
         </View>
 
         <View style={styles.card}>
@@ -119,13 +118,16 @@ export function AccountScreen() {
           <Row label="About" onPress={() => setLegalDoc('about')} />
         </View>
 
-        <View style={styles.footer}>
-          <Pressable onPress={signOut} hitSlop={8}>
+        <View style={styles.accountCard}>
+          <Pressable onPress={signOut} hitSlop={8} style={styles.accountRow}>
             <Text style={styles.logout}>Log out</Text>
           </Pressable>
-          <View style={styles.dangerZone}>
+          <View style={[styles.accountRow, styles.accountDivider]}>
             <DeleteAccountSection />
           </View>
+        </View>
+
+        <View style={styles.footer}>
           <Text style={styles.version}>version {appConfig.expo.version}</Text>
         </View>
       </ScrollView>
@@ -137,43 +139,15 @@ export function AccountScreen() {
   );
 }
 
-type ProfileStatIconName = 'moon' | 'clock' | 'score';
-
-function ProfileStat({ icon, value, label }: { icon: ProfileStatIconName; value: string; label: string }) {
+function ProfileStat({ value, label, first }: { value: string; label: string; first?: boolean }) {
   return (
-    <View style={styles.statItem}>
-      <ProfileStatIcon name={icon} />
-      <Text style={styles.statValue}>{value}</Text>
+    <View style={[styles.statItem, !first && styles.statDivider]}>
       <Text style={styles.statLabel}>{label}</Text>
+      <Text style={styles.statValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.78}>
+        {value}
+      </Text>
     </View>
   );
-}
-
-function ProfileStatIcon({ name }: { name: ProfileStatIconName }) {
-  const c = colors.accent;
-  switch (name) {
-    case 'moon':
-      return (
-        <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
-          <Path d="M20 16.4A8.5 8.5 0 1 1 9.6 4 6.7 6.7 0 0 0 20 16.4Z" fill={c} />
-        </Svg>
-      );
-    case 'clock':
-      return (
-        <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
-          <Circle cx={12} cy={12} r={9} fill={c} />
-          <Path d="M12 7V12L15.5 15" stroke={colors.bgPrimary} strokeWidth={2.3} strokeLinecap="round" strokeLinejoin="round" />
-        </Svg>
-      );
-    case 'score':
-      return (
-        <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
-          <Circle cx={12} cy={12} r={9} stroke={c} strokeWidth={4} opacity={0.32} />
-          <Path d="M12 3A9 9 0 0 1 21 12" stroke={c} strokeWidth={4} strokeLinecap="round" />
-          <Rect x={10.2} y={10.2} width={3.6} height={3.6} rx={1.8} fill={c} />
-        </Svg>
-      );
-  }
 }
 
 function Row({ label, onPress, first }: { label: string; onPress: () => void; first?: boolean }) {
@@ -196,8 +170,8 @@ const styles = StyleSheet.create({
   },
   scroll: {
     paddingTop: spacing.xl,
-    paddingBottom: TAB_BAR_SPACE,
-    gap: spacing.xl,
+    paddingBottom: TAB_BAR_SPACE + spacing.xxl,
+    gap: spacing.lg,
   },
   profileHeader: {
     gap: spacing.md,
@@ -210,10 +184,12 @@ const styles = StyleSheet.create({
   identityText: {
     flex: 1,
     gap: spacing.xs,
+    minWidth: 0,
   },
   name: {
     fontFamily: systemFontFamily,
     fontSize: 24,
+    lineHeight: 30,
     fontWeight: '600',
     letterSpacing: -0.3,
     color: colors.textPrimary,
@@ -221,48 +197,59 @@ const styles = StyleSheet.create({
   sub: {
     fontFamily: systemFontFamily,
     fontSize: 15,
+    lineHeight: 20,
     color: colors.textSecondary,
-  },
-  metaRow: {
-    gap: spacing.xs,
   },
   meta: {
     fontFamily: systemFontFamily,
     fontSize: 13,
+    lineHeight: 18,
     color: colors.textTertiary,
   },
   editBtn: {
-    alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    borderRadius: radii.pill,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
   },
   editText: {
     fontFamily: systemFontFamily,
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: '600',
-    color: colors.accent,
+    color: colors.textPrimary,
   },
   statsPanel: {
     flexDirection: 'row',
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
+    backgroundColor: colors.bgSurface,
+    borderRadius: radii.card,
+    borderWidth: 1,
     borderColor: colors.borderSubtle,
+    overflow: 'hidden',
   },
   statItem: {
     flex: 1,
-    minHeight: 116,
-    justifyContent: 'center',
+    minHeight: 82,
+    justifyContent: 'space-between',
     gap: spacing.xs,
-    paddingRight: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+  },
+  statDivider: {
+    borderLeftWidth: StyleSheet.hairlineWidth,
+    borderLeftColor: colors.borderSubtle,
   },
   statValue: {
     fontFamily: systemFontFamily,
-    fontSize: 28,
-    lineHeight: 34,
+    fontSize: 22,
+    lineHeight: 27,
     fontWeight: '600',
     color: colors.textPrimary,
   },
   statLabel: {
     fontFamily: systemFontFamily,
-    fontSize: 13,
+    fontSize: 12,
+    lineHeight: 16,
     color: colors.textSecondary,
   },
   card: {
@@ -274,7 +261,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: spacing.md,
+    minHeight: 54,
+    paddingVertical: 14,
   },
   rowDivider: {
     borderTopWidth: StyleSheet.hairlineWidth,
@@ -285,37 +273,45 @@ const styles = StyleSheet.create({
   },
   rowLabel: {
     fontFamily: systemFontFamily,
-    fontSize: 16,
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: '500',
     color: colors.textPrimary,
   },
   chevron: {
     fontFamily: systemFontFamily,
-    fontSize: 22,
+    fontSize: 20,
     color: colors.textTertiary,
   },
-  footer: {
-    marginTop: spacing.xxl,
-    alignItems: 'flex-start',
+  accountCard: {
+    backgroundColor: colors.bgSurface,
+    borderRadius: radii.card,
+    paddingHorizontal: spacing.md,
+    marginTop: spacing.md,
+  },
+  accountRow: {
+    minHeight: 54,
+    justifyContent: 'center',
+    paddingVertical: 14,
+  },
+  accountDivider: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.borderSubtle,
   },
   logout: {
     fontFamily: systemFontFamily,
     fontSize: 15,
-    fontWeight: '600',
+    lineHeight: 20,
+    fontWeight: '500',
     color: colors.textSecondary,
   },
-  // Delete sits well below Log out, fenced off by a hairline + generous space
-  // so the destructive action can't be hit by muscle memory after Log out.
-  dangerZone: {
-    alignSelf: 'stretch',
-    marginTop: spacing.xl,
-    paddingTop: spacing.xl,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.borderSubtle,
+  footer: {
+    alignItems: 'flex-start',
+    paddingTop: spacing.xs,
   },
   version: {
     fontFamily: systemFontFamily,
     fontSize: 12,
     color: colors.textTertiary,
-    marginTop: spacing.xxl,
   },
 });

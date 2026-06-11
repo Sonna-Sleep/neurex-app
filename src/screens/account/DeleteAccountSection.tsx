@@ -66,6 +66,8 @@ const styles = StyleSheet.create({
   delete: {
     fontFamily: systemFontFamily,
     fontSize: 15,
+    lineHeight: 20,
+    fontWeight: '500',
     color: colors.danger,
   },
 });

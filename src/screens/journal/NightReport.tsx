@@ -96,7 +96,7 @@ function DetailTile({ icon, value, label }: { icon: DetailIconName; value: strin
 }
 
 function DetailIcon({ name }: { name: DetailIconName }) {
-  const c = '#77D2E5';
+  const c = colors.textSecondary;
   switch (name) {
     case 'asleep':
       return (
