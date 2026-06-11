@@ -26,6 +26,19 @@ async function upsertToken(userId: string, token: string): Promise<void> {
     );
 }
 
+export async function unregisterPushToken(): Promise<void> {
+  if (!projectId) return;
+  try {
+    const { data: token } = await Notifications.getExpoPushTokenAsync({ projectId });
+    if (!token) return;
+    const supabase = getSupabase();
+    if (!supabase) return;
+    await supabase.from('user_push_tokens').delete().eq('token', token);
+  } catch {
+    // Best-effort — sign-out must not be blocked by a failed token delete.
+  }
+}
+
 export async function registerPushToken(userId: string): Promise<void> {
   if (!projectId) return;
   try {
