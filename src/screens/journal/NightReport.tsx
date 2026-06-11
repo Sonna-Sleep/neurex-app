@@ -89,7 +89,7 @@ function DetailTile({ icon, value, label }: { icon: DetailIconName; value: strin
       <DetailIcon name={icon} />
       <View style={styles.detailText}>
         <Text style={styles.detailValue}>{value}</Text>
-        <Text style={styles.detailLabel}>{label} ›</Text>
+        <Text style={styles.detailLabel}>{label}</Text>
       </View>
     </View>
   );
