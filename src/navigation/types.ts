@@ -12,6 +12,7 @@ export type OnboardingStackParamList = {
 
 export type JournalStackParamList = {
   JournalHome: undefined;
+  JournalCalendar: undefined;
   SessionDetail: { sessionId: string };
 };
 

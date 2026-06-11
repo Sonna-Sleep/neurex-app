@@ -1,9 +1,9 @@
-// Journal tab stack: the calendar (JournalHome) plus a per-night SessionDetail
-// route, so a notification tap (or any deep link) can open one night directly
-// with a native back button.
+// Journal tab stack: latest-night home, full calendar browse, and per-night
+// SessionDetail for notifications/deep links.
 import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
+import { JournalCalendarScreen } from '../screens/journal/JournalCalendarScreen';
 import { JournalScreen } from '../screens/journal/JournalScreen';
 import { SessionDetailScreen } from '../screens/journal/SessionDetailScreen';
 import { colors } from '../theme/tokens';
@@ -21,6 +21,7 @@ export function JournalNavigator() {
       }}
     >
       <Stack.Screen name="JournalHome" component={JournalScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="JournalCalendar" component={JournalCalendarScreen} options={{ headerShown: false }} />
       <Stack.Screen name="SessionDetail" component={SessionDetailScreen} options={{ title: 'Night' }} />
     </Stack.Navigator>
   );
