@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import * as Linking from 'expo-linking';
 
-import { getSupabase } from './supabase';
+import { getSupabase, AUTH_REDIRECT_URL } from './supabase';
 import { useSession } from '../../state/session';
 import { cancelPendingDeletion } from '../accountDeletion';
 import { registerPushToken } from '../push/registerPushToken';
@@ -102,8 +102,11 @@ export function useAuthListener() {
     });
 
     const handleUrl = async (url: string) => {
+      if (!url.startsWith(AUTH_REDIRECT_URL)) return;
       const tokens = parseTokensFromUrl(url);
       if (!tokens) return;
+      const { data: existing } = await supabase.auth.getSession();
+      if (existing.session) return;
       await supabase.auth.setSession(tokens);
     };
 
