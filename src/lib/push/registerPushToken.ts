@@ -35,11 +35,18 @@ export async function registerPushToken(userId: string): Promise<void> {
     const { data: token } = await Notifications.getExpoPushTokenAsync({ projectId });
     if (token) await upsertToken(userId, token);
 
-    // iOS can rotate the token; keep the row current. Attach once per process.
+    // iOS can rotate the underlying device token; re-fetch the Expo push token
+    // (which may have changed) and keep the row current. Attach once per process.
+    // NOTE: t.data is the raw APNs/FCM token — upsert that directly and the
+    // backend's Expo push batch breaks. Always re-derive via getExpoPushTokenAsync.
     if (!tokenListenerAttached) {
       tokenListenerAttached = true;
-      Notifications.addPushTokenListener((t) => {
-        upsertToken(userId, t.data).catch(() => undefined);
+      Notifications.addPushTokenListener(() => {
+        Notifications.getExpoPushTokenAsync({ projectId })
+          .then(({ data: expoToken }) => upsertToken(userId, expoToken))
+          .catch((err) => {
+            if (__DEV__) console.warn('[registerPushToken] rotation re-fetch failed', err);
+          });
       });
     }
   } catch {
