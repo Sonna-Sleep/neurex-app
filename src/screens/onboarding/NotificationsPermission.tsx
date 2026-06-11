@@ -8,6 +8,7 @@ import { Button } from '../../components/Button';
 import { SerifDisplay, Body } from '../../theme/typography';
 import { colors, layout, spacing } from '../../theme/tokens';
 import { useSession } from '../../state/session';
+import { registerPushToken } from '../../lib/push/registerPushToken';
 import type { OnboardingStackParamList } from '../../navigation/types';
 
 type Props = NativeStackScreenProps<
@@ -17,12 +18,18 @@ type Props = NativeStackScreenProps<
 
 export function NotificationsPermission({ navigation: _ }: Props) {
   const completeOnboarding = useSession((s) => s.completeOnboarding);
+  const userId = useSession((s) => s.user?.id ?? null);
   const [busy, setBusy] = useState(false);
 
   const allow = async () => {
     setBusy(true);
     try {
-      await Notifications.requestPermissionsAsync();
+      const { status } = await Notifications.requestPermissionsAsync();
+      if (status === 'granted' && userId) {
+        registerPushToken(userId).catch((err) => {
+          if (__DEV__) console.warn('[NotificationsPermission] registerPushToken failed:', err);
+        });
+      }
     } finally {
       setBusy(false);
       completeOnboarding();
