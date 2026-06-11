@@ -20,7 +20,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { File, Directory, Paths } from 'expo-file-system';
 
 import { transmitSession } from './cloudSync';
-import { reconstructTiming } from './recoveryMath';
+import {
+  reconstructTiming,
+  durationMsFromBytes,
+  isStageableDurationMs,
+  RECOVERY_RESTORE_GRACE_MS,
+} from './recoveryMath';
 import { EEG_SAMPLE_RATE_HZ } from '../ble/constants';
 
 const ACTIVE_KEY = 'neurex-active-recording';
@@ -142,6 +147,10 @@ export function scanRecoverable(activeSessionId?: string | null): RecoverableRec
       continue;
     }
     const sizeBytes = eeg.size;
+    // Apply the same minimum-length floor as the live sync path: a sub-5-min
+    // recording can't be staged (backend needs ≥10 epochs), so don't ship it —
+    // it stays on disk like a short recording kept in the app.
+    if (!isStageableDurationMs(durationMsFromBytes(sizeBytes, EEG_SAMPLE_RATE_HZ))) continue;
     const meta = readMeta(item);
     const { startedAtMs, endMs } = reconstructTiming({
       sizeBytes,
@@ -157,13 +166,42 @@ export function scanRecoverable(activeSessionId?: string | null): RecoverableRec
 
 export type RecoveryResult = { sessionId: string; ok: boolean; error?: string };
 
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** The session id that must NOT be swept: the live recording OR one currently
+ * being resumed from iOS state restoration. Read via dynamic import because
+ * streamController.ts statically imports THIS module, so a static import would
+ * be a cycle. Returns null if unavailable (e.g. unit tests). */
+async function liveOrRestoringSessionId(): Promise<string | null> {
+  try {
+    const { activeOrRestoringSessionId } = await import('../ble/streamController');
+    return activeOrRestoringSessionId();
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Upload every recoverable recording through the normal transmit path. Each is
  * independent — one failure doesn't block the rest. Returns a per-session
  * result for logging/surfacing.
+ *
+ * Guards the iOS state-restoration race: if a marker says a session was
+ * recording when we were killed, a background resume (wakeHandler →
+ * resumeSessionAfterRestore) may be about to reclaim it onto the SAME dir.
+ * Uploading + deleting that dir mid-resume would corrupt the live night. So we
+ * wait a grace window when a marker exists, then exclude whatever is ACTUALLY
+ * live or mid-resume now (a stale marker with no live resume still gets its
+ * orphan recovered).
  */
 export async function recoverAll(activeSessionId?: string | null): Promise<RecoveryResult[]> {
-  const recs = scanRecoverable(activeSessionId);
+  const marker = await getActiveRecording();
+  if (marker) await delay(RECOVERY_RESTORE_GRACE_MS);
+
+  const liveId = (await liveOrRestoringSessionId()) ?? activeSessionId ?? null;
+  const recs = scanRecoverable(activeSessionId).filter((r) => r.sessionId !== liveId);
   const results: RecoveryResult[] = [];
   for (const r of recs) {
     try {

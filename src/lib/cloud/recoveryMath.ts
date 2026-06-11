@@ -4,6 +4,22 @@
 
 export const EEG_BYTES_PER_SAMPLE = 8; // uint32 ms + float32 µV — matches real.ts encoder
 
+// Minimum recorded length worth uploading: the backend stages on 30-second
+// epochs and needs at least ten of them. Shared with the live RecordingCard
+// sync gate so recovery and the in-app path apply the SAME floor.
+export const MIN_STAGING_SEC = 5 * 60;
+
+// On launch, if a recording was active when we were killed, an iOS state-
+// restoration resume may be about to reclaim it (wakeHandler → resumeSession-
+// AfterRestore). Wait this long before sweeping for orphans so we don't
+// upload+delete the session dir out from under a resume in progress.
+export const RECOVERY_RESTORE_GRACE_MS = 30_000;
+
+/** True if a recording is long enough to be worth uploading/staging. */
+export function isStageableDurationMs(durationMs: number): boolean {
+  return durationMs >= MIN_STAGING_SEC * 1000;
+}
+
 /** Recorded duration (ms) implied by an EEG.BIN byte count. */
 export function durationMsFromBytes(sizeBytes: number, sampleRateHz: number): number {
   if (sizeBytes <= 0 || sampleRateHz <= 0) return 0;

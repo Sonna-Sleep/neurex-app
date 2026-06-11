@@ -18,6 +18,7 @@ import { useSession } from '../../../state/session';
 import { startSession, stopSession } from '../../../lib/ble/streamController';
 import { EEG_SAMPLE_RATE_HZ } from '../../../lib/ble/constants';
 import { transmitSession, subscribeToResult } from '../../../lib/cloud/cloudSync';
+import { MIN_STAGING_SEC } from '../../../lib/cloud/recoveryMath';
 import { handleNightReady } from '../../../lib/nights/onNightReady';
 import type { Session } from '../../../lib/repos/types';
 
@@ -31,9 +32,6 @@ type SavedRecording = {
   endMs: number;
   endedEarly?: boolean;
 };
-
-// Backend staging needs at least ten 30-second epochs.
-const MIN_STAGING_SEC = 5 * 60;
 
 export function RecordingCard() {
   const streaming = useSession((s) => s.streaming);

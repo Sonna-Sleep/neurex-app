@@ -4,6 +4,9 @@
 import {
   durationMsFromBytes,
   reconstructTiming,
+  isStageableDurationMs,
+  MIN_STAGING_SEC,
+  RECOVERY_RESTORE_GRACE_MS,
   EEG_BYTES_PER_SAMPLE,
 } from '../src/lib/cloud/recoveryMath';
 
@@ -71,6 +74,18 @@ eq(durationMsFromBytes(7_200_000, 250), 3_600_000, '1h of bytes = 3,600,000ms');
   eq(startedAtMs, 79_000, 'no meta/mtime: start = now − duration');
   eq(endMs, 80_000, 'no meta/mtime: end = now');
 }
+
+// ── staging-length floor (shared with the live RecordingCard sync gate) ─────
+eq(MIN_STAGING_SEC, 300, 'MIN_STAGING_SEC is 5 minutes');
+eq(RECOVERY_RESTORE_GRACE_MS, 30_000, 'restore grace is 30s');
+ok(isStageableDurationMs(300_000) === true, 'exactly 5 min is stageable');
+ok(isStageableDurationMs(299_999) === false, 'just under 5 min is NOT stageable');
+ok(isStageableDurationMs(0) === false, 'zero-length is NOT stageable');
+ok(isStageableDurationMs(3_600_000) === true, '1 h is stageable');
+// A 1-second orphan (2000 B @250 Hz) must be skipped by recovery.
+ok(isStageableDurationMs(durationMsFromBytes(2000, 250)) === false, '1 s orphan skipped');
+// A 5-minute recording (250 × 8 × 300 = 600000 B) is recovered.
+ok(isStageableDurationMs(durationMsFromBytes(600_000, 250)) === true, '5 min orphan recovered');
 
 if (failures) {
   console.error(`\n${failures} RECOVERY ASSERTION(S) FAILED`);

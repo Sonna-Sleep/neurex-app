@@ -63,9 +63,21 @@ type ActiveSession = {
 };
 
 let active: ActiveSession | null = null;
+// Set SYNCHRONOUSLY at the top of resumeSessionAfterRestore — before the slow
+// BLE connect await — so a concurrent launch-time recoverAll can exclude the
+// session being restored even though `active`/`streaming` aren't set until the
+// connect + startStream finish. Cleared when the resume settles.
+let restoringSessionId: string | null = null;
 
 export function isSessionActive(): boolean {
   return active !== null;
+}
+
+/** The session id that must NOT be touched by crash-recovery: the live one, or
+ * one currently being resumed from iOS state restoration. Read by recovery.ts
+ * (via dynamic import, to avoid the static cycle) to skip it during a sweep. */
+export function activeOrRestoringSessionId(): string | null {
+  return active?.sessionId ?? restoringSessionId;
 }
 
 function freshStats(): StreamStats {
@@ -225,6 +237,10 @@ export async function resumeSessionAfterRestore(meta: RecordingMeta): Promise<vo
   if (active) return; // already recording — nothing to restore
   const { sessionId, deviceId, startedAtMs } = meta;
   if (!deviceId) return;
+  // Claim the session before the (untimed, possibly slow) connect so a
+  // concurrent recoverAll excludes this dir even if the re-link outlasts the
+  // recovery grace window — otherwise it could upload+delete it mid-resume.
+  restoringSessionId = sessionId;
   try {
     // Restored peripheral connects fast (already linked at the OS level). No
     // timeout — this runs backgrounded where the pending connect is desirable.
@@ -270,6 +286,10 @@ export async function resumeSessionAfterRestore(meta: RecordingMeta): Promise<vo
     if (__DEV__) console.log('[stream] resumed session after iOS restore', sessionId);
   } catch (e) {
     if (__DEV__) console.warn('[stream] resume after restore failed', e);
+  } finally {
+    // Resume settled (took over as `active`, aborted, or failed) — drop the
+    // claim. If it succeeded, activeOrRestoringSessionId now reports the live id.
+    restoringSessionId = null;
   }
 }
 
