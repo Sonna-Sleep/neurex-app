@@ -53,11 +53,13 @@ export function RecordingCard() {
   // Re-render once per second so the elapsed timer ticks even when no
   // packet arrives, while keeping render pure.
   const [nowMs, setNowMs] = useState(() => Date.now());
+  const streamingSessionId = streaming?.sessionId ?? null;
   useEffect(() => {
-    if (!streaming) return;
+    if (!streamingSessionId) return;
+    setNowMs(Date.now());
     const t = setInterval(() => setNowMs(Date.now()), 1000);
     return () => clearInterval(t);
-  }, [streaming]);
+  }, [streamingSessionId]);
 
   // Keep the screen/CPU awake for the whole recording so Android doesn't
   // suspend JS + BLE mid-night. Released when the session ends. (Belt-and-
@@ -352,7 +354,6 @@ export function RecordingCard() {
     <View style={styles.idle}>
       <View style={styles.idleMain}>
         <View style={styles.idleHead}>
-          <Eyebrow>tonight</Eyebrow>
           <SerifDisplay style={styles.idleTitle}>Ready to record</SerifDisplay>
           <Secondary style={styles.idleSub}>
             Wear your Neurex device and keep your phone nearby.
@@ -363,8 +364,6 @@ export function RecordingCard() {
           <ReadyRow label="Device" value={pairedSerial ?? 'Paired'} />
           <View style={styles.divider} />
           <ReadyRow label="Battery" value={batteryLabel} />
-          <View style={styles.divider} />
-          <ReadyRow label="Analysis" value="Records over 5 min can be staged" />
         </View>
       </View>
 
