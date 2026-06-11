@@ -2,6 +2,7 @@
 // bottom safe-area, the active tab highlighted by a lighter inner pill.
 import React from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import Svg, { Rect } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 
@@ -18,6 +19,10 @@ const ICONS: Record<string, 'sleep' | 'journal' | 'profile'> = {
   Journal: 'journal',
   Profile: 'profile',
 };
+
+// ≈ the item's stadium radius (it's ~53px tall) and concentric with the bar's
+// rounding minus its 6px padding, so the highlight nests evenly inside.
+const HIGHLIGHT_RADIUS = 26;
 
 export function FloatingTabBar({ state, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
@@ -40,7 +45,25 @@ export function FloatingTabBar({ state, navigation }: BottomTabBarProps) {
           const showDot = route.name === 'Journal' && hasNewNight;
           return (
             <Pressable key={route.key} onPress={onPress} hitSlop={6}>
-              <View style={[styles.item, focused && styles.itemActive]}>
+              <View style={styles.item}>
+                {/* Active highlight drawn with SVG, not a View background:
+                    toggling backgroundColor on a mounted View loses its corner
+                    rounding on Android's renderer (the square-highlight bug).
+                    The Svg mounts fresh on each switch, so it always takes the
+                    first-paint path and the pill stays rounded. */}
+                {focused ? (
+                  <Svg style={StyleSheet.absoluteFill} pointerEvents="none">
+                    <Rect
+                      x={0}
+                      y={0}
+                      width="100%"
+                      height="100%"
+                      rx={HIGHLIGHT_RADIUS}
+                      ry={HIGHLIGHT_RADIUS}
+                      fill={colors.bgElevated}
+                    />
+                  </Svg>
+                ) : null}
                 <TabIcon name={ICONS[route.name] ?? 'sleep'} color={color} size={21} />
                 <Text style={[styles.label, { color }]}>{route.name}</Text>
                 {showDot ? <View style={styles.dot} /> : null}
@@ -83,20 +106,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
-    // Concrete radius, NOT radii.pill: oversized radii on background-only views
-    // (no borderWidth) render square on some Android/new-arch builds. 26 ≈ this
-    // item's stadium (height ~53) AND concentric with the container's rounding
-    // minus its 6px padding, so the highlight nests evenly inside the bar.
-    borderRadius: 26,
     gap: 3,
-  },
-  itemActive: {
-    backgroundColor: colors.bgElevated,
-    // Same-color border: not decoration — it forces Android onto the bordered
-    // drawing path, which rounds corners reliably (the bar itself proves it:
-    // its borderWidth:1 corners render; background-only views can draw square).
-    borderWidth: 1,
-    borderColor: colors.bgElevated,
   },
   label: {
     fontFamily: systemFontFamily,
