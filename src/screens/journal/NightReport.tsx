@@ -4,6 +4,7 @@
 // screen (opened from the "Your night is ready" notification).
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
+import Svg, { Circle, Line, Path, Rect } from 'react-native-svg';
 
 import { Eyebrow, Secondary } from '../../theme/typography';
 import { colors, spacing, systemFontFamily } from '../../theme/tokens';
@@ -17,6 +18,13 @@ function fmtDur(min: number | null): string {
   const h = Math.floor(min / 60);
   const m = Math.floor(min % 60);
   return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
+
+function fmtTime(ms: number): string {
+  const d = new Date(ms);
+  const h = d.getHours().toString().padStart(2, '0');
+  const m = d.getMinutes().toString().padStart(2, '0');
+  return `${h}:${m}`;
 }
 
 export function NightReport({ session }: { session: Session }) {
@@ -41,14 +49,24 @@ export function NightReport({ session }: { session: Session }) {
 
           <View style={styles.section}>
             <Eyebrow>details</Eyebrow>
-            <View style={styles.detailRows}>
-              <DetailRow
-                label="Fell asleep in"
-                value={session.sol != null ? `${Math.round(session.sol)} min` : '—'}
+            <View style={styles.detailGrid}>
+              <DetailTile
+                icon="regularity"
+                value={session.efficiency != null ? `${Math.round(session.efficiency)}%` : '—'}
+                label="Efficiency"
               />
-              <DetailRow
-                label="Staging confidence"
-                value={session.confidence != null ? `${Math.round(session.confidence * 100)}%` : '—'}
+              <DetailTile
+                icon="asleep"
+                value={session.sol != null ? `${Math.round(session.sol)} min` : '—'}
+                label="Asleep after"
+              />
+              <DetailTile icon="moon" value={fmtTime(session.startMs)} label="Went to bed" />
+              <DetailTile icon="alarm" value={fmtTime(session.endMs)} label="Woke up" />
+              <DetailTile icon="awake" value={fmtDur(session.waso)} label="Awake time" />
+              <DetailTile
+                icon="awakenings"
+                value={session.awakenings != null ? `${session.awakenings}` : '—'}
+                label="Awakenings"
               />
             </View>
           </View>
@@ -69,13 +87,67 @@ function Stat({ value, label }: { value: string; label: string }) {
   );
 }
 
-function DetailRow({ label, value }: { label: string; value: string }) {
+type DetailIconName = 'regularity' | 'asleep' | 'moon' | 'alarm' | 'awake' | 'awakenings';
+
+function DetailTile({ icon, value, label }: { icon: DetailIconName; value: string; label: string }) {
   return (
-    <View style={styles.detailRow}>
-      <Secondary style={styles.detailLabel}>{label}</Secondary>
-      <Text style={styles.detailValue}>{value}</Text>
+    <View style={styles.detailTile}>
+      <DetailIcon name={icon} />
+      <View style={styles.detailText}>
+        <Text style={styles.detailValue}>{value}</Text>
+        <Text style={styles.detailLabel}>{label} ›</Text>
+      </View>
     </View>
   );
+}
+
+function DetailIcon({ name }: { name: DetailIconName }) {
+  const c = '#77D2E5';
+  switch (name) {
+    case 'regularity':
+      return (
+        <Svg width={44} height={44} viewBox="0 0 44 44" fill="none">
+          {[8, 16, 24, 32].map((x, i) => (
+            <Rect key={x} x={x} y={10 + i * 3} width={5} height={24 - i * 4} rx={2.5} fill={c} />
+          ))}
+        </Svg>
+      );
+    case 'asleep':
+      return (
+        <Svg width={44} height={44} viewBox="0 0 44 44" fill="none">
+          <Circle cx={22} cy={22} r={18} fill={c} />
+          <Path d="M14 20C16 23 18 23 20 20M24 20C26 23 28 23 30 20" stroke={colors.bgPrimary} strokeWidth={3} strokeLinecap="round" />
+          <Path d="M17 29C20 32 24 32 27 29" stroke={colors.bgPrimary} strokeWidth={3} strokeLinecap="round" />
+        </Svg>
+      );
+    case 'moon':
+      return (
+        <Svg width={44} height={44} viewBox="0 0 44 44" fill="none">
+          <Path d="M33 30.5A15.5 15.5 0 0 1 16.5 8A17 17 0 1 0 33 30.5Z" fill={c} />
+        </Svg>
+      );
+    case 'alarm':
+      return (
+        <Svg width={44} height={44} viewBox="0 0 44 44" fill="none">
+          <Circle cx={22} cy={24} r={14} fill={c} />
+          <Path d="M15 8L9 13M29 8L35 13" stroke={c} strokeWidth={4} strokeLinecap="round" />
+          <Path d="M15 24L20 29L30 18" stroke={colors.bgPrimary} strokeWidth={4} strokeLinecap="round" strokeLinejoin="round" />
+        </Svg>
+      );
+    case 'awake':
+      return (
+        <Svg width={44} height={44} viewBox="0 0 44 44" fill="none">
+          <Path d="M8 14H24L17 22H34L20 36L24 26H10L8 14Z" fill={c} />
+        </Svg>
+      );
+    case 'awakenings':
+      return (
+        <Svg width={44} height={44} viewBox="0 0 44 44" fill="none">
+          <Path d="M11 32L21 12L25 24L33 18" stroke={c} strokeWidth={5} strokeLinecap="round" strokeLinejoin="round" />
+          <Line x1={10} y1={34} x2={34} y2={34} stroke={c} strokeWidth={4} strokeLinecap="round" />
+        </Svg>
+      );
+  }
 }
 
 const styles = StyleSheet.create({
@@ -107,22 +179,40 @@ const styles = StyleSheet.create({
   section: {
     gap: spacing.md,
   },
-  detailRows: {
-    gap: spacing.sm,
-  },
-  detailRow: {
+  detailGrid: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexWrap: 'wrap',
+    rowGap: spacing.xl,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.lg,
+    borderBottomWidth: 1,
+    borderColor: colors.borderSubtle,
   },
-  detailLabel: {
-    color: colors.textSecondary,
+  detailTile: {
+    width: '50%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    minHeight: 72,
+    paddingRight: spacing.sm,
+  },
+  detailText: {
+    flex: 1,
+    gap: 2,
   },
   detailValue: {
     fontFamily: systemFontFamily,
-    fontSize: 15,
+    fontSize: 28,
+    lineHeight: 34,
     fontWeight: '600',
     color: colors.textPrimary,
+  },
+  detailLabel: {
+    fontFamily: systemFontFamily,
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: '600',
+    color: colors.textSecondary,
   },
   processing: {
     color: colors.textSecondary,
