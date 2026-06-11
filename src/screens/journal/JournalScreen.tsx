@@ -1,61 +1,52 @@
-// Journal home — latest-night summary first. Detailed graphs stay one tap
-// deeper in SessionDetail so the landing screen stays calm.
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+// Journal home — weekly picker on top, selected-night report below. The
+// calendar is the final control in the weekly row.
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
-import { Eyebrow, Secondary } from '../../theme/typography';
-import { colors, layout, radii, spacing, systemFontFamily } from '../../theme/tokens';
+import { Eyebrow, Secondary, SerifDisplay } from '../../theme/typography';
+import { colors, layout, spacing, systemFontFamily } from '../../theme/tokens';
 import { sessionRepo, type Session } from '../../lib/repos';
 import { useSession } from '../../state/session';
-import { ScoreRing, scoreBand } from '../../components/ScoreRing';
+import { dateKey, weekStartOf } from '../../components/WeekStrip';
+import { scoreBand } from '../../components/ScoreRing';
 import { TabIcon } from '../../components/TabIcon';
+import { NightReport } from './NightReport';
 import { TAB_BAR_SPACE } from '../../navigation/FloatingTabBar';
 import type { JournalStackParamList } from '../../navigation/types';
 
 type Props = NativeStackScreenProps<JournalStackParamList, 'JournalHome'>;
 
-function dateLabel(ms: number): string {
-  const d = new Date(ms);
+const WEEKDAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+
+function keyToDate(key: string): Date {
+  const [y, m, d] = key.split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
+
+function todayKey(): string {
+  return dateKey(new Date());
+}
+
+function selectedDateLabel(key: string): string {
+  const d = keyToDate(key);
   return `${d.toLocaleDateString(undefined, { weekday: 'long' })}, ${d.toLocaleDateString(undefined, {
     month: 'short',
   })} ${d.getDate()}`;
 }
 
-function latestSession(sessions: Session[]): Session | null {
-  if (sessions.length === 0) return null;
-  return sessions.reduce((a, b) => (a.endMs > b.endMs ? a : b));
-}
-
-function fmtDur(min: number | null): string {
-  if (min == null) return '—';
-  const h = Math.floor(min / 60);
-  const m = Math.floor(min % 60);
-  return h > 0 ? `${h}h ${m}m` : `${m}m`;
-}
-
-function fmtSol(min: number | null): string {
-  if (min == null) return '—';
-  return `${Math.round(min)}m`;
-}
-
-function statusLabel(session: Session): { label: string; color: string } {
-  if (session.score != null) {
-    const band = scoreBand(session.score);
-    return { label: band.label, color: band.color };
-  }
-  if (session.status === 'failed') return { label: 'Needs review', color: colors.warning };
-  return { label: 'Analyzing', color: colors.textTertiary };
-}
-
 export function JournalScreen({ navigation }: Props) {
   const authReady = useSession((s) => s.authReady);
+  const markNightViewed = useSession((s) => s.markNightViewed);
   const [sessions, setSessions] = useState<Session[]>([]);
+  const [selectedKey, setSelectedKey] = useState<string>(() => todayKey());
+  const [weekStart, setWeekStart] = useState<Date>(() => weekStartOf(new Date()));
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const initialized = useRef(false);
 
   const load = useCallback(async () => {
     try {
@@ -63,6 +54,13 @@ export function JournalScreen({ navigation }: Props) {
       setSessions(list);
       setLoadError(false);
       setLoaded(true);
+      if (!initialized.current && list.length > 0) {
+        initialized.current = true;
+        const latest = list.reduce((a, b) => (a.endMs > b.endMs ? a : b));
+        const k = dateKey(new Date(latest.endMs));
+        setSelectedKey(k);
+        setWeekStart(weekStartOf(keyToDate(k)));
+      }
     } catch {
       setLoadError(true);
       setLoaded(true);
@@ -88,8 +86,29 @@ export function JournalScreen({ navigation }: Props) {
     }
   }, [load]);
 
-  const latest = useMemo(() => latestSession(sessions), [sessions]);
-  const status = latest ? statusLabel(latest) : null;
+  const byDate = useMemo(() => {
+    const map: Record<string, Session> = {};
+    for (const s of sessions) {
+      const k = dateKey(new Date(s.endMs));
+      if (!map[k] || s.endMs > map[k].endMs) map[k] = s;
+    }
+    return map;
+  }, [sessions]);
+
+  const selected = byDate[selectedKey] ?? null;
+
+  useEffect(() => {
+    if (selected) markNightViewed(selected.id);
+  }, [selected, markNightViewed]);
+
+  const selectedLabel = selectedDateLabel(selectedKey);
+  const shiftWeek = (deltaDays: number) =>
+    setWeekStart((w) => new Date(w.getFullYear(), w.getMonth(), w.getDate() + deltaDays));
+
+  const selectDate = (date: Date) => {
+    setSelectedKey(dateKey(date));
+    setWeekStart(weekStartOf(date));
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -100,73 +119,83 @@ export function JournalScreen({ navigation }: Props) {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.textSecondary} />
         }
       >
-        <View style={styles.header}>
-          <Eyebrow>journal</Eyebrow>
+        <View style={styles.top}>
+          <View style={styles.titleBlock}>
+            <Eyebrow>journal</Eyebrow>
+            <SerifDisplay>{selectedLabel}</SerifDisplay>
+          </View>
+          <View style={styles.weekNav}>
+            <Pressable onPress={() => shiftWeek(-7)} hitSlop={10} accessibilityRole="button">
+              <Text style={styles.chevron}>‹</Text>
+            </Pressable>
+            <Pressable onPress={() => shiftWeek(7)} hitSlop={10} accessibilityRole="button">
+              <Text style={styles.chevron}>›</Text>
+            </Pressable>
+          </View>
+        </View>
+
+        <View style={styles.weekRail}>
+          {Array.from({ length: 7 }, (_, i) => {
+            const d = new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() + i);
+            const key = dateKey(d);
+            const session = byDate[key] ?? null;
+            const selectedDay = key === selectedKey;
+            const band = session ? scoreBand(session.score) : null;
+            return (
+              <Pressable
+                key={key}
+                style={styles.day}
+                onPress={() => selectDate(d)}
+                hitSlop={4}
+                accessibilityRole="button"
+              >
+                <View
+                  style={[
+                    styles.dayCircle,
+                    session && band ? { borderColor: band.color, borderWidth: 2 } : null,
+                    selectedDay && styles.dayCircleSelected,
+                  ]}
+                >
+                  <Text style={[styles.dayLetter, (selectedDay || session) && styles.dayLetterActive]}>
+                    {WEEKDAYS[i]}
+                  </Text>
+                </View>
+                <Text style={[styles.dayNumber, selectedDay && styles.dayNumberActive]}>{d.getDate()}</Text>
+              </Pressable>
+            );
+          })}
           <Pressable
+            style={styles.day}
             onPress={() => navigation.navigate('JournalCalendar')}
-            style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}
+            hitSlop={4}
             accessibilityRole="button"
             accessibilityLabel="Open calendar"
           >
-            <TabIcon name="journal" color={colors.textPrimary} size={20} />
+            <View style={[styles.dayCircle, styles.calendarCircle]}>
+              <TabIcon name="journal" color={colors.textPrimary} size={18} />
+            </View>
+            <Text style={styles.dayNumber}>All</Text>
           </Pressable>
         </View>
 
-        {latest && status ? (
-          <View style={styles.summary}>
-            <View style={styles.dateBlock}>
-              <Secondary style={styles.kicker}>Latest night</Secondary>
-              <Text style={styles.date}>{dateLabel(latest.endMs)}</Text>
-            </View>
-
-            <View style={styles.scoreRow}>
-              <ScoreRing score={latest.score} size={132} stroke={10} showLabel={false} />
-              <View style={styles.scoreText}>
-                <Text style={[styles.scoreLabel, { color: status.color }]}>{status.label}</Text>
-                <Secondary style={styles.scoreSubtext}>
-                  {latest.score != null ? 'Sleep score' : 'Report pending'}
-                </Secondary>
-              </View>
-            </View>
-
-            <View style={styles.metrics}>
-              <Metric label="Asleep" value={fmtDur(latest.tst)} />
-              <Metric label="In bed" value={fmtDur(latest.tib)} />
-              <Metric label="Fell asleep" value={fmtSol(latest.sol)} />
-            </View>
-
-            <Pressable
-              onPress={() => navigation.navigate('SessionDetail', { sessionId: latest.id })}
-              style={({ pressed }) => [styles.reportButton, pressed && styles.pressed]}
-              accessibilityRole="button"
-            >
-              <Text style={styles.reportButtonText}>View report</Text>
-            </Pressable>
-          </View>
+        {selected ? (
+          <NightReport session={selected} />
         ) : loadError && sessions.length === 0 ? (
           <View style={styles.empty}>
-            <Text style={styles.emptyTitle}>Couldn’t load journal.</Text>
+            <Secondary style={styles.emptyText}>Couldn’t load your sleep history.</Secondary>
             <Pressable onPress={onRefresh} hitSlop={8}>
-              <Text style={styles.retryText}>Retry</Text>
+              <Secondary style={styles.retryText}>Retry</Secondary>
             </Pressable>
           </View>
         ) : (
           <View style={styles.empty}>
-            <Text style={styles.emptyTitle}>{loaded ? 'No recordings yet.' : ''}</Text>
-            <Secondary style={styles.emptyText}>{loaded ? 'Record from Sleep to fill your journal.' : ''}</Secondary>
+            <Secondary style={styles.emptyText}>
+              {loaded ? `No recording for ${selectedLabel}.` : ''}
+            </Secondary>
           </View>
         )}
       </ScrollView>
     </SafeAreaView>
-  );
-}
-
-function Metric({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.metric}>
-      <Text style={styles.metricValue}>{value}</Text>
-      <Secondary style={styles.metricLabel}>{label}</Secondary>
-    </View>
   );
 }
 
@@ -181,118 +210,76 @@ const styles = StyleSheet.create({
     paddingBottom: TAB_BAR_SPACE,
     gap: spacing.xl,
   },
-  header: {
-    minHeight: 48,
+  top: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
     gap: spacing.md,
   },
-  iconButton: {
-    width: 44,
-    height: 44,
+  titleBlock: {
+    flex: 1,
+  },
+  weekNav: {
+    flexDirection: 'row',
+    gap: spacing.lg,
+  },
+  chevron: {
+    fontFamily: systemFontFamily,
+    fontSize: 26,
+    fontWeight: '600',
+    color: colors.textSecondary,
+  },
+  weekRail: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: 5,
+  },
+  day: {
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  dayCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 1.5,
+    borderColor: colors.borderSubtle,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 22,
-    borderWidth: 1,
+  },
+  dayCircleSelected: {
+    backgroundColor: colors.bgElevated,
+  },
+  calendarCircle: {
     borderColor: colors.borderDivider,
     backgroundColor: colors.bgElevated,
   },
-  pressed: {
-    opacity: 0.85,
-    transform: [{ scale: 0.98 }],
-  },
-  summary: {
-    gap: spacing.xl,
-  },
-  dateBlock: {
-    gap: spacing.sm,
-    paddingTop: spacing.lg,
-  },
-  kicker: {
+  dayLetter: {
+    fontFamily: systemFontFamily,
+    fontSize: 12,
+    fontWeight: '600',
     color: colors.textTertiary,
   },
-  date: {
-    fontFamily: systemFontFamily,
-    fontSize: 38,
-    lineHeight: 44,
-    fontWeight: '600',
+  dayLetterActive: {
     color: colors.textPrimary,
   },
-  scoreRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xl,
-    paddingVertical: spacing.md,
-  },
-  scoreText: {
-    flex: 1,
-    gap: spacing.xs,
-  },
-  scoreLabel: {
+  dayNumber: {
     fontFamily: systemFontFamily,
-    fontSize: 28,
-    lineHeight: 34,
-    fontWeight: '600',
+    fontSize: 11,
+    color: colors.textTertiary,
   },
-  scoreSubtext: {
+  dayNumberActive: {
     color: colors.textSecondary,
-  },
-  metrics: {
-    flexDirection: 'row',
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: colors.borderSubtle,
-  },
-  metric: {
-    flex: 1,
-    minHeight: 84,
-    justifyContent: 'center',
-    gap: spacing.xs,
-  },
-  metricValue: {
-    fontFamily: systemFontFamily,
-    fontSize: 22,
-    lineHeight: 26,
-    fontWeight: '600',
-    color: colors.textPrimary,
-  },
-  metricLabel: {
-    color: colors.textSecondary,
-  },
-  reportButton: {
-    height: 56,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radii.button,
-    backgroundColor: colors.ctaBg,
-  },
-  reportButtonText: {
-    fontFamily: systemFontFamily,
-    fontSize: 16,
-    lineHeight: 20,
-    fontWeight: '600',
-    color: colors.ctaText,
   },
   empty: {
-    minHeight: 320,
-    justifyContent: 'center',
-    gap: spacing.sm,
-  },
-  emptyTitle: {
-    fontFamily: systemFontFamily,
-    fontSize: 28,
-    lineHeight: 34,
-    fontWeight: '600',
-    color: colors.textPrimary,
+    paddingTop: spacing.xxl,
   },
   emptyText: {
     color: colors.textSecondary,
   },
   retryText: {
-    fontFamily: systemFontFamily,
-    fontSize: 15,
-    fontWeight: '600',
     color: colors.textPrimary,
+    paddingTop: spacing.sm,
   },
 });
