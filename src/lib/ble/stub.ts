@@ -86,6 +86,7 @@ export const stubBleClient: BleClient = {
           lastSeq: null,
           generation: 0,
           lastBaseMs: null,
+          deviceReboots: 0,
         };
         const startedAt = Date.now();
         let stopped = false;

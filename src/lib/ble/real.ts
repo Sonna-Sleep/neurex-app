@@ -30,7 +30,7 @@ import {
   NEUREX_SERVICE_UUID,
   SAMPLES_PER_PACKET,
 } from './constants';
-import { parsePacket } from './packet';
+import { classifyResume, parsePacket } from './packet';
 import type {
   BleClient,
   ConnectedDevice,
@@ -148,6 +148,18 @@ class ContigTracker {
     if (!this.valid || !this.dirty) return null;
     this.dirty = false;
     return new Uint8Array([this.contigGen, this.contigSeq]);
+  }
+
+  // Restore to the just-constructed state. Called when the device reboots
+  // mid-session (a new epoch): firmware restarts its own gen/seq from scratch,
+  // so the ACK frontier must too, or we'd ACK a frontier the device never had.
+  reset(): void {
+    this.lastSeq = null;
+    this.obsGen = 0;
+    this.contigGen = 0;
+    this.contigSeq = 0;
+    this.valid = false;
+    this.dirty = false;
   }
 }
 
@@ -378,6 +390,7 @@ export const realBleClient: BleClient = {
           lastSeq: null,
           generation: 0,
           lastBaseMs: opts?.resumeFromBaseMs ?? null,
+          deviceReboots: 0,
         };
         let stopped = false;
         // Set on a fatal write failure (storage full). Distinct from `stopped`
@@ -434,10 +447,28 @@ export const realBleClient: BleClient = {
           }
           const pkt = result.packet;
 
-          // Resume dedup: reconnect can deliver a packet older than the last
-          // one already written. Drop any such packet so files stay monotonic.
-          // baseMs is uint32 ms-since-boot, so there is no overnight wrap.
-          if (stats.lastBaseMs !== null && pkt.baseMs <= stats.lastBaseMs) {
+          // Resume dedup vs device-reboot survival. baseMs is firmware ms-since
+          // boot, so a packet at/below lastBaseMs is normally a replayed dup on
+          // reconnect (drop it to keep files monotonic). BUT a brownout/watchdog
+          // reboot resets the firmware clock to ~0, so EVERY post-reboot packet
+          // is "<= lastBaseMs" — the old gate silently discarded the rest of the
+          // night while the link still looked connected. A large backward jump
+          // is therefore a NEW epoch: reset dedup + seq/gen tracking and accept.
+          const resume = classifyResume(stats.lastBaseMs, pkt.baseMs);
+          if (resume === 'reboot') {
+            if (__DEV__)
+              console.warn(
+                `[ble/real] device reboot #${stats.deviceReboots + 1} ` +
+                  `(baseMs ${stats.lastBaseMs}→${pkt.baseMs}); kept recording`,
+              );
+            stats.deviceReboots++;
+            stats.lastSeq = null;
+            stats.generation = 0;
+            pkt.generation = 0;
+            contig.reset();
+            // fall through to persist + advance below; the existing flow re-sets
+            // lastBaseMs to this epoch's baseMs and restarts gap/wrap tracking.
+          } else if (resume === 'dup') {
             stats.dupSkips++;
             cb.onPacket?.(pkt, stats);
             return;

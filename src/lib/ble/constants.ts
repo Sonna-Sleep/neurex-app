@@ -90,3 +90,8 @@ export const PKT_IDX_CHECKSUM = 223; // 7 (header) + 8 × 27 (samples)
 // Channel layout (beta hardware wiring): CH1 is FP1 active, referenced to FP2.
 // FPz is bias/DRL and is not exported as an EEG channel.
 export const CH_FP1 = 0;
+
+// A backward jump in baseMs (firmware ms-since-boot) larger than this means the
+// device rebooted (brownout/watchdog) and its clock reset — a NEW epoch, not a
+// replayed dup. Smaller backward jumps are reconnect replays we still dedup.
+export const DEVICE_REBOOT_GAP_MS = 60_000;

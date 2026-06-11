@@ -67,6 +67,7 @@ function freshStats(): StreamStats {
     lastSeq: null,
     generation: 0,
     lastBaseMs: null,
+    deviceReboots: 0,
   };
 }
 
@@ -104,6 +105,7 @@ function startStatsTimer(statsRef: StatsRef): ReturnType<typeof setInterval> {
       drops: s.drops,
       lastSeq: s.lastSeq,
       generation: s.generation,
+      deviceReboots: s.deviceReboots,
     });
   }, 500);
 }

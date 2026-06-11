@@ -13,6 +13,7 @@
     "smoke:account-deletion": "ts-node --transpile-only --project scripts/tsconfig.scripts.json scripts/smoke-account-deletion.ts",
     "smoke:profile": "ts-node --transpile-only --project scripts/tsconfig.scripts.json scripts/smoke-profile.ts",
     "smoke:ble-packet": "ts-node --transpile-only --project scripts/tsconfig.scripts.json scripts/smoke-ble-packet.ts",
+    "smoke:ble-reboot": "ts-node --transpile-only --project scripts/tsconfig.scripts.json scripts/smoke-ble-reboot.ts",
     "smoke:connect-timeout": "ts-node --transpile-only --project scripts/tsconfig.scripts.json scripts/smoke-connect-timeout.ts",
     "smoke:recovery": "ts-node --transpile-only --project scripts/tsconfig.scripts.json scripts/smoke-recovery.ts",
     "prebuild": "expo prebuild",

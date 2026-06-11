@@ -1,6 +1,7 @@
 import {
   BYTES_PER_FRAME,
   CH_FP1,
+  DEVICE_REBOOT_GAP_MS,
   EEG_UV_PER_LSB,
   PACKET_END_HI,
   PACKET_END_LO,
@@ -14,6 +15,31 @@ import {
   SAMPLES_PER_PACKET,
 } from './constants';
 import type { EegSample, ParsedPacket } from './types';
+
+// Re-export so the resume decision + its threshold live behind one import.
+export { DEVICE_REBOOT_GAP_MS };
+
+// How to treat an incoming packet relative to the highest baseMs already
+// written. baseMs is firmware ms-since-boot:
+//   'accept' — first packet, or strictly newer than the last write.
+//   'dup'    — at/below the last write but within DEVICE_REBOOT_GAP_MS: a
+//              replayed packet on reconnect; drop so files stay monotonic.
+//   'reboot' — more than DEVICE_REBOOT_GAP_MS below: the firmware clock reset
+//              (brownout/watchdog), so this is a NEW device epoch, not a dup.
+// Assumes in-order delivery within an epoch (BLE notify on one connection is
+// ordered). A reboot inside the first DEVICE_REBOOT_GAP_MS of an epoch
+// (lastBaseMs < the gap) reads as 'dup' — a small, accepted dead zone.
+export type ResumeDecision = 'accept' | 'dup' | 'reboot';
+
+export function classifyResume(
+  lastBaseMs: number | null,
+  baseMs: number,
+): ResumeDecision {
+  if (lastBaseMs === null) return 'accept';
+  if (baseMs > lastBaseMs) return 'accept';
+  if (lastBaseMs - baseMs > DEVICE_REBOOT_GAP_MS) return 'reboot';
+  return 'dup';
+}
 
 export type ParseOutcome =
   | { ok: true; packet: ParsedPacket }

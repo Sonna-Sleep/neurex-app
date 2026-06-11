@@ -32,6 +32,10 @@ export type Streaming = {
   drops: number;
   lastSeq: number | null;
   generation: number;
+  // Times the firmware clock reset mid-session (brownout/watchdog reboot); each
+  // was a new epoch we kept recording across instead of dropping the rest of the
+  // night. Surfaced for the UI / flaky-hardware debugging. undefined until first set.
+  deviceReboots?: number;
   connection: 'connected' | 'reconnecting' | 'lost';
   // Set with a user-facing message on a FATAL, non-recoverable stream error
   // (e.g. storage full). The recording is stopped; whatever was written stays

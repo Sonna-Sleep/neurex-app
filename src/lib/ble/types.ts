@@ -42,6 +42,10 @@ export type StreamStats = {
   generation: number;
   /** Highest packet baseMs written so far — used to dedup on resume. null until first write. */
   lastBaseMs: number | null;
+  /** Times the firmware clock reset (brownout/watchdog reboot) mid-session; each
+   * is a new epoch we detected (baseMs jumped far backward) and kept recording
+   * across instead of discarding the rest of the night as duplicates. */
+  deviceReboots: number;
 };
 
 export type StreamCallbacks = {
