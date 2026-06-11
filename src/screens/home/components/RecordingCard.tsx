@@ -6,17 +6,16 @@
 // the local file can still be shared manually for diagnostics.
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import * as Sharing from 'expo-sharing';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 
 import { Button } from '../../../components/Button';
 import { Card } from '../../../components/Card';
-import { Body, Eyebrow, SerifDisplay, SerifHeadline, Secondary } from '../../../theme/typography';
-import { colors, radii, spacing, typeScale } from '../../../theme/tokens';
+import { Body, Eyebrow, SerifHeadline, Secondary } from '../../../theme/typography';
+import { colors, spacing, typeScale } from '../../../theme/tokens';
 import { useSession } from '../../../state/session';
 import { startSession, stopSession } from '../../../lib/ble/streamController';
-import { EEG_SAMPLE_RATE_HZ } from '../../../lib/ble/constants';
 import { transmitSession, subscribeToResult } from '../../../lib/cloud/cloudSync';
 import { handleNightReady } from '../../../lib/nights/onNightReady';
 import type { Session } from '../../../lib/repos/types';
@@ -37,8 +36,6 @@ export function RecordingCard() {
   const streaming = useSession((s) => s.streaming);
   const pairedDeviceId = useSession((s) => s.pairedDeviceId);
   const pairedSerial = useSession((s) => s.pairedSerial);
-  const setPaired = useSession((s) => s.setPaired);
-  const deviceBattery = useSession((s) => s.deviceBattery);
 
   const [busy, setBusy] = useState<'idle' | 'starting' | 'stopping'>('idle');
   const [error, setError] = useState<string | null>(null);
@@ -88,21 +85,6 @@ export function RecordingCard() {
       setBusy('idle');
     }
   }, [pairedDeviceId, pairedSerial]);
-
-  const onForgetDevice = useCallback(() => {
-    Alert.alert(
-      'Forget this Neurex device?',
-      `${pairedSerial ?? 'The paired Neurex device'} will be removed. You can pair again from Sleep.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Forget',
-          style: 'destructive',
-          onPress: () => setPaired(null),
-        },
-      ],
-    );
-  }, [pairedSerial, setPaired]);
 
   const onStop = useCallback(async () => {
     setBusy('stopping');
@@ -208,61 +190,30 @@ export function RecordingCard() {
   // ── Active recording ─────────────────────────────────────────────────────
   if (streaming) {
     const elapsedSec = Math.max(0, Math.floor((nowMs - streaming.startedAtMs) / 1000));
-    const realRateHz =
-      elapsedSec > 0 ? Math.round(streaming.samples / elapsedSec) : 0;
-    const lossPct =
-      streaming.packets + streaming.drops > 0
-        ? Math.round((streaming.drops / (streaming.packets + streaming.drops)) * 100)
-        : 0;
-    const connLabel =
-      streaming.connection === 'connected'
-        ? 'connected'
-        : streaming.connection === 'reconnecting'
-          ? 'reconnecting…'
-          : 'connection lost';
     const isReconnecting = streaming.connection === 'reconnecting';
     return (
-      <View style={styles.wrap}>
-        <Eyebrow>recording · {connLabel}</Eyebrow>
-        <Card style={styles.card}>
-          <View style={styles.row}>
-            <ActivityIndicator color={colors.textSecondary} />
-            <View style={styles.titleCol}>
-              <SerifHeadline>Recording from {pairedSerial ?? 'Neurex device'}</SerifHeadline>
-              <Body style={styles.subtext}>
-                {isReconnecting
-                  ? 'Reconnecting to your Neurex device…'
-                  : `${formatElapsed(elapsedSec)} elapsed`}
-              </Body>
-            </View>
-          </View>
-
-          {__DEV__ ? (
-            <View style={styles.stats}>
-              <Stat label="samples" value={streaming.samples.toLocaleString()} />
-              <Stat
-                label="rate"
-                value={`${realRateHz} Hz`}
-                hint={`target ${EEG_SAMPLE_RATE_HZ}`}
-              />
-              <Stat label="drops" value={`${streaming.drops}`} hint={`${lossPct}%`} />
-              <Stat
-                label="battery"
-                value={deviceBattery !== null ? `${deviceBattery}%` : '—'}
-              />
-            </View>
+      <View style={styles.controlScreen}>
+        <Pressable
+          onPress={onStop}
+          disabled={busy === 'stopping'}
+          style={({ pressed }) => [
+            styles.sessionBubble,
+            styles.sessionBubbleActive,
+            pressed && styles.bubblePressed,
+            busy === 'stopping' && styles.bubbleDisabled,
+          ]}
+          accessibilityRole="button"
+          accessibilityLabel="Stop recording"
+        >
+          {busy === 'stopping' || isReconnecting ? (
+            <ActivityIndicator color={colors.textPrimary} />
           ) : null}
+          <Text style={styles.elapsedValue}>{formatElapsed(elapsedSec)}</Text>
+          <Text style={styles.elapsedLabel}>{busy === 'stopping' ? 'saving' : 'elapsed'}</Text>
+        </Pressable>
 
-          {streaming.error ? <Text style={styles.error}>{streaming.error}</Text> : null}
-          {error ? <Text style={styles.error}>{error}</Text> : null}
-
-          <Button
-            label={busy === 'stopping' ? 'Saving…' : streaming.error ? 'Save & stop' : 'Stop recording'}
-            variant="ghost"
-            onPress={onStop}
-            loading={busy === 'stopping'}
-          />
-        </Card>
+        {streaming.error ? <Text style={styles.error}>{streaming.error}</Text> : null}
+        {error ? <Text style={styles.error}>{error}</Text> : null}
       </View>
     );
   }
@@ -349,47 +300,23 @@ export function RecordingCard() {
 
   // ── Idle (paired but not streaming) — quiet bedtime control surface ───────
   if (!pairedDeviceId) return null;
-  const batteryLabel = deviceBattery !== null ? `${deviceBattery}%` : '—';
   return (
-    <View style={styles.idle}>
-      <View style={styles.idleMain}>
-        <View style={styles.idleHead}>
-          <SerifDisplay style={styles.idleTitle}>Ready to record</SerifDisplay>
-          <Secondary style={styles.idleSub}>
-            Wear your Neurex device and keep your phone nearby.
-          </Secondary>
-        </View>
-
-        <View style={styles.readinessPanel}>
-          <ReadyRow label="Device" value={pairedSerial ?? 'Paired'} />
-          <View style={styles.divider} />
-          <ReadyRow label="Battery" value={batteryLabel} />
-        </View>
-      </View>
-
+    <View style={styles.controlScreen}>
+      <Pressable
+        onPress={onStart}
+        disabled={busy === 'starting'}
+        style={({ pressed }) => [
+          styles.sessionBubble,
+          pressed && styles.bubblePressed,
+          busy === 'starting' && styles.bubbleDisabled,
+        ]}
+        accessibilityRole="button"
+        accessibilityLabel="Start session"
+      >
+        {busy === 'starting' ? <ActivityIndicator color={colors.textPrimary} /> : null}
+        <Text style={styles.startLabel}>{busy === 'starting' ? 'Connecting' : 'Start\nSession'}</Text>
+      </Pressable>
       {error ? <Text style={styles.error}>{error}</Text> : null}
-
-      <View style={styles.bedtimeActions}>
-        <Button
-          label={busy === 'starting' ? 'Connecting…' : 'Start recording'}
-          onPress={onStart}
-          loading={busy === 'starting'}
-        />
-        <Pressable onPress={onForgetDevice} hitSlop={8} style={styles.unpair}>
-          <Secondary style={styles.unpairText}>Forget device</Secondary>
-        </Pressable>
-      </View>
-    </View>
-  );
-}
-
-function ReadyRow({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.readyRow}>
-      <Secondary style={styles.readyLabel}>{label}</Secondary>
-      <Text style={styles.readyValue} numberOfLines={2}>
-        {value}
-      </Text>
     </View>
   );
 }
@@ -431,79 +358,64 @@ const styles = StyleSheet.create({
   card: {
     gap: spacing.lg,
   },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-  },
-  titleCol: {
-    flexShrink: 1,
-    gap: spacing.xs,
-  },
   subtext: {
     color: colors.textSecondary,
   },
-  idle: {
+  controlScreen: {
     flexGrow: 1,
-    justifyContent: 'space-between',
-    alignItems: 'stretch',
-    gap: spacing.xxl,
-    paddingTop: spacing.xl,
-    paddingBottom: spacing.md,
-  },
-  idleMain: {
-    gap: spacing.xl,
-  },
-  idleHead: {
-    alignItems: 'flex-start',
-    gap: spacing.md,
-    maxWidth: 330,
-  },
-  idleTitle: {
-    fontSize: 36,
-    lineHeight: 41,
-  },
-  idleSub: {
-    color: colors.textSecondary,
-    fontSize: 16,
-    lineHeight: 23,
-  },
-  readinessPanel: {
-    alignSelf: 'stretch',
-    borderRadius: radii.button,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    backgroundColor: colors.bgSurface,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-  },
-  readyRow: {
-    minHeight: 50,
-    flexDirection: 'row',
+    minHeight: 420,
+    justifyContent: 'center',
     alignItems: 'center',
-    justifyContent: 'space-between',
     gap: spacing.lg,
+    paddingBottom: spacing.xxl,
   },
-  readyLabel: {
-    color: colors.textTertiary,
-    fontSize: 12,
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
+  sessionBubble: {
+    width: 218,
+    height: 218,
+    borderRadius: 109,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.borderDivider,
+    backgroundColor: colors.bgElevated,
+    shadowColor: colors.textPrimary,
+    shadowOpacity: 0.08,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 18 },
+    elevation: 8,
   },
-  readyValue: {
-    flex: 1,
-    textAlign: 'right',
+  sessionBubbleActive: {
+    borderColor: colors.textSecondary,
+  },
+  bubblePressed: {
+    opacity: 0.88,
+    transform: [{ scale: 0.985 }],
+  },
+  bubbleDisabled: {
+    opacity: 0.7,
+  },
+  startLabel: {
+    fontSize: 26,
+    lineHeight: 32,
+    fontWeight: '500',
+    textAlign: 'center',
     color: colors.textPrimary,
-    fontSize: 14,
+  },
+  elapsedValue: {
+    fontSize: 38,
+    lineHeight: 44,
     fontWeight: '600',
+    textAlign: 'center',
+    color: colors.textPrimary,
   },
-  divider: {
-    height: 1,
-    backgroundColor: colors.borderSubtle,
-  },
-  bedtimeActions: {
-    alignSelf: 'stretch',
-    gap: spacing.lg,
+  elapsedLabel: {
+    fontSize: 14,
+    lineHeight: 18,
+    fontWeight: '500',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    color: colors.textSecondary,
   },
   stats: {
     flexDirection: 'row',
@@ -528,12 +440,5 @@ const styles = StyleSheet.create({
   error: {
     color: colors.warning,
     fontSize: 13,
-  },
-  unpair: {
-    alignSelf: 'center',
-    paddingVertical: spacing.xs,
-  },
-  unpairText: {
-    color: colors.textSecondary,
   },
 });
