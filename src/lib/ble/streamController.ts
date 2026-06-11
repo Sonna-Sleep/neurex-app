@@ -15,6 +15,11 @@ import { getBleManager } from './manager';
 import { startForegroundService, stopForegroundService } from './foregroundService';
 import { nextBackoffMs } from './backoff';
 import {
+  WATCHDOG_INTERVAL_MS,
+  freshWatchdogState,
+  stallTick,
+} from './watchdog';
+import {
   setActiveRecording,
   clearActiveRecording,
   writeSessionMeta,
@@ -40,6 +45,11 @@ type ActiveSession = {
   handle: StreamHandle;
   device: ConnectedDevice;
   statsTimer: ReturnType<typeof setInterval>;
+  // Level-based data-stall watchdog. Forces a reconnect when packets stop
+  // arriving while the link still reports connected (firmware hang). Always a
+  // live interval while recording (a no-op tick on the stub/Expo-Go path);
+  // nulled out by failSession after a fatal storage error.
+  watchdogTimer: ReturnType<typeof setInterval> | null;
   cb: StreamCallbacks;
   // Holder, not a snapshot: real.ts allocates a fresh StreamStats object on
   // each (re)startStream, so we track the current one by reference here. The
@@ -110,6 +120,32 @@ function startStatsTimer(statsRef: StatsRef): ReturnType<typeof setInterval> {
   }, 500);
 }
 
+// Level-based data-stall watchdog. onDeviceDisconnected only fires on an actual
+// link drop; a firmware hang with the link still up delivers no packets while
+// the OS reports connected, stranding the session forever. Every
+// WATCHDOG_INTERVAL_MS we check whether the packet counter advanced; after
+// enough frozen ticks we force the link down so the existing reconnect path
+// (onDeviceDisconnected → reconnectLoop) takes over. Paused while a reconnect
+// is already in flight, and re-baselined after one so a fresh link isn't judged
+// stalled before its first packet. Cleared on stop and on a fatal failSession
+// (we must NOT reconnect after storage-full).
+function startWatchdog(): ReturnType<typeof setInterval> {
+  let wd = freshWatchdogState();
+  return setInterval(() => {
+    if (!active || active.userStopped) return;
+    const manager = getBleManager();
+    if (!manager) return; // stub / Expo Go — no native link to cancel
+    const tick = stallTick(wd, active.statsRef.current.packets, active.reconnecting);
+    wd = tick.state;
+    if (!tick.forceReconnect) return;
+    const deviceId = active.deviceId;
+    if (__DEV__) console.warn('[stream] data stall — forcing reconnect');
+    // cancelDeviceConnection emits a disconnect the registerDisconnectWatch
+    // listener is already subscribed to, which drives reconnectLoop.
+    manager.cancelDeviceConnection(deviceId).catch(() => undefined);
+  }, WATCHDOG_INTERVAL_MS);
+}
+
 export async function startSession(
   deviceId: string,
   serial?: string | null,
@@ -145,6 +181,7 @@ export async function startSession(
   });
 
   const statsTimer = startStatsTimer(statsRef);
+  const watchdogTimer = startWatchdog();
 
   // Keep the process alive overnight (screen off / backgrounded).
   const fgStarted = startForegroundService();
@@ -156,6 +193,7 @@ export async function startSession(
     handle,
     device,
     statsTimer,
+    watchdogTimer,
     cb,
     statsRef,
     disconnectSub: null,
@@ -211,6 +249,7 @@ export async function resumeSessionAfterRestore(meta: RecordingMeta): Promise<vo
       error: null,
     });
     const statsTimer = startStatsTimer(statsRef);
+    const watchdogTimer = startWatchdog();
     startForegroundService();
     active = {
       sessionId,
@@ -219,6 +258,7 @@ export async function resumeSessionAfterRestore(meta: RecordingMeta): Promise<vo
       handle,
       device,
       statsTimer,
+      watchdogTimer,
       cb,
       statsRef,
       disconnectSub: null,
@@ -336,6 +376,12 @@ async function failSession(message: string): Promise<void> {
     clearTimeout(active.lostTimer);
     active.lostTimer = null;
   }
+  // Stop the watchdog — a fatal storage error must NOT trigger a reconnect (the
+  // disk is full; reconnecting would just restart streaming into a full disk).
+  if (active.watchdogTimer) {
+    clearInterval(active.watchdogTimer);
+    active.watchdogTimer = null;
+  }
   active.disconnectSub?.remove();
   active.disconnectSub = null;
   await active.handle.stop().catch(() => undefined);
@@ -359,6 +405,7 @@ export async function stopSession(): Promise<StopResult | null> {
   session.disconnectSub?.remove();
   if (session.lostTimer) clearTimeout(session.lostTimer);
   clearInterval(session.statsTimer);
+  if (session.watchdogTimer) clearInterval(session.watchdogTimer);
   const stats = await session.handle.stop().catch(() => session.statsRef.current);
   await session.device.disconnect().catch(() => undefined);
 
