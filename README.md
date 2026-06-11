@@ -128,6 +128,36 @@ Install with `adb install -r <apk>` (in-place `-r` preserves app data).
 3. The Modal backend stages the EEG with YASA and writes a `sessions` row.
 4. The app reads that row and renders the hypnogram + score in Journal.
 
+## Android push setup
+
+Android push notifications require a `google-services.json` file in the repo root and an FCM V1 service account key uploaded to EAS. **Pushes will not work on Android until these steps are done.**
+
+`google-services.json` is safe to commit — it contains only public identifiers and a restricted API key (standard Expo practice).
+
+**(a) Download google-services.json**
+
+1. Open the [Firebase console](https://console.firebase.google.com/) and open (or create) a project for the app's Android package name: `tech.neurex.app`.
+2. Go to **Project settings** (gear icon) → **General** → scroll to **Your apps** → Android app.
+3. Click **Download google-services.json** and place the file in the **repo root** (next to `app.json`).
+4. Commit it: `git add google-services.json && git commit -m "chore: add google-services.json for Android FCM"`
+
+**(b) Upload FCM V1 service account key to EAS**
+
+1. In the same Firebase project: **Project settings** → **Service accounts** → **Generate new private key** → download the JSON file.
+2. Run:
+   ```
+   eas credentials
+   ```
+   Select **Android** → select the app → **Push Notifications (FCM V1)** → upload the service account key.
+
+**(c) Rebuild**
+
+```bash
+eas build --platform android
+```
+
+Push notifications will be active in the new build.
+
 ## License
 
 Private. © Neurex.

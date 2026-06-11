@@ -34,7 +34,8 @@ export async function unregisterPushToken(): Promise<void> {
     const supabase = getSupabase();
     if (!supabase) return;
     await supabase.from('user_push_tokens').delete().eq('token', token);
-  } catch {
+  } catch (e) {
+    if (__DEV__) console.warn('[push] registration failed', e);
     // Best-effort — sign-out must not be blocked by a failed token delete.
   }
 }
@@ -62,7 +63,8 @@ export async function registerPushToken(userId: string): Promise<void> {
           });
       });
     }
-  } catch {
+  } catch (e) {
+    if (__DEV__) console.warn('[push] registration failed', e);
     // Push is best-effort — a missing token must never block sign-in.
   }
 }
