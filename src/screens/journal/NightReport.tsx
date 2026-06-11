@@ -65,6 +65,10 @@ export function NightReport({ session }: { session: Session }) {
             </View>
           </View>
         </>
+      ) : session.status === 'failed' ? (
+        <Secondary style={styles.processing}>
+          Analysis failed. Contact support at contact@neurex.tech.
+        </Secondary>
       ) : (
         <Secondary style={styles.processing}>Analyzing this night…</Secondary>
       )}

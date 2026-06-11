@@ -25,6 +25,7 @@ const LANE_LABEL: Record<SleepStage, string> = {
 // Hour labels nearer than this (in px) to either chart edge are dropped so
 // they don't collide with the bed/wake labels anchored at the edges.
 const EDGE_CLEARANCE_PX = 56;
+const VALID_STAGES = new Set<string>(['wake', 'rem', 'light', 'deep']);
 
 export function Hypnogram({ epochs, startMs, endMs }: Props) {
   const [width, setWidth] = useState(0);
@@ -164,12 +165,13 @@ export function Hypnogram({ epochs, startMs, endMs }: Props) {
 function collapseRuns(epochs: Epoch[]) {
   const runs: { stage: SleepStage; startMs: number; durationMs: number }[] = [];
   for (const e of epochs) {
+    const stage: SleepStage = VALID_STAGES.has(e.stage) ? e.stage : 'light';
     const last = runs[runs.length - 1];
-    if (last && last.stage === e.stage) {
+    if (last && last.stage === stage) {
       last.durationMs += e.durationSec * 1000;
     } else {
       runs.push({
-        stage: e.stage,
+        stage,
         startMs: e.startMs,
         durationMs: e.durationSec * 1000,
       });
