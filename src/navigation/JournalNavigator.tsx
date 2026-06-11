@@ -22,7 +22,7 @@ export function JournalNavigator() {
     >
       <Stack.Screen name="JournalHome" component={JournalScreen} options={{ headerShown: false }} />
       <Stack.Screen name="JournalCalendar" component={JournalCalendarScreen} options={{ headerShown: false }} />
-      <Stack.Screen name="SessionDetail" component={SessionDetailScreen} options={{ title: 'Night' }} />
+      <Stack.Screen name="SessionDetail" component={SessionDetailScreen} options={{ headerShown: false }} />
     </Stack.Navigator>
   );
 }
