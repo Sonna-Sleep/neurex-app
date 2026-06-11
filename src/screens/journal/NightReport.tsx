@@ -47,7 +47,7 @@ export function NightReport({ session }: { session: Session }) {
                 value={session.sol != null ? `${Math.round(session.sol)} min` : '—'}
               />
               <DetailRow
-                label="Signal quality"
+                label="Staging confidence"
                 value={session.confidence != null ? `${Math.round(session.confidence * 100)}%` : '—'}
               />
             </View>

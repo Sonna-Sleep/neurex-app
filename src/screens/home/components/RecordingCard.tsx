@@ -20,7 +20,6 @@ import { EEG_SAMPLE_RATE_HZ } from '../../../lib/ble/constants';
 import { transmitSession, subscribeToResult } from '../../../lib/cloud/cloudSync';
 import { handleNightReady } from '../../../lib/nights/onNightReady';
 import type { Session } from '../../../lib/repos/types';
-import { PreBedCheck } from './PreBedCheck';
 
 // Holds the just-finished local recording so the UI can offer a share button.
 type SavedRecording = {
@@ -42,9 +41,6 @@ export function RecordingCard() {
   const deviceBattery = useSession((s) => s.deviceBattery);
 
   const [busy, setBusy] = useState<'idle' | 'starting' | 'stopping'>('idle');
-  // True while the pre-bed signal check is on screen (between tapping
-  // "start session" and the recording actually beginning).
-  const [checking, setChecking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState<SavedRecording | null>(null);
   // Cloud sync of the just-finished recording (transmit → analyze → summary).
@@ -349,25 +345,6 @@ export function RecordingCard() {
     );
   }
 
-  // ── Pre-bed signal check (between "start session" and recording) ─────────
-  if (checking && pairedDeviceId) {
-    return (
-      <View style={styles.wrap}>
-        <Eyebrow>before you sleep</Eyebrow>
-        <Card style={styles.card}>
-          <PreBedCheck
-            deviceId={pairedDeviceId}
-            onProceed={() => {
-              setChecking(false);
-              onStart();
-            }}
-            onCancel={() => setChecking(false)}
-          />
-        </Card>
-      </View>
-    );
-  }
-
   // ── Idle (paired but not streaming) — flat, editorial, mask as the hero ──
   if (!pairedDeviceId) return null;
   return (
@@ -381,10 +358,7 @@ export function RecordingCard() {
       <View style={styles.idleActions}>
         <Button
           label={busy === 'starting' ? 'Connecting…' : 'Start session'}
-          onPress={() => {
-            setError(null);
-            setChecking(true);
-          }}
+          onPress={onStart}
           loading={busy === 'starting'}
         />
         <Pressable onPress={onUnpair} hitSlop={8} style={styles.unpair}>

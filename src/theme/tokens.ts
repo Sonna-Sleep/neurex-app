@@ -19,7 +19,7 @@ export const colors = {
   ctaText: '#0B0D10',
   warning: '#E0B560',
   danger: '#E5484D',
-  // Calm green for "all good" cues (signal check, synced).
+  // Calm green for "all good" cues (synced, successful actions).
   positive: '#5FB89C',
   // Single restrained accent — soft periwinkle, used sparingly for emphasis.
   accent: '#7C9CE0',

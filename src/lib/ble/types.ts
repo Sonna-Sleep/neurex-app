@@ -62,20 +62,6 @@ export type StreamHandle = {
   stop(): Promise<StreamStats>;
 };
 
-/** Lightweight preview handle — same notify stream as startStream but
- * NO file I/O. Used by the Home signal-quality preview before a real
- * recording starts. */
-export type PreviewHandle = {
-  stop(): Promise<void>;
-};
-
-export type PreviewCallbacks = {
-  /** Fired for each well-formed packet. Stats are not aggregated. */
-  onPacket: (packet: ParsedPacket) => void;
-  /** Fatal stream error. */
-  onError?: (err: Error) => void;
-};
-
 export type StreamResumeOpts = {
   /** On reconnect, drop replayed packets with baseMs <= this value. */
   resumeFromBaseMs?: number | null;
@@ -89,20 +75,17 @@ export type ConnectedDevice = {
     cb: StreamCallbacks,
     opts?: StreamResumeOpts,
   ): Promise<StreamHandle>;
-  /** Subscribe to the notify characteristic for live signal preview.
-   * Does NOT write to disk — caller drives whatever UI/analysis it wants. */
-  startPreview(cb: PreviewCallbacks): Promise<PreviewHandle>;
   disconnect(): Promise<void>;
 };
 
 export type ConnectOpts = {
   /**
    * Reject the connect if the device hasn't connected within this many ms.
-   * Used for USER-INITIATED connects (pre-bed check, session start) so a mask
-   * that's off/out of range fails fast with an error instead of an infinite
-   * spinner. OMIT it for the background reconnect loop — there we want the
-   * untimed `autoConnect` pending connection so iOS/Android can complete the
-   * link whenever the device comes back in range (even while backgrounded).
+   * Used for USER-INITIATED session starts so a mask that's off/out of range
+   * fails fast with an error instead of an infinite spinner. OMIT it for the
+   * background reconnect loop — there we want the untimed `autoConnect` pending
+   * connection so iOS/Android can complete the link whenever the device comes
+   * back in range (even while backgrounded).
    */
   timeoutMs?: number;
 };

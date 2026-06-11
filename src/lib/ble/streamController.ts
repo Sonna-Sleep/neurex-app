@@ -22,9 +22,9 @@ import {
 } from '../cloud/recovery';
 import type { Subscription } from 'react-native-ble-plx';
 
-// User-initiated connect (pre-bed check / session start): time-bounded so a
-// mask that's off or out of range fails fast with an error instead of an
-// infinite spinner. The background reconnect loop deliberately omits this.
+// User-initiated session start: time-bounded so a mask that's off or out of
+// range fails fast with an error instead of an infinite spinner. The background
+// reconnect loop deliberately omits this.
 const CONNECT_TIMEOUT_MS = 20_000;
 // How long a reconnect may drag on before the UI escalates to "connection
 // lost". Retries continue indefinitely (correct for an overnight run — the

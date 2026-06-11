@@ -144,35 +144,6 @@ export const stubBleClient: BleClient = {
         };
       },
 
-      async startPreview(cb) {
-        // Reuse the synthetic generator at the same ~62 Hz cadence as the
-        // real path. No file I/O — just hand each packet to the caller.
-        let stopped = false;
-        let seq = 0;
-        let baseMs = Date.now() & 0xffffffff;
-        const timer = setInterval(() => {
-          if (stopped) return;
-          const samples: EegSample[] = [];
-          for (let i = 0; i < SAMPLES_PER_PACKET; i++) {
-            const t = (baseMs + i * EEG_SAMPLE_INTERVAL_MS) / 1000;
-            const fpz = Math.sin(2 * Math.PI * 10 * t) * 30;
-            samples.push({
-              ms: (baseMs + i * EEG_SAMPLE_INTERVAL_MS) >>> 0,
-              fpz_uV: fpz,
-            });
-          }
-          cb.onPacket({ generation: 0, seq, baseMs, samples });
-          baseMs = (baseMs + SAMPLES_PER_PACKET * EEG_SAMPLE_INTERVAL_MS) >>> 0;
-          seq = (seq + 1) & 0xff;
-        }, 16);
-        return {
-          async stop() {
-            stopped = true;
-            clearInterval(timer);
-          },
-        };
-      },
-
       async disconnect() {},
     };
   },

@@ -37,8 +37,6 @@ import type {
   ConnectOpts,
   FoundDevice,
   ParsedPacket,
-  PreviewCallbacks,
-  PreviewHandle,
   StreamCallbacks,
   StreamHandle,
   StreamStats,
@@ -510,46 +508,6 @@ export const realBleClient: BleClient = {
               if (__DEV__) console.warn('[ble/real] EEG close failed:', e);
             }
             return stats;
-          },
-        };
-      },
-
-      async startPreview(cb: PreviewCallbacks): Promise<PreviewHandle> {
-        let stopped = false;
-        let generation = 0;
-        let lastSeq: number | null = null;
-        const sub = manager.monitorCharacteristicForDevice(
-          deviceId,
-          NEUREX_SERVICE_UUID,
-          NEUREX_EEG_NOTIFY_UUID,
-          (error, characteristic) => {
-            if (stopped) return;
-            if (error) {
-              cb.onError?.(error as unknown as Error);
-              return;
-            }
-            const b64 = characteristic?.value;
-            if (!b64) return;
-            const bytes = b64ToBytes(b64);
-            const result = parsePacket(bytes, generation);
-            if (!result.ok) return;
-            const pkt = result.packet;
-            if (lastSeq !== null && pkt.seq < lastSeq) {
-              generation++;
-              pkt.generation = generation;
-            }
-            lastSeq = pkt.seq;
-            cb.onPacket(pkt);
-          },
-        );
-        return {
-          async stop(): Promise<void> {
-            stopped = true;
-            try {
-              sub.remove();
-            } catch {
-              /* ignore */
-            }
           },
         };
       },
