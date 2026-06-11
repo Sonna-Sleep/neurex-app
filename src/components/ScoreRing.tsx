@@ -46,7 +46,7 @@ export function ScoreRing({ score, size = 160, stroke = 11, showLabel = true }: 
   }, [score, isScored, anim]);
 
   const dashoffset = anim.interpolate({ inputRange: [0, 1], outputRange: [c, c * (1 - progress)] });
-  const numberSize = Math.round(size * 0.34);
+  const numberSize = Math.round(size * 0.3);
 
   return (
     <View style={{ width: size, height: size }}>
@@ -67,7 +67,7 @@ export function ScoreRing({ score, size = 160, stroke = 11, showLabel = true }: 
       </Svg>
       <View style={styles.center}>
         <Text style={[styles.number, { fontSize: numberSize, lineHeight: numberSize + 2 }]} allowFontScaling={false}>
-          {score ?? '—'}
+          {score != null ? `${score}%` : '—'}
         </Text>
         {showLabel ? (
           <Text style={[styles.descriptor, { color: band.color }]} allowFontScaling={false}>

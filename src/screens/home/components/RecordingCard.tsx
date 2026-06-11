@@ -310,7 +310,7 @@ export function RecordingCard() {
           {error ? <Text style={styles.error}>{error}</Text> : null}
           {sync === 'done' && summary ? (
             <View style={styles.stats}>
-              <Stat label="Score" value={summary.score != null ? `${summary.score}` : '—'} />
+              <Stat label="Score" value={summary.score != null ? `${summary.score}%` : '—'} />
               <Stat label="Deep" value={`${Math.round(summary.stageMinutes?.deep ?? 0)}m`} />
               <Stat label="REM" value={`${Math.round(summary.stageMinutes?.rem ?? 0)}m`} />
               <Stat label="Light" value={`${Math.round(summary.stageMinutes?.light ?? 0)}m`} />

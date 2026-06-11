@@ -42,7 +42,7 @@ function profileStats(sessions: Session[]) {
   return {
     nights: `${completed.length}`,
     avgAsleep: fmtDur(avgTst),
-    avgScore: `${Math.round(avgScore)}`,
+    avgScore: `${Math.round(avgScore)}%`,
   };
 }
 
