@@ -140,7 +140,8 @@ Android push notifications require a `google-services.json` file in the repo roo
 1. Open the [Firebase console](https://console.firebase.google.com/) and open (or create) a project for the app's Android package name: `tech.neurex.app`.
 2. Go to **Project settings** (gear icon) → **General** → scroll to **Your apps** → Android app.
 3. Click **Download google-services.json** and place the file in the **repo root** (next to `app.json`).
-4. Commit it: `git add google-services.json && git commit -m "chore: add google-services.json for Android FCM"`
+4. Verify it matches the app package: `npm run check:android-push`
+5. Commit it: `git add google-services.json && git commit -m "chore: add google-services.json for Android FCM"`
 
 **(b) Upload FCM V1 service account key to EAS**
 
