@@ -47,6 +47,15 @@ export function NightReport({ session }: { session: Session }) {
           <View style={styles.section}>
             <Eyebrow>sleep stages</Eyebrow>
             <Hypnogram epochs={session.epochs} startMs={session.startMs} endMs={session.endMs} />
+            {session.excludedMinutes > 0 ? (
+              <Secondary style={styles.signalNote}>
+                {`No-signal time excluded: ${fmtDur(session.excludedMinutes)}${
+                  session.signalEndMs != null
+                    ? ` · usable signal ended around ${fmtTime(session.startMs + session.signalEndMs)}`
+                    : ''
+                }.`}
+              </Secondary>
+            ) : null}
           </View>
           <StageBreakdown stageMinutes={session.stageMinutes} />
 
@@ -167,6 +176,9 @@ const styles = StyleSheet.create({
   },
   section: {
     gap: spacing.md,
+  },
+  signalNote: {
+    color: colors.textSecondary,
   },
   detailGrid: {
     flexDirection: 'row',

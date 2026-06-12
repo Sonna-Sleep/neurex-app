@@ -3,7 +3,7 @@ import { StyleSheet, View } from 'react-native';
 import Svg, { Line, Rect, Text as SvgText } from 'react-native-svg';
 
 import { colors, stageColors } from '../../../theme/tokens';
-import type { Epoch, SleepStage } from '../../../lib/repos';
+import type { CoreSleepStage, Epoch } from '../../../lib/repos';
 
 type Props = {
   epochs: Epoch[];
@@ -15,8 +15,8 @@ const HEIGHT = 220;
 const PADDING_TOP = 8;
 const PADDING_BOTTOM = 22; // space for the bottom time axis
 const LABEL_W = 36; // left gutter reserved for lane labels
-const LANES: SleepStage[] = ['wake', 'rem', 'light', 'deep'];
-const LANE_LABEL: Record<SleepStage, string> = {
+const LANES: CoreSleepStage[] = ['wake', 'rem', 'light', 'deep'];
+const LANE_LABEL: Record<CoreSleepStage, string> = {
   wake: 'WAKE',
   light: 'LIGHT',
   rem: 'REM',
@@ -42,9 +42,9 @@ export function Hypnogram({ epochs, startMs, endMs }: Props) {
   // Each stage occupies a horizontal band; wake on top, deep at the bottom.
   const SLOT_H = drawH / LANES.length;
   const BAND_H = 20;
-  const laneTop = (stage: SleepStage) =>
+  const laneTop = (stage: CoreSleepStage) =>
     PADDING_TOP + LANES.indexOf(stage) * SLOT_H + (SLOT_H - BAND_H) / 2;
-  const laneCenter = (stage: SleepStage) => laneTop(stage) + BAND_H / 2;
+  const laneCenter = (stage: CoreSleepStage) => laneTop(stage) + BAND_H / 2;
   const baselineY = PADDING_TOP + drawH;
   const axisY = baselineY + 15;
 
@@ -163,9 +163,10 @@ export function Hypnogram({ epochs, startMs, endMs }: Props) {
 }
 
 function collapseRuns(epochs: Epoch[]) {
-  const runs: { stage: SleepStage; startMs: number; durationMs: number }[] = [];
+  const runs: { stage: CoreSleepStage; startMs: number; durationMs: number }[] = [];
   for (const e of epochs) {
-    const stage: SleepStage = VALID_STAGES.has(e.stage) ? e.stage : 'light';
+    if (!VALID_STAGES.has(e.stage)) continue;
+    const stage = e.stage as CoreSleepStage;
     const last = runs[runs.length - 1];
     if (last && last.stage === stage) {
       last.durationMs += e.durationSec * 1000;

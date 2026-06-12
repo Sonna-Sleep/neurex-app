@@ -1,4 +1,5 @@
-export type SleepStage = 'wake' | 'rem' | 'light' | 'deep';
+export type CoreSleepStage = 'wake' | 'rem' | 'light' | 'deep';
+export type SleepStage = CoreSleepStage | 'excluded';
 
 export type Epoch = {
   startMs: number;
@@ -20,7 +21,7 @@ export type Session = {
   efficiency: number | null;
   /** Count of distinct wake intrusions after sleep onset. null until staging. */
   awakenings: number | null;
-  stageMinutes: Record<SleepStage, number>;
+  stageMinutes: Partial<Record<SleepStage, number>>;
   epochs: Epoch[];
   /** 0..99, never 100. Capped by design (psychological retention hook). */
   score: number | null;
@@ -28,6 +29,10 @@ export type Session = {
   confidence: number | null;
   /** Sleep onset latency, minutes (time to fall asleep). null until staged / never slept. */
   sol: number | null;
+  /** Minutes removed from metrics because the signal was off-head/no-contact/railed. */
+  excludedMinutes: number;
+  /** Offset from start where usable signal ended, when backend can identify it. */
+  signalEndMs: number | null;
   /** Cloud Storage path {user_id}/{readable-label}; lets the app download the raw files. null for legacy rows. */
   storagePrefix: string | null;
   /** uploaded | processing | ready | failed — drives "analyzing…" vs results in the list. */

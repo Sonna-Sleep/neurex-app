@@ -1,6 +1,6 @@
 import { Platform } from 'react-native';
 
-import type { SleepStage } from '../lib/repos/types';
+import type { CoreSleepStage } from '../lib/repos/types';
 
 export const colors = {
   // Calm cool-neutral charcoal (Oura-like): deep but never pure black, never
@@ -46,7 +46,7 @@ export const stageColors = {
 // Single source of truth for stage order + labels across every visualization.
 // Sleep-first order (most restorative → least) so the user reads one consistent
 // order in the legend and breakdown.
-export const STAGE_META: { key: SleepStage; label: string }[] = [
+export const STAGE_META: { key: CoreSleepStage; label: string }[] = [
   { key: 'deep', label: 'Deep' },
   { key: 'rem', label: 'REM' },
   { key: 'light', label: 'Light' },

@@ -8,13 +8,13 @@ import {
   STAGE_META,
   systemFontFamily,
 } from '../../../theme/tokens';
-import type { SleepStage } from '../../../lib/repos';
+import type { CoreSleepStage, SleepStage } from '../../../lib/repos';
 
-type Props = { stageMinutes: Record<SleepStage, number> };
+type Props = { stageMinutes: Partial<Record<SleepStage, number>> };
 
 export function StageBreakdown({ stageMinutes }: Props) {
   // Read every stage through `?? 0` — a short night may be missing a stage.
-  const minutesFor = (key: SleepStage) => stageMinutes?.[key] ?? 0;
+  const minutesFor = (key: CoreSleepStage) => stageMinutes?.[key] ?? 0;
   const total = STAGE_META.reduce((s, x) => s + minutesFor(x.key), 0) || 1;
 
   return (
