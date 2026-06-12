@@ -93,4 +93,6 @@ The app is a companion to a **hardware EEG sleep mask** the reviewer won't have.
 - [x] Privacy Policy hosted (`https://aleksaspetro.github.io/neurex-legal/`) + `src/lib/legal.ts` wired — just paste the URL into ASC
 - [ ] Version `1.0.0`, build number auto-incremented (eas.json `autoIncrement` is on)
 - [ ] Export compliance: already declared (`ios.config.usesNonExemptEncryption: false`) — no per-submit prompt
+- [ ] Submit with App Store Connect credentials from your local keychain or
+  `eas submit --platform ios --profile production --asc-api-key-path <local .p8>`.
 ```

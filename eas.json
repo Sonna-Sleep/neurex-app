@@ -28,10 +28,7 @@
   "submit": {
     "production": {
       "ios": {
-        "ascAppId": "6778255946",
-        "ascApiKeyPath": "C:/Users/Lenovo/.neurex-secrets/AuthKey_S4A7ZAG96F.p8",
-        "ascApiKeyId": "S4A7ZAG96F",
-        "ascApiKeyIssuerId": "bca2c8b7-1c6e-44e5-aea2-dc2cc5d61767"
+        "ascAppId": "6778255946"
       }
     }
   }

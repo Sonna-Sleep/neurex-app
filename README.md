@@ -117,6 +117,7 @@ Install with `adb install -r <apk>` (in-place `-r` preserves app data).
 | `npm run smoke:recovery` | Local recording recovery smoke test |
 | `npm run smoke:account-deletion` | Account deletion API smoke test |
 | `npm run smoke:profile` | Profile state smoke test |
+| `npm run smoke:push` | Push token ownership/cleanup smoke test |
 | `npm run smoke:support` | Support message smoke test |
 
 ## How a night flows

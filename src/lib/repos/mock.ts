@@ -1,11 +1,10 @@
 import type { Device, DeviceRepo } from './types';
 
 /**
- * TEMPORARY device mock — a stand-in until real BLE pairing lands.
- *
  * Sessions come from Supabase (see ./supabase.ts); only device state is still
- * local, because it's BLE-sourced, not cloud-sourced. Delete this file once
- * real BLE provides the device.
+ * local because it's BLE-sourced, not cloud-sourced. Pairing writes the real
+ * device serial/id into Zustand; this repo exposes that local pairing state to
+ * account/home surfaces that don't need an active BLE connection.
  */
 class MockDeviceRepo implements DeviceRepo {
   private device: Device | null = {

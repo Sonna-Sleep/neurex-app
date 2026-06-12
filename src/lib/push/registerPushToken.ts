@@ -14,10 +14,15 @@ import appConfig from '../../../app.json';
 const projectId = appConfig.expo.extra?.eas?.projectId;
 
 let tokenListenerAttached = false;
+let currentPushUserId: string | null = null;
+const registeredTokensByUser = new Map<string, Set<string>>();
 
 async function upsertToken(userId: string, token: string): Promise<void> {
   const supabase = getSupabase();
   if (!supabase) return;
+  const known = registeredTokensByUser.get(userId) ?? new Set<string>();
+  known.add(token);
+  registeredTokensByUser.set(userId, known);
   await supabase
     .from('user_push_tokens')
     .upsert(
@@ -26,27 +31,20 @@ async function upsertToken(userId: string, token: string): Promise<void> {
     );
 }
 
-export async function unregisterPushToken(): Promise<void> {
-  if (!projectId) return;
-  try {
-    const { data: token } = await Notifications.getExpoPushTokenAsync({ projectId });
-    if (!token) return;
-    const supabase = getSupabase();
-    if (!supabase) return;
-    await supabase.from('user_push_tokens').delete().eq('token', token);
-  } catch (e) {
-    if (__DEV__) console.warn('[push] registration failed', e);
-    // Best-effort — sign-out must not be blocked by a failed token delete.
-  }
+async function currentExpoPushToken(): Promise<string | null> {
+  if (!projectId) return null;
+  const { status } = await Notifications.getPermissionsAsync();
+  if (status !== 'granted') return null;
+
+  const { data: token } = await Notifications.getExpoPushTokenAsync({ projectId });
+  return token ?? null;
 }
 
 export async function registerPushToken(userId: string): Promise<void> {
   if (!projectId) return;
+  currentPushUserId = userId;
   try {
-    const { status } = await Notifications.getPermissionsAsync();
-    if (status !== 'granted') return;
-
-    const { data: token } = await Notifications.getExpoPushTokenAsync({ projectId });
+    const token = await currentExpoPushToken();
     if (token) await upsertToken(userId, token);
 
     // iOS can rotate the underlying device token; re-fetch the Expo push token
@@ -56,8 +54,13 @@ export async function registerPushToken(userId: string): Promise<void> {
     if (!tokenListenerAttached) {
       tokenListenerAttached = true;
       Notifications.addPushTokenListener(() => {
+        const uid = currentPushUserId;
+        if (!uid) return;
         Notifications.getExpoPushTokenAsync({ projectId })
-          .then(({ data: expoToken }) => upsertToken(userId, expoToken))
+          .then(({ data: expoToken }) => {
+            if (expoToken) return upsertToken(uid, expoToken);
+            return undefined;
+          })
           .catch((err) => {
             if (__DEV__) console.warn('[registerPushToken] rotation re-fetch failed', err);
           });
@@ -68,3 +71,27 @@ export async function registerPushToken(userId: string): Promise<void> {
     // Push is best-effort — a missing token must never block sign-in.
   }
 }
+
+export async function clearPushTokenRegistration(): Promise<void> {
+  const supabase = getSupabase();
+  const uid = currentPushUserId;
+  currentPushUserId = null;
+  if (!supabase || !uid) return;
+
+  try {
+    const tokens = new Set(registeredTokensByUser.get(uid) ?? []);
+    const token = await currentExpoPushToken();
+    if (token) tokens.add(token);
+    registeredTokensByUser.delete(uid);
+
+    await Promise.all(
+      [...tokens].map((t) =>
+        supabase.from('user_push_tokens').delete().eq('user_id', uid).eq('token', t),
+      ),
+    );
+  } catch {
+    // Logout must continue even if push cleanup is unavailable/offline.
+  }
+}
+
+export const unregisterPushToken = clearPushTokenRegistration;

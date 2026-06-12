@@ -5,13 +5,8 @@
 // local copy once the cloud confirms it, and exposes raw download-on-demand +
 // live result delivery.
 //
-// STATUS: compile-verified, NOT yet device-tested (built while the test phone
-// was unplugged). It is intentionally ADDITIVE — it does not touch the
-// validated BLE→local-file recording path in real.ts. Wiring it into the
-// recording flow + on-device verification is the remaining Phase-2 step.
-//
 // Storage layout (matches backend assemble_if_needed):
-//   {uid}/{sessionId}/segments/eeg/segNNNN.bin
+//   {uid}/{readable-label}/segments/eeg/segNNNN.bin
 // The backend concatenates these (whole-sample boundaries) into eeg.bin.
 
 import { File, Directory, Paths } from 'expo-file-system';

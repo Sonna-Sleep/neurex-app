@@ -36,6 +36,7 @@ jobs:
           npm run smoke:connect-timeout
           npm run smoke:account-deletion
           npm run smoke:profile
+          npm run smoke:push
           npm run smoke:ble-packet
           npm run smoke:recovery
           npm run smoke:support

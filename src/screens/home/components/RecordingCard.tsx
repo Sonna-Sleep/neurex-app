@@ -42,9 +42,9 @@ export function RecordingCard() {
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState<SavedRecording | null>(null);
   // Cloud sync of the just-finished recording (transmit → analyze → summary).
-  const [sync, setSync] = useState<'idle' | 'uploading' | 'analyzing' | 'slow' | 'done' | 'error'>(
-    'idle',
-  );
+  const [sync, setSync] = useState<
+    'idle' | 'uploading' | 'analyzing' | 'slow' | 'done' | 'error' | 'analysis-error'
+  >('idle');
   const [summary, setSummary] = useState<Session | null>(null);
   const unsubRef = useRef<(() => void) | null>(null);
   useEffect(() => () => unsubRef.current?.(), []);
@@ -142,8 +142,9 @@ export function RecordingCard() {
 
   // Ship the just-finished recording to the cloud: upload as segments, finalize
   // (→ webhook → YASA), delete the local copy, then live-subscribe for the
-  // summary. On failure the local files are kept (transmitSession throws before
-  // deleting), so nothing is lost.
+  // summary. Upload/finalize errors keep the local files and can be retried;
+  // backend analysis failures happen after cloud handoff, so there is no local
+  // retry path to offer.
   const onSyncToCloud = useCallback(async () => {
     if (!saved || sync === 'uploading' || sync === 'analyzing' || sync === 'done') return;
     if (saved.durationSec < MIN_STAGING_SEC) {
@@ -176,7 +177,7 @@ export function RecordingCard() {
           timeoutMs: 3 * 60_000,
           onSlow: () => setSync((cur) => (cur === 'analyzing' ? 'slow' : cur)),
           onFailed: (message) => {
-            setSync('error');
+            setSync('analysis-error');
             setError(message ?? 'Analysis failed. The raw recording is safely stored in cloud.');
           },
         },
@@ -240,9 +241,11 @@ export function RecordingCard() {
         ? 'recording · still analyzing'
         : sync === 'done'
           ? 'recording · ready'
-          : sync === 'error'
-            ? 'recording · sync failed'
-            : 'recording · saved on phone';
+          : sync === 'analysis-error'
+            ? 'recording · analysis failed'
+            : sync === 'error'
+              ? 'recording · sync failed'
+              : 'recording · saved on phone';
     const headline =
       sync === 'uploading'
         ? 'Uploading your night…'
@@ -252,18 +255,22 @@ export function RecordingCard() {
             ? 'Still analyzing…'
             : sync === 'done'
               ? 'Your night is ready'
-              : sync === 'error'
-                ? "Couldn't sync"
-                : 'Night saved';
+              : sync === 'analysis-error'
+                ? 'Analysis failed'
+                : sync === 'error'
+                  ? "Couldn't sync"
+                  : 'Night saved';
     const sub = syncing
       ? 'This usually takes under a minute.'
       : sync === 'slow'
         ? 'This one is taking a little longer — we’ll notify you when it’s ready. You can close the app.'
       : sync === 'done'
         ? 'Saved to your journal.'
-        : canStage
-          ? `Your recording is saved${saved.durationSec > 0 ? ` · ${mins}m ${secs}s` : ''}.`
-          : `Your recording is saved · ${mins}m ${secs}s. Record at least 5 minutes to analyze.`;
+      : sync === 'analysis-error'
+        ? 'The upload finished, but analysis failed. The raw recording is stored in cloud.'
+      : canStage
+        ? `Your recording is saved${saved.durationSec > 0 ? ` · ${mins}m ${secs}s` : ''}.`
+        : `Your recording is saved · ${mins}m ${secs}s. Record at least 5 minutes to analyze.`;
     return (
       <View style={styles.wrap}>
         <Eyebrow>{eyebrow}</Eyebrow>

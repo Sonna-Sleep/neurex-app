@@ -5,7 +5,7 @@ import { deviceRepo } from '../lib/repos';
 import { getSupabase } from '../lib/auth/supabase';
 import { localWipe } from '../lib/accountDeletion';
 import { clearActiveRecording } from '../lib/cloud/recovery';
-import { unregisterPushToken } from '../lib/push/registerPushToken';
+import { clearPushTokenRegistration } from '../lib/push/registerPushToken';
 
 export type AuthStatus = 'unknown' | 'signed-out' | 'signed-in';
 
@@ -140,11 +140,13 @@ export const useSession = create<SessionState>()(
 
       signOut: () => {
         const isStreaming = get().streaming !== null;
-        // unregister must run while the session is still active (RLS requires auth),
+        // Push cleanup must run while the session is still active (RLS requires auth),
         // then chain the actual Supabase sign-out after it resolves.
-        void unregisterPushToken()
-          .catch(() => undefined)
-          .then(() => getSupabase()?.auth.signOut().catch(() => undefined));
+        const supabase = getSupabase();
+        void (async () => {
+          await clearPushTokenRegistration();
+          await supabase?.auth.signOut();
+        })().catch(() => undefined);
         set({
           authStatus: 'signed-out',
           user: null,
