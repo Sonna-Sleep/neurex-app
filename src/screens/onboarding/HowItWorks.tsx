@@ -1,36 +1,36 @@
 import React from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import { Button } from '../../components/Button';
-import { SerifDisplay, SerifHeadline, Body, Eyebrow } from '../../theme/typography';
+import { SerifDisplay, SerifHeadline, Body } from '../../theme/typography';
 import { colors, layout, radii, spacing } from '../../theme/tokens';
 import type { OnboardingStackParamList } from '../../navigation/types';
 
 type Props = NativeStackScreenProps<OnboardingStackParamList, 'HowItWorks'>;
 
 type Step = {
-  eyebrow: string;
+  label: string;
   headline: string;
   body: string;
 };
 
 const STEPS: Step[] = [
   {
-    eyebrow: 'NIGHT',
-    headline: 'Put it on.',
-    body: 'Tap start, then keep your phone nearby.',
+    label: '1',
+    headline: 'Start a session',
+    body: 'Put on the device, tap start, and keep your phone nearby.',
   },
   {
-    eyebrow: 'ALL NIGHT',
-    headline: 'Sleep.',
-    body: 'It records while you rest.',
+    label: '2',
+    headline: 'Sleep normally',
+    body: 'Neurex records quietly through the night.',
   },
   {
-    eyebrow: 'MORNING',
-    headline: 'See your night.',
-    body: 'Stop, and your sleep appears.',
+    label: '3',
+    headline: 'Review your report',
+    body: 'Stop the session and your sleep report appears in Journal.',
   },
 ];
 
@@ -45,13 +45,11 @@ export function HowItWorks({ navigation }: Props) {
 
         <View style={styles.timeline}>
           {STEPS.map((step, index) => (
-            <View key={step.eyebrow}>
+            <View key={step.label}>
               <View style={styles.stepRow}>
                 <View style={styles.pillColumn}>
                   <View style={styles.pill}>
-                    <Eyebrow style={styles.pillText} numberOfLines={1}>
-                      {step.eyebrow}
-                    </Eyebrow>
+                    <Text style={styles.pillText}>{step.label}</Text>
                   </View>
                 </View>
 
@@ -104,15 +102,16 @@ const styles = StyleSheet.create({
   },
   pillColumn: {
     alignItems: 'center',
-    width: 116,
+    width: 44,
   },
   connectorRow: {
-    width: 116,
+    width: 44,
     alignItems: 'center',
     paddingVertical: spacing.sm,
   },
   pill: {
-    width: '100%',
+    width: 36,
+    height: 36,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.sm,
     borderRadius: radii.pill,
@@ -123,7 +122,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   pillText: {
-    color: colors.textSecondary,
+    color: colors.textPrimary,
+    fontSize: 15,
+    lineHeight: 18,
+    fontWeight: '600',
     textAlign: 'center',
   },
   connector: {

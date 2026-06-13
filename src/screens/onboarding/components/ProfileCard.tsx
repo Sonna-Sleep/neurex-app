@@ -10,11 +10,10 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '../../../components/Button';
-import { SerifDisplay, Body, Eyebrow } from '../../../theme/typography';
+import { SerifDisplay, Body } from '../../../theme/typography';
 import { colors, layout, spacing } from '../../../theme/tokens';
 
 type Props = {
-  eyebrow: string;
   title: string;
   subtitle?: string;
   canContinue: boolean;
@@ -25,7 +24,7 @@ type Props = {
 };
 
 export function ProfileCard({
-  eyebrow, title, subtitle, canContinue, onContinue, onSkip, isLast, children,
+  title, subtitle, canContinue, onContinue, onSkip, isLast, children,
 }: Props) {
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
@@ -38,7 +37,6 @@ export function ProfileCard({
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <Pressable style={styles.center} onPress={Keyboard.dismiss} accessible={false}>
-          <Eyebrow>{eyebrow}</Eyebrow>
           <SerifDisplay style={styles.title}>{title}</SerifDisplay>
           {subtitle ? <Body style={styles.subtitle}>{subtitle}</Body> : null}
           <View style={styles.input}>{children}</View>

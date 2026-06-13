@@ -17,7 +17,7 @@ import {
 
 import { Button } from '../../../components/Button';
 import { Card } from '../../../components/Card';
-import { Body, Eyebrow, SerifHeadline } from '../../../theme/typography';
+import { Body, SerifHeadline } from '../../../theme/typography';
 import { colors, radii, spacing } from '../../../theme/tokens';
 import { useSession } from '../../../state/session';
 import { bleClient, isBleStubMode, type FoundDevice } from '../../../lib/ble';
@@ -146,10 +146,9 @@ export function ConnectDeviceCard() {
   if (state === 'idle') {
     return (
       <View style={styles.wrap}>
-        <Eyebrow>no device</Eyebrow>
         <Card style={styles.card}>
-          <SerifHeadline>Connect your Neurex device</SerifHeadline>
-          <Body style={styles.subtext}>Power it on, then tap connect.</Body>
+          <SerifHeadline>Connect device</SerifHeadline>
+          <Body style={styles.subtext}>Turn on your device and keep it nearby.</Body>
           <Button label="Connect" onPress={beginScan} />
         </Card>
       </View>
@@ -158,7 +157,6 @@ export function ConnectDeviceCard() {
 
   return (
     <View style={styles.wrap}>
-      <Eyebrow>pairing</Eyebrow>
       <Card style={styles.card}>
         {state === 'preflight' ? (
           <View style={styles.row}>
@@ -173,7 +171,7 @@ export function ConnectDeviceCard() {
             <Body style={styles.subtext}>
               {sortedDevices.length === 0
                 ? 'Searching for your Neurex device…'
-                : `Found ${sortedDevices.length} — keep scanning…`}
+                : `Found ${sortedDevices.length}. Choose yours below.`}
             </Body>
           </View>
         ) : null}
@@ -234,7 +232,7 @@ export function ConnectDeviceCard() {
 
         {state === 'error' && errorMsg ? (
           <View style={styles.col}>
-            <Eyebrow>connection failed</Eyebrow>
+            <Body style={styles.statusTitle}>Connection failed</Body>
             <Text style={styles.errorText}>{errorMsg}</Text>
           </View>
         ) : null}
@@ -277,6 +275,10 @@ const styles = StyleSheet.create({
   subtext: {
     color: colors.textSecondary,
     flexShrink: 1,
+  },
+  statusTitle: {
+    color: colors.textPrimary,
+    fontWeight: '600',
   },
   scanHeader: {
     flexDirection: 'row',

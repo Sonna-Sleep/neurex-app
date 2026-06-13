@@ -22,7 +22,7 @@ export function Welcome({ navigation }: Props) {
         <SerifDisplay style={styles.headline}>
           Sleep deeper.{'\n'}Wake up actually rested.
         </SerifDisplay>
-        <Body style={styles.subtext}>Let's get your Neurex device set up.</Body>
+        <Body style={styles.subtext}>Set up your Neurex device.</Body>
       </View>
 
       <View style={styles.actions}>

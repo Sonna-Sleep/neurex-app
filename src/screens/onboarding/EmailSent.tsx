@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import { Button } from '../../components/Button';
-import { SerifDisplay, Body, Eyebrow } from '../../theme/typography';
+import { SerifDisplay, Body } from '../../theme/typography';
 import { colors, layout, spacing } from '../../theme/tokens';
 import { useSession } from '../../state/session';
 import type { OnboardingStackParamList } from '../../navigation/types';
@@ -26,7 +26,6 @@ export function EmailSent({ navigation, route }: Props) {
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <View style={styles.center}>
-        <Eyebrow>check your email</Eyebrow>
         <SerifDisplay style={styles.headline}>
           We sent you a link
         </SerifDisplay>

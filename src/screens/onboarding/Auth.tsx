@@ -177,7 +177,6 @@ export function Auth({ navigation }: Props) {
         >
           <View style={styles.center}>
             <View style={styles.copy}>
-              <Eyebrow style={styles.eyebrow}>account</Eyebrow>
               <SerifDisplay style={styles.headline}>
                 Create your account
               </SerifDisplay>
@@ -296,9 +295,6 @@ const styles = StyleSheet.create({
   },
   copy: {
     gap: spacing.sm,
-  },
-  eyebrow: {
-    color: colors.accent,
   },
   headline: {
     textAlign: 'left',

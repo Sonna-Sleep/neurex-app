@@ -11,7 +11,7 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
-import { SerifDisplay, Body, Eyebrow } from '../../theme/typography';
+import { SerifDisplay, Body } from '../../theme/typography';
 import { colors, layout, radii, spacing } from '../../theme/tokens';
 import { useSession } from '../../state/session';
 import { bleClient, isBleStubMode, type FoundDevice } from '../../lib/ble';
@@ -164,7 +164,7 @@ export function Pair({ navigation }: Props) {
               <Body style={styles.cardText}>
                 {sortedDevices.length === 0
                   ? 'Searching for your Neurex device…'
-                  : `Found ${sortedDevices.length} — keep scanning…`}
+                  : `Found ${sortedDevices.length}. Choose yours below.`}
               </Body>
             </View>
           ) : null}
@@ -191,7 +191,6 @@ export function Pair({ navigation }: Props) {
 
           {state === 'scan-timeout' ? (
             <View style={styles.foundCol}>
-              <Eyebrow>nothing yet</Eyebrow>
               <Body style={styles.cardText}>
                 Make sure your Neurex device is on — press the button to turn it on.
               </Body>
@@ -200,7 +199,6 @@ export function Pair({ navigation }: Props) {
 
           {state === 'bluetooth-off' ? (
             <View style={styles.foundCol}>
-              <Eyebrow>bluetooth is off</Eyebrow>
               <Body style={styles.cardText}>
                 Turn on Bluetooth, then tap re-scan.
               </Body>
@@ -209,7 +207,6 @@ export function Pair({ navigation }: Props) {
 
           {state === 'permission-denied' ? (
             <View style={styles.foundCol}>
-              <Eyebrow>permission needed</Eyebrow>
               <Body style={styles.cardText}>
                 Neurex needs Bluetooth permission to find your Neurex device. Open
                 Settings to grant it.
@@ -219,7 +216,6 @@ export function Pair({ navigation }: Props) {
 
           {state === 'unsupported' ? (
             <View style={styles.foundCol}>
-              <Eyebrow>not supported</Eyebrow>
               <Body style={styles.cardText}>
                 Bluetooth LE isn't available in this app build or on this device.
               </Body>
@@ -238,14 +234,13 @@ export function Pair({ navigation }: Props) {
 
           {state === 'paired' ? (
             <View style={styles.foundCol}>
-              <Eyebrow>connected</Eyebrow>
               <Body style={styles.deviceSerial}>{pairedDevice?.serial}</Body>
             </View>
           ) : null}
 
           {state === 'error' && errorMsg ? (
             <View style={styles.foundCol}>
-              <Eyebrow>connection failed</Eyebrow>
+              <Body style={styles.statusTitle}>Connection failed</Body>
               <Text style={styles.errorText}>{errorMsg}</Text>
             </View>
           ) : null}
@@ -305,6 +300,10 @@ const styles = StyleSheet.create({
   cardText: {
     color: colors.textSecondary,
     flexShrink: 1,
+  },
+  statusTitle: {
+    color: colors.textPrimary,
+    fontWeight: '600',
   },
   foundCol: {
     gap: spacing.sm,

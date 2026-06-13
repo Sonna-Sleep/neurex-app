@@ -41,7 +41,7 @@ export function Profile({ navigation }: Props) {
 
   if (step === 0) {
     return (
-      <ProfileCard eyebrow="about you" title="What should we call you?"
+      <ProfileCard title="What should we call you?"
         canContinue={firstName.trim().length > 0} onContinue={next} onSkip={() => setStep(1)} isLast={false}>
         <TextInput style={styles.text} value={firstName} onChangeText={setFirstName}
           placeholder="First name" placeholderTextColor={colors.textTertiary} autoFocus />
@@ -50,7 +50,7 @@ export function Profile({ navigation }: Props) {
   }
   if (step === 1) {
     return (
-      <ProfileCard eyebrow="about you" title="When were you born?"
+      <ProfileCard title="When were you born?"
         subtitle="Required for sleep staging."
         canContinue={dob !== null} onContinue={next} isLast={false}>
         <DateOfBirthInput value={dob} onChange={setDob} />
@@ -58,7 +58,7 @@ export function Profile({ navigation }: Props) {
     );
   }
   return (
-    <ProfileCard eyebrow="about you" title="Biological sex"
+    <ProfileCard title="Biological sex"
       subtitle="Improves sleep-staging accuracy. You can skip this."
       canContinue={sex !== null} onContinue={done} onSkip={done} isLast>
       <Segmented options={SEX_OPTIONS} value={sex} onChange={setSex} />

@@ -12,7 +12,7 @@ import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 
 import { Button } from '../../../components/Button';
 import { Card } from '../../../components/Card';
-import { Body, Eyebrow, SerifHeadline, Secondary } from '../../../theme/typography';
+import { Body, SerifHeadline, Secondary } from '../../../theme/typography';
 import { colors, spacing, typeScale } from '../../../theme/tokens';
 import { useSession } from '../../../state/session';
 import { startSession, stopSession } from '../../../lib/ble/streamController';
@@ -238,17 +238,6 @@ export function RecordingCard({ idleFooter }: { idleFooter?: React.ReactNode }) 
     const secs = saved.durationSec % 60;
     const syncing = sync === 'uploading' || sync === 'analyzing';
     const canStage = saved.durationSec >= MIN_STAGING_SEC;
-    const eyebrow = syncing
-      ? 'recording · syncing'
-      : sync === 'slow'
-        ? 'recording · still analyzing'
-        : sync === 'done'
-          ? 'recording · ready'
-          : sync === 'analysis-error'
-            ? 'recording · analysis failed'
-            : sync === 'error'
-              ? 'recording · sync failed'
-              : 'recording · saved on phone';
     const headline =
       sync === 'uploading'
         ? 'Uploading your night…'
@@ -276,7 +265,6 @@ export function RecordingCard({ idleFooter }: { idleFooter?: React.ReactNode }) 
         : `Your recording is saved · ${mins}m ${secs}s. Record at least ${MIN_STAGING_MIN} minutes to analyze.`;
     return (
       <View style={styles.wrap}>
-        <Eyebrow>{eyebrow}</Eyebrow>
         <Card style={styles.card}>
           <SerifHeadline>{headline}</SerifHeadline>
           <Body style={styles.subtext}>{sub}</Body>
