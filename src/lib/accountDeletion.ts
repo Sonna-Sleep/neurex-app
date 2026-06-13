@@ -7,9 +7,9 @@
 // in place and maybeSingle() is safe) with RLS scoping every row to auth.uid().
 import { Directory, Paths } from 'expo-file-system';
 import { getSupabase } from './auth/supabase';
+import { MODAL_ENDPOINT_URL } from './config';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-const MODAL_ENDPOINT_URL = process.env.EXPO_PUBLIC_MODAL_ENDPOINT_URL ?? '';
 const DELETE_PATH = '/account/delete';
 const GRACE_DAYS = 30;
 const TABLE = 'account_deletion_requests';
