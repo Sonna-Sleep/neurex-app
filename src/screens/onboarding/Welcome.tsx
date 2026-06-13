@@ -46,14 +46,21 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'flex-start',
+    paddingBottom: spacing.xxxl,
   },
   headline: {
-    marginBottom: spacing.md,
+    marginBottom: spacing.lg,
     textAlign: 'left',
+    maxWidth: 330,
+    fontSize: 40,
+    lineHeight: 46,
   },
   subtext: {
     color: colors.textSecondary,
     textAlign: 'left',
+    maxWidth: 300,
+    fontSize: 17,
+    lineHeight: 24,
   },
   actions: {
     paddingBottom: spacing.lg,
