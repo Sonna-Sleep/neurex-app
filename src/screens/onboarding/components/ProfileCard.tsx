@@ -18,13 +18,12 @@ type Props = {
   subtitle?: string;
   canContinue: boolean;
   onContinue: () => void;
-  onSkip?: () => void;
   isLast: boolean;
   children: React.ReactNode;
 };
 
 export function ProfileCard({
-  title, subtitle, canContinue, onContinue, onSkip, isLast, children,
+  title, subtitle, canContinue, onContinue, isLast, children,
 }: Props) {
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
@@ -43,7 +42,6 @@ export function ProfileCard({
         </Pressable>
         <View style={styles.actions}>
           <Button label={isLast ? 'Finish' : 'Continue'} onPress={onContinue} disabled={!canContinue} />
-          {onSkip ? <Button label="Skip" variant="ghost" onPress={onSkip} /> : null}
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
