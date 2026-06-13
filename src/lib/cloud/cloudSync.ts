@@ -10,6 +10,7 @@
 // The backend concatenates these (whole-sample boundaries) into eeg.bin.
 
 import { File, Directory, Paths } from 'expo-file-system';
+import { AppState } from 'react-native';
 
 import { getSupabase } from '../auth/supabase';
 import { supabaseSessionRepo } from '../repos/supabase';
@@ -291,6 +292,7 @@ export function subscribeToResult(
   let done = false;
   let slowTimer: ReturnType<typeof setTimeout> | null = null;
   let pollTimer: ReturnType<typeof setInterval> | null = null;
+  let appStateSub: { remove: () => void } | null = null;
   const clearSlow = () => {
     if (slowTimer) {
       clearTimeout(slowTimer);
@@ -311,6 +313,9 @@ export function subscribeToResult(
     poll();
     pollTimer = setInterval(poll, opts?.pollIntervalMs ?? 15_000);
   };
+  appStateSub = AppState.addEventListener('change', (state) => {
+    if (state === 'active') poll();
+  });
   // Only fire for a row the backend has actually staged. byId returns the row at
   // ANY status (including the just-inserted 'uploaded'), so without this guard
   // the immediate read below would flip the UI to "done" before YASA ever runs.
@@ -336,6 +341,7 @@ export function subscribeToResult(
 
   // Immediate read (already processed?).
   supabaseSessionRepo.byId(sessionId).then(finish).catch(() => {});
+  startPoll();
 
   const channel = supabase
     .channel(`session-${sessionId}`)
@@ -368,6 +374,8 @@ export function subscribeToResult(
   return () => {
     clearSlow();
     clearPoll();
+    appStateSub?.remove();
+    appStateSub = null;
     supabase.removeChannel(channel);
   };
 }
