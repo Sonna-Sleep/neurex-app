@@ -272,6 +272,9 @@ export type SubscribeResultOpts = {
    * once so the UI can stop showing an endless spinner. The subscription stays
    * live, so a late 'ready' still delivers via `onReady`. */
   timeoutMs?: number;
+  /** Poll fallback after `onSlow` fires. Realtime can miss updates while the app
+   * is backgrounded/suspended; polling keeps the Sleep page in sync with Journal. */
+  pollIntervalMs?: number;
   onSlow?: () => void;
   /** Called when the backend marks staging as failed. */
   onFailed?: (message?: string) => void;
@@ -287,11 +290,26 @@ export function subscribeToResult(
 
   let done = false;
   let slowTimer: ReturnType<typeof setTimeout> | null = null;
+  let pollTimer: ReturnType<typeof setInterval> | null = null;
   const clearSlow = () => {
     if (slowTimer) {
       clearTimeout(slowTimer);
       slowTimer = null;
     }
+  };
+  const clearPoll = () => {
+    if (pollTimer) {
+      clearInterval(pollTimer);
+      pollTimer = null;
+    }
+  };
+  const poll = () => {
+    if (!done) supabaseSessionRepo.byId(sessionId).then(finish).catch(() => {});
+  };
+  const startPoll = () => {
+    if (pollTimer || done) return;
+    poll();
+    pollTimer = setInterval(poll, opts?.pollIntervalMs ?? 15_000);
   };
   // Only fire for a row the backend has actually staged. byId returns the row at
   // ANY status (including the just-inserted 'uploaded'), so without this guard
@@ -300,6 +318,7 @@ export function subscribeToResult(
     if (!done) {
       done = true;
       clearSlow();
+      clearPoll();
       opts?.onFailed?.(message);
     }
   };
@@ -310,6 +329,7 @@ export function subscribeToResult(
     } else if (s.status === 'ready') {
       done = true;
       clearSlow();
+      clearPoll();
       onReady(s);
     }
   };
@@ -338,12 +358,16 @@ export function subscribeToResult(
   if (opts?.timeoutMs && opts.onSlow) {
     const onSlow = opts.onSlow;
     slowTimer = setTimeout(() => {
-      if (!done) onSlow();
+      if (!done) {
+        onSlow();
+        startPoll();
+      }
     }, opts.timeoutMs);
   }
 
   return () => {
     clearSlow();
+    clearPoll();
     supabase.removeChannel(channel);
   };
 }
