@@ -23,6 +23,13 @@ expo-env.d.ts
 credentials.json
 /credentials/
 
+# Firebase service account / Admin SDK private keys (FCM V1 push). SECRET —
+# uploaded to EAS, never committed. google-services.json is NOT secret and is
+# intentionally tracked, so these patterns are name-specific to avoid catching it.
+*-firebase-adminsdk-*.json
+service-account*.json
+/secrets/
+
 # Metro
 .metro-health-check*
 
