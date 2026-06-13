@@ -25,6 +25,11 @@ import type { JournalStackParamList } from '../../navigation/types';
 type Props = NativeStackScreenProps<JournalStackParamList, 'JournalHome'>;
 
 const WEEKDAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+const DATE_RAIL_DAYS = 21;
+const DATE_RAIL_START_OFFSET = -7;
+const DATE_RAIL_ITEM_W = 46;
+const DATE_RAIL_GAP = 12;
+const DATE_RAIL_CENTER_X = (DATE_RAIL_ITEM_W + DATE_RAIL_GAP) * 7;
 
 function keyToDate(key: string): Date {
   const [y, m, d] = key.split('-').map(Number);
@@ -52,6 +57,7 @@ export function JournalScreen({ navigation }: Props) {
   const [loadError, setLoadError] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const initialized = useRef(false);
+  const dateRailRef = useRef<ScrollView>(null);
 
   const load = useCallback(async () => {
     if (!authReady) return;
@@ -124,6 +130,18 @@ export function JournalScreen({ navigation }: Props) {
   }, [selected, markNightViewed]);
 
   const selectedLabel = selectedDateLabel(selectedKey);
+  const railDays = useMemo(
+    () =>
+      Array.from({ length: DATE_RAIL_DAYS }, (_, i) => {
+        const offset = DATE_RAIL_START_OFFSET + i;
+        return new Date(
+          weekStart.getFullYear(),
+          weekStart.getMonth(),
+          weekStart.getDate() + offset,
+        );
+      }),
+    [weekStart],
+  );
   const shiftWeek = (deltaDays: number) =>
     setWeekStart((w) => new Date(w.getFullYear(), w.getMonth(), w.getDate() + deltaDays));
 
@@ -131,6 +149,12 @@ export function JournalScreen({ navigation }: Props) {
     setSelectedKey(dateKey(date));
     setWeekStart(weekStartOf(date));
   };
+
+  useEffect(() => {
+    requestAnimationFrame(() => {
+      dateRailRef.current?.scrollTo({ x: DATE_RAIL_CENTER_X, animated: false });
+    });
+  }, [weekStart]);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -155,13 +179,19 @@ export function JournalScreen({ navigation }: Props) {
           </View>
         </View>
 
-        <View style={styles.weekRail}>
-          {Array.from({ length: 7 }, (_, i) => {
-            const d = new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() + i);
+        <ScrollView
+          ref={dateRailRef}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.weekRail}
+          decelerationRate="fast"
+        >
+          {railDays.map((d) => {
             const key = dateKey(d);
             const session = byDate[key] ?? null;
             const selectedDay = key === selectedKey;
             const band = session && isCompletedSession(session) ? scoreBand(session.score) : null;
+            const weekdayIndex = (d.getDay() + 6) % 7;
             return (
               <Pressable
                 key={key}
@@ -180,7 +210,7 @@ export function JournalScreen({ navigation }: Props) {
                   ]}
                 >
                   <Text style={[styles.dayLetter, (selectedDay || session) && styles.dayLetterActive]}>
-                    {WEEKDAYS[i]}
+                    {WEEKDAYS[weekdayIndex]}
                   </Text>
                 </View>
                 <Text style={[styles.dayNumber, selectedDay && styles.dayNumberActive]}>{d.getDate()}</Text>
@@ -199,7 +229,7 @@ export function JournalScreen({ navigation }: Props) {
             </View>
             <Text style={styles.dayNumber}>All</Text>
           </Pressable>
-        </View>
+        </ScrollView>
 
         {selected ? (
           <NightReport session={selected} />
@@ -259,11 +289,12 @@ const styles = StyleSheet.create({
   },
   weekRail: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'flex-start',
-    gap: 5,
+    gap: DATE_RAIL_GAP,
+    paddingRight: layout.screenPadding,
   },
   day: {
+    width: DATE_RAIL_ITEM_W,
     alignItems: 'center',
     gap: spacing.xs,
   },
