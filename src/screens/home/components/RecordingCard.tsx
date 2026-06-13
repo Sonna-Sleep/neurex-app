@@ -33,7 +33,7 @@ type SavedRecording = {
   endedEarly?: boolean;
 };
 
-export function RecordingCard() {
+export function RecordingCard({ idleFooter }: { idleFooter?: React.ReactNode }) {
   const streaming = useSession((s) => s.streaming);
   const pairedDeviceId = useSession((s) => s.pairedDeviceId);
   const pairedSerial = useSession((s) => s.pairedSerial);
@@ -342,6 +342,7 @@ export function RecordingCard() {
         <Text style={styles.startLabel}>{busy === 'starting' ? 'Connecting' : 'Start\nSession'}</Text>
       </Pressable>
       {error ? <Text style={styles.error}>{error}</Text> : null}
+      {idleFooter ? <View style={styles.idleFooter}>{idleFooter}</View> : null}
     </View>
   );
 }
@@ -393,6 +394,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.lg,
     paddingBottom: spacing.xxl,
+  },
+  idleFooter: {
+    width: '100%',
+    alignItems: 'center',
   },
   sessionBubble: {
     width: 218,

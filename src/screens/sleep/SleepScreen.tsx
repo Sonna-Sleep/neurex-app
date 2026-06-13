@@ -11,7 +11,6 @@ import { useSession } from '../../state/session';
 import { RecordingCard } from '../home/components/RecordingCard';
 import { ConnectDeviceCard } from '../home/components/ConnectDeviceCard';
 import { TAB_BAR_SPACE } from '../../navigation/FloatingTabBar';
-import { Eyebrow } from '../../theme/typography';
 
 export function SleepScreen() {
   const pairedDeviceId = useSession((s) => s.pairedDeviceId);
@@ -28,19 +27,21 @@ export function SleepScreen() {
         </View>
       </View>
 
-      {pairedDeviceId ? (
-        <View style={styles.fixedDevice}>
-          <DeviceIdentity
-            serial={pairedSerial}
-            deviceId={pairedDeviceId}
-            onChange={() => setPaired(null)}
-          />
-        </View>
-      ) : null}
-
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <View style={styles.body}>
-          {pairedDeviceId ? <RecordingCard /> : <ConnectDeviceCard />}
+          {pairedDeviceId ? (
+            <RecordingCard
+              idleFooter={
+                <DeviceIdentity
+                  serial={pairedSerial}
+                  deviceId={pairedDeviceId}
+                  onChange={() => setPaired(null)}
+                />
+              }
+            />
+          ) : (
+            <ConnectDeviceCard />
+          )}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -65,7 +66,6 @@ function DeviceIdentity({
   const id = shortDeviceId(deviceId);
   return (
     <View style={styles.deviceIdentity}>
-      <Eyebrow>paired device</Eyebrow>
       <View style={styles.deviceRow}>
         <View style={styles.deviceText}>
           <Text style={styles.deviceName} numberOfLines={1} adjustsFontSizeToFit>
@@ -107,40 +107,40 @@ const styles = StyleSheet.create({
     bottom: 0,
     justifyContent: 'center',
   },
-  fixedDevice: {
-    paddingHorizontal: layout.screenPadding,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.sm,
-  },
   scroll: {
     flexGrow: 1,
     paddingHorizontal: layout.screenPadding,
-    paddingTop: spacing.md,
+    paddingTop: 0,
     paddingBottom: TAB_BAR_SPACE + spacing.lg,
   },
   body: {
     flex: 1,
-    justifyContent: 'flex-start',
+    justifyContent: 'center',
     gap: spacing.md,
   },
   deviceIdentity: {
-    gap: spacing.sm,
+    width: '100%',
+    maxWidth: 260,
+    alignSelf: 'center',
   },
   deviceRow: {
-    minHeight: 54,
+    position: 'relative',
+    minHeight: 56,
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
-    borderRadius: 14,
+    borderRadius: 28,
     borderWidth: 1,
     borderColor: colors.borderSubtle,
     backgroundColor: colors.bgSurface,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: spacing.md,
   },
   deviceText: {
     flex: 1,
     minWidth: 0,
+    paddingHorizontal: 54,
     gap: 2,
   },
   deviceName: {
@@ -148,13 +148,19 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 20,
     fontWeight: '600',
+    textAlign: 'center',
   },
   deviceMeta: {
     color: colors.textTertiary,
     fontSize: 12,
     lineHeight: 16,
+    textAlign: 'center',
   },
   changeButton: {
+    position: 'absolute',
+    right: spacing.md,
+    top: 0,
+    bottom: 0,
     minHeight: 34,
     justifyContent: 'center',
   },
