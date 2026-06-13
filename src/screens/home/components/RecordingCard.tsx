@@ -37,7 +37,6 @@ export function RecordingCard() {
   const streaming = useSession((s) => s.streaming);
   const pairedDeviceId = useSession((s) => s.pairedDeviceId);
   const pairedSerial = useSession((s) => s.pairedSerial);
-  const setPaired = useSession((s) => s.setPaired);
 
   const [busy, setBusy] = useState<'idle' | 'starting' | 'stopping'>('idle');
   const [error, setError] = useState<string | null>(null);
@@ -208,7 +207,6 @@ export function RecordingCard() {
     const isReconnecting = streaming.connection === 'reconnecting';
     return (
       <View style={styles.controlScreen}>
-        <DeviceIdentity serial={pairedSerial} deviceId={pairedDeviceId} />
         <Pressable
           onPress={onStop}
           disabled={busy === 'stopping'}
@@ -329,11 +327,6 @@ export function RecordingCard() {
   if (!pairedDeviceId) return null;
   return (
     <View style={styles.controlScreen}>
-      <DeviceIdentity
-        serial={pairedSerial}
-        deviceId={pairedDeviceId}
-        onChange={() => setPaired(null)}
-      />
       <Pressable
         onPress={onStart}
         disabled={busy === 'starting'}
@@ -349,45 +342,6 @@ export function RecordingCard() {
         <Text style={styles.startLabel}>{busy === 'starting' ? 'Connecting' : 'Start\nSession'}</Text>
       </Pressable>
       {error ? <Text style={styles.error}>{error}</Text> : null}
-    </View>
-  );
-}
-
-function shortDeviceId(deviceId: string | null): string | null {
-  if (!deviceId) return null;
-  const clean = deviceId.replace(/[^A-Za-z0-9]/g, '');
-  return clean.slice(-5).toUpperCase() || null;
-}
-
-function DeviceIdentity({
-  serial,
-  deviceId,
-  onChange,
-}: {
-  serial: string | null;
-  deviceId: string | null;
-  onChange?: () => void;
-}) {
-  const id = shortDeviceId(deviceId);
-  return (
-    <View style={styles.deviceIdentity}>
-      <Eyebrow>paired device</Eyebrow>
-      <Text style={styles.deviceName} numberOfLines={1} adjustsFontSizeToFit>
-        {serial ?? 'Neurex device'}
-      </Text>
-      <View style={styles.deviceMetaRow}>
-        {id ? <Text style={styles.deviceMeta}>id …{id}</Text> : null}
-        {onChange ? (
-          <Pressable
-            onPress={onChange}
-            accessibilityRole="button"
-            accessibilityLabel="Change paired device"
-            hitSlop={10}
-          >
-            <Text style={styles.changeDevice}>Change</Text>
-          </Pressable>
-        ) : null}
-      </View>
     </View>
   );
 }
@@ -439,39 +393,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.lg,
     paddingBottom: spacing.xxl,
-  },
-  deviceIdentity: {
-    width: '100%',
-    maxWidth: 280,
-    alignItems: 'center',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.md,
-  },
-  deviceName: {
-    color: colors.textPrimary,
-    fontSize: 18,
-    lineHeight: 22,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  deviceMetaRow: {
-    minHeight: 22,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.md,
-  },
-  deviceMeta: {
-    color: colors.textTertiary,
-    fontSize: 13,
-    lineHeight: 18,
-  },
-  changeDevice: {
-    color: colors.textSecondary,
-    fontSize: 13,
-    lineHeight: 18,
-    fontWeight: '600',
-    textDecorationLine: 'underline',
   },
   sessionBubble: {
     width: 218,
