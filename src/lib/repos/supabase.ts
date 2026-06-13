@@ -64,7 +64,7 @@ function toSession(r: Row): Session {
 class SupabaseSessionRepo implements SessionRepo {
   async list(): Promise<Session[]> {
     const supabase = getSupabase();
-    if (!supabase) return [];
+    if (!supabase) throw new Error('Supabase is not configured');
     const { data, error } = await supabase
       .from('sessions')
       .select(COLUMNS)

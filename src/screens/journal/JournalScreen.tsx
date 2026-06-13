@@ -54,6 +54,7 @@ export function JournalScreen({ navigation }: Props) {
   const initialized = useRef(false);
 
   const load = useCallback(async () => {
+    if (!authReady) return;
     try {
       const list = await sessionRepo.list();
       setSessions(list);
@@ -71,7 +72,7 @@ export function JournalScreen({ navigation }: Props) {
       setLoadError(true);
       setLoaded(true);
     }
-  }, []);
+  }, [authReady]);
 
   useEffect(() => {
     void load();
@@ -104,6 +105,19 @@ export function JournalScreen({ navigation }: Props) {
   }, [journalSessions]);
 
   const selected = byDate[selectedKey] ?? null;
+
+  const showLatestNight = useCallback(() => {
+    if (journalSessions.length === 0) return;
+    const latest = journalSessions.reduce((a, b) => betterJournalSession(a, b));
+    const k = dateKey(new Date(latest.endMs));
+    setSelectedKey(k);
+    setWeekStart(weekStartOf(keyToDate(k)));
+  }, [journalSessions]);
+
+  useEffect(() => {
+    if (!loaded || selected || journalSessions.length === 0) return;
+    showLatestNight();
+  }, [journalSessions.length, loaded, selected, showLatestNight]);
 
   useEffect(() => {
     if (selected) markNightViewed(selected.id);
@@ -201,6 +215,11 @@ export function JournalScreen({ navigation }: Props) {
             <Secondary style={styles.emptyText}>
               {loaded ? `No recording for ${selectedLabel}.` : ''}
             </Secondary>
+            {journalSessions.length > 0 ? (
+              <Pressable onPress={showLatestNight} hitSlop={8}>
+                <Secondary style={styles.retryText}>Show latest night</Secondary>
+              </Pressable>
+            ) : null}
           </View>
         )}
       </ScrollView>
