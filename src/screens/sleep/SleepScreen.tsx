@@ -28,15 +28,18 @@ export function SleepScreen() {
         </View>
       </View>
 
+      {pairedDeviceId ? (
+        <View style={styles.fixedDevice}>
+          <DeviceIdentity
+            serial={pairedSerial}
+            deviceId={pairedDeviceId}
+            onChange={() => setPaired(null)}
+          />
+        </View>
+      ) : null}
+
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <View style={styles.body}>
-          {pairedDeviceId ? (
-            <DeviceIdentity
-              serial={pairedSerial}
-              deviceId={pairedDeviceId}
-              onChange={() => setPaired(null)}
-            />
-          ) : null}
           {pairedDeviceId ? <RecordingCard /> : <ConnectDeviceCard />}
         </View>
       </ScrollView>
@@ -104,10 +107,15 @@ const styles = StyleSheet.create({
     bottom: 0,
     justifyContent: 'center',
   },
+  fixedDevice: {
+    paddingHorizontal: layout.screenPadding,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.sm,
+  },
   scroll: {
     flexGrow: 1,
     paddingHorizontal: layout.screenPadding,
-    paddingTop: spacing.lg,
+    paddingTop: spacing.md,
     paddingBottom: TAB_BAR_SPACE + spacing.lg,
   },
   body: {
