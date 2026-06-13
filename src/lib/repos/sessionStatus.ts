@@ -1,6 +1,6 @@
 import type { Session } from './types';
 
-const MIN_ANALYSIS_MIN = 5;
+const MIN_ANALYSIS_MIN = 20;
 
 export function isCompletedSession(session: Session): boolean {
   return session.status === 'ready' && session.score != null && session.tst != null;

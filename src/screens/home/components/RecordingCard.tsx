@@ -18,7 +18,7 @@ import { useSession } from '../../../state/session';
 import { startSession, stopSession } from '../../../lib/ble/streamController';
 import { EEG_SAMPLE_RATE_HZ } from '../../../lib/ble/constants';
 import { transmitSession, subscribeToResult } from '../../../lib/cloud/cloudSync';
-import { MIN_STAGING_SEC } from '../../../lib/cloud/recoveryMath';
+import { MIN_STAGING_MIN, MIN_STAGING_SEC } from '../../../lib/cloud/recoveryMath';
 import { handleNightReady } from '../../../lib/nights/onNightReady';
 import type { Session } from '../../../lib/repos/types';
 
@@ -148,7 +148,9 @@ export function RecordingCard() {
   const onSyncToCloud = useCallback(async () => {
     if (!saved || sync === 'uploading' || sync === 'analyzing' || sync === 'done') return;
     if (saved.durationSec < MIN_STAGING_SEC) {
-      setError('Record at least 5 minutes before syncing. This short recording is still saved on this phone.');
+      setError(
+        `Record at least ${MIN_STAGING_MIN} minutes before syncing. This short recording is still saved on this phone.`,
+      );
       return;
     }
     setError(null);
@@ -189,8 +191,9 @@ export function RecordingCard() {
   }, [saved, sync]);
 
   // Auto-sync the moment a night is saved — no manual tap. Skipped (manual
-  // button shown) for very short recordings because the backend needs at least
-  // five minutes of EEG. onSyncToCloud guards re-entry, so this fires once.
+  // button shown) for very short recordings because we only cloud-stage nights
+  // long enough to produce useful analysis. onSyncToCloud guards re-entry, so
+  // this fires once.
   useEffect(() => {
     if (saved && sync === 'idle' && saved.durationSec >= MIN_STAGING_SEC) {
       // Intentional transition side-effect: once a recording becomes saved, start upload.
@@ -270,7 +273,7 @@ export function RecordingCard() {
         ? 'The upload finished, but analysis failed. The raw recording is stored in cloud.'
       : canStage
         ? `Your recording is saved${saved.durationSec > 0 ? ` · ${mins}m ${secs}s` : ''}.`
-        : `Your recording is saved · ${mins}m ${secs}s. Record at least 5 minutes to analyze.`;
+        : `Your recording is saved · ${mins}m ${secs}s. Record at least ${MIN_STAGING_MIN} minutes to analyze.`;
     return (
       <View style={styles.wrap}>
         <Eyebrow>{eyebrow}</Eyebrow>

@@ -4,10 +4,11 @@
 
 export const EEG_BYTES_PER_SAMPLE = 8; // uint32 ms + float32 µV — matches real.ts encoder
 
-// Minimum recorded length worth uploading: the backend stages on 30-second
-// epochs and needs at least ten of them. Shared with the live RecordingCard
-// sync gate so recovery and the in-app path apply the SAME floor.
-export const MIN_STAGING_SEC = 5 * 60;
+// Minimum recorded length worth uploading: short setup/debug captures are kept
+// local instead of being sent to cloud analysis. Shared with the live
+// RecordingCard sync gate so recovery and the in-app path apply the SAME floor.
+export const MIN_STAGING_MIN = 20;
+export const MIN_STAGING_SEC = MIN_STAGING_MIN * 60;
 
 // On launch, if a recording was active when we were killed, an iOS state-
 // restoration resume may be about to reclaim it (wakeHandler → resumeSession-

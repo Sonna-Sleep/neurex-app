@@ -147,9 +147,9 @@ export function scanRecoverable(activeSessionId?: string | null): RecoverableRec
       continue;
     }
     const sizeBytes = eeg.size;
-    // Apply the same minimum-length floor as the live sync path: a sub-5-min
-    // recording can't be staged (backend needs ≥10 epochs), so don't ship it —
-    // it stays on disk like a short recording kept in the app.
+    // Apply the same minimum-length floor as the live sync path. Short setup or
+    // debug captures are not useful for cloud staging, so don't ship them — they
+    // stay on disk like a short recording kept in the app.
     if (!isStageableDurationMs(durationMsFromBytes(sizeBytes, EEG_SAMPLE_RATE_HZ))) continue;
     const meta = readMeta(item);
     const { startedAtMs, endMs } = reconstructTiming({
