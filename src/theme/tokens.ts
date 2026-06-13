@@ -44,13 +44,12 @@ export const stageColors = {
 } as const;
 
 // Single source of truth for stage order + labels across every visualization.
-// Sleep-first order (most restorative → least) so the user reads one consistent
-// order in the legend and breakdown.
+// User-facing order follows the hypnogram from awake to progressively deeper sleep.
 export const STAGE_META: { key: CoreSleepStage; label: string }[] = [
-  { key: 'deep', label: 'Deep' },
-  { key: 'rem', label: 'REM' },
-  { key: 'light', label: 'Light' },
   { key: 'wake', label: 'Awake' },
+  { key: 'light', label: 'Light' },
+  { key: 'rem', label: 'REM' },
+  { key: 'deep', label: 'Deep' },
 ];
 
 // Match neurex.tech: SF Pro Display on iOS, Roboto on Android (platform default sans).

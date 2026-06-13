@@ -15,7 +15,7 @@ const HEIGHT = 220;
 const PADDING_TOP = 8;
 const PADDING_BOTTOM = 22; // space for the bottom time axis
 const LABEL_W = 36; // left gutter reserved for lane labels
-const LANES: CoreSleepStage[] = ['wake', 'rem', 'light', 'deep'];
+const LANES: CoreSleepStage[] = ['wake', 'light', 'rem', 'deep'];
 const LANE_LABEL: Record<CoreSleepStage, string> = {
   wake: 'WAKE',
   light: 'LIGHT',
@@ -39,7 +39,7 @@ export function Hypnogram({ epochs, startMs, endMs }: Props) {
   const xAt = (ms: number) =>
     chartLeft + ((ms - startMs) / totalMs) * chartW;
 
-  // Each stage occupies a horizontal band; wake on top, deep at the bottom.
+  // Each stage occupies a horizontal band; awake on top, deep at the bottom.
   const SLOT_H = drawH / LANES.length;
   const BAND_H = 20;
   const laneTop = (stage: CoreSleepStage) =>
@@ -60,7 +60,7 @@ export function Hypnogram({ epochs, startMs, endMs }: Props) {
       >
       {width > 0 && (
         <Svg width={width} height={HEIGHT}>
-          {/* Left lane labels: Wake (top) -> Deep (bottom) */}
+          {/* Left lane labels: Wake -> Light -> REM -> Deep. */}
           {LANES.map((stage) => (
             <SvgText
               key={`label-${stage}`}

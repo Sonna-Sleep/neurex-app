@@ -19,7 +19,7 @@ export function StageBreakdown({ stageMinutes }: Props) {
 
   return (
     <View style={styles.wrap}>
-      {/* Legend rows, sleep-first order: color · stage · duration · share. */}
+      {/* Legend rows: color · stage · duration · share. */}
       <View style={styles.rows}>
         {STAGE_META.map(({ key, label }) => {
           const min = minutesFor(key);

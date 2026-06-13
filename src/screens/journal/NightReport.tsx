@@ -4,7 +4,6 @@
 // screen (opened from the "Your night is ready" notification).
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import Svg, { Circle, Path } from 'react-native-svg';
 
 import { Eyebrow, Secondary } from '../../theme/typography';
 import { colors, spacing, systemFontFamily } from '../../theme/tokens';
@@ -62,15 +61,13 @@ export function NightReport({ session }: { session: Session }) {
           <View style={styles.section}>
             <Eyebrow>details</Eyebrow>
             <View style={styles.detailGrid}>
-              <DetailTile icon="moon" value={fmtTime(session.startMs)} label="Went to bed" />
-              <DetailTile icon="alarm" value={fmtTime(session.endMs)} label="Woke up" />
+              <DetailTile value={fmtTime(session.startMs)} label="Went to bed" />
+              <DetailTile value={fmtTime(session.endMs)} label="Woke up" />
               <DetailTile
-                icon="asleep"
                 value={session.sol != null ? `${Math.round(session.sol)} min` : '—'}
                 label="Asleep after"
               />
               <DetailTile
-                icon="confidence"
                 value={session.confidence != null ? `${Math.round(session.confidence * 100)}%` : '—'}
                 label="Confidence"
               />
@@ -99,53 +96,13 @@ function Stat({ value, label }: { value: string; label: string }) {
   );
 }
 
-type DetailIconName = 'asleep' | 'moon' | 'alarm' | 'confidence';
-
-function DetailTile({ icon, value, label }: { icon: DetailIconName; value: string; label: string }) {
+function DetailTile({ value, label }: { value: string; label: string }) {
   return (
     <View style={styles.detailTile}>
-      <DetailIcon name={icon} />
-      <View style={styles.detailText}>
-        <Text style={styles.detailValue}>{value}</Text>
-        <Text style={styles.detailLabel}>{label}</Text>
-      </View>
+      <Text style={styles.detailLabel}>{label}</Text>
+      <Text style={styles.detailValue}>{value}</Text>
     </View>
   );
-}
-
-function DetailIcon({ name }: { name: DetailIconName }) {
-  const c = colors.textSecondary;
-  switch (name) {
-    case 'asleep':
-      return (
-        <Svg width={44} height={44} viewBox="0 0 44 44" fill="none">
-          <Circle cx={22} cy={22} r={18} fill={c} />
-          <Path d="M14 20C16 23 18 23 20 20M24 20C26 23 28 23 30 20" stroke={colors.bgPrimary} strokeWidth={3} strokeLinecap="round" />
-          <Path d="M17 29C20 32 24 32 27 29" stroke={colors.bgPrimary} strokeWidth={3} strokeLinecap="round" />
-        </Svg>
-      );
-    case 'moon':
-      return (
-        <Svg width={44} height={44} viewBox="0 0 44 44" fill="none">
-          <Path d="M33 30.5A15.5 15.5 0 0 1 16.5 8A17 17 0 1 0 33 30.5Z" fill={c} />
-        </Svg>
-      );
-    case 'alarm':
-      return (
-        <Svg width={44} height={44} viewBox="0 0 44 44" fill="none">
-          <Circle cx={22} cy={24} r={14} fill={c} />
-          <Path d="M15 8L9 13M29 8L35 13" stroke={c} strokeWidth={4} strokeLinecap="round" />
-          <Path d="M15 24L20 29L30 18" stroke={colors.bgPrimary} strokeWidth={4} strokeLinecap="round" strokeLinejoin="round" />
-        </Svg>
-      );
-    case 'confidence':
-      return (
-        <Svg width={44} height={44} viewBox="0 0 44 44" fill="none">
-          <Circle cx={22} cy={22} r={17} fill={c} />
-          <Path d="M14 23L20 29L31 16" stroke={colors.bgPrimary} strokeWidth={4} strokeLinecap="round" strokeLinejoin="round" />
-        </Svg>
-      );
-  }
 }
 
 const styles = StyleSheet.create({
@@ -183,37 +140,33 @@ const styles = StyleSheet.create({
   detailGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    rowGap: spacing.xl,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.lg,
-    borderBottomWidth: 1,
-    borderColor: colors.borderSubtle,
+    gap: spacing.sm,
   },
   detailTile: {
-    width: '50%',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    minHeight: 72,
-    paddingRight: spacing.sm,
-  },
-  detailText: {
-    flex: 1,
-    gap: 2,
+    flexBasis: '48%',
+    flexGrow: 1,
+    minHeight: 76,
+    justifyContent: 'space-between',
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    backgroundColor: colors.bgSurface,
   },
   detailValue: {
     fontFamily: systemFontFamily,
-    fontSize: 28,
-    lineHeight: 34,
+    fontSize: 22,
+    lineHeight: 27,
     fontWeight: '600',
     color: colors.textPrimary,
   },
   detailLabel: {
     fontFamily: systemFontFamily,
-    fontSize: 15,
-    lineHeight: 20,
+    fontSize: 12,
+    lineHeight: 16,
     fontWeight: '600',
-    color: colors.textSecondary,
+    color: colors.textTertiary,
   },
   processing: {
     color: colors.textSecondary,
