@@ -38,5 +38,8 @@ jobs:
           npm run smoke:profile
           npm run smoke:push
           npm run smoke:ble-packet
+          npm run smoke:ble-reboot
+          npm run smoke:ble-watchdog
           npm run smoke:recovery
           npm run smoke:support
+          npm run check:android-push

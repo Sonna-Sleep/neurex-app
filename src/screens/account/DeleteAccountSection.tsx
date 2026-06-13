@@ -11,6 +11,7 @@ const GRACE_DAYS = 30;
 
 export function DeleteAccountSection() {
   const signOut = useSession((s) => s.signOut);
+  const streaming = useSession((s) => s.streaming);
   const [busy, setBusy] = useState(false);
 
   const onSchedule = async () => {
@@ -44,6 +45,10 @@ export function DeleteAccountSection() {
   };
 
   const confirm = () => {
+    if (streaming) {
+      Alert.alert('Recording in progress', 'Stop the recording before deleting your account.');
+      return;
+    }
     Alert.alert(
       'Delete account',
       `This permanently deletes your account and every sleep recording. This cannot be undone.\n\nSchedule deletion in ${GRACE_DAYS} days (cancel anytime by logging in), or delete immediately.`,

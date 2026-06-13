@@ -139,7 +139,19 @@ export const useSession = create<SessionState>()(
       completeOnboarding: () => set({ onboardingComplete: true }),
 
       signOut: () => {
-        const isStreaming = get().streaming !== null;
+        if (get().streaming !== null) {
+          set((s) =>
+            s.streaming
+              ? {
+                  streaming: {
+                    ...s.streaming,
+                    error: 'Stop recording before logging out.',
+                  },
+                }
+              : {},
+          );
+          return;
+        }
         // Push cleanup must run while the session is still active (RLS requires auth),
         // then chain the actual Supabase sign-out after it resolves.
         const supabase = getSupabase();
@@ -158,9 +170,7 @@ export const useSession = create<SessionState>()(
           deviceBattery: null,
           unviewedNightIds: [],
         });
-        if (!isStreaming) {
-          void Promise.all([localWipe(), clearActiveRecording()]);
-        }
+        void Promise.all([localWipe(), clearActiveRecording()]);
       },
 
       setStreaming: (s) => set({ streaming: s }),

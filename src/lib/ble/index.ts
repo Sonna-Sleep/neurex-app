@@ -9,6 +9,8 @@
 import { getBleManager } from './manager';
 import { realBleClient } from './real';
 import { stubBleClient } from './stub';
+import { ALLOW_DEV_BYPASS } from '../config';
+import type { BleClient } from './types';
 
 export * from './types';
 export { stubBleClient } from './stub';
@@ -16,8 +18,19 @@ export { realBleClient } from './real';
 export { checkBleAvailability, openSettingsForBluetooth } from './permissions';
 export type { BleAvailability } from './permissions';
 
-// Pick real on dev-client / production builds (native module loaded);
-// fall back to the stub on Expo Go + web (no native BleManager). The
-// stub still writes a real EEG.BIN to documentDirectory so the upload +
-// Supabase path is exercisable without hardware.
-export const bleClient = getBleManager() ? realBleClient : stubBleClient;
+const manager = getBleManager();
+
+const unavailableBleClient: BleClient = {
+  scan() {
+    return () => {};
+  },
+  async connect() {
+    throw new Error('Bluetooth module unavailable in this app build.');
+  },
+};
+
+// Pick real on dev-client / production builds (native module loaded). The stub
+// is allowed only in dev/test-bypass builds; production must fail closed instead
+// of silently generating synthetic EEG if the native BLE module is missing.
+export const isBleStubMode = !manager && ALLOW_DEV_BYPASS;
+export const bleClient = manager ? realBleClient : isBleStubMode ? stubBleClient : unavailableBleClient;

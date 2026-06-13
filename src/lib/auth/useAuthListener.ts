@@ -70,18 +70,25 @@ export function useAuthListener() {
 
     let mounted = true;
 
-    supabase.auth.getSession().then(({ data }) => {
-      if (!mounted) return;
-      const u = data.session?.user;
-      if (u) {
-        setAuth(toUser(u));
-        // Cold start with a live session → register this device's push token so
-        // "report ready" notifications can reach it. Best-effort.
-        registerPushToken(u.id).catch(() => undefined);
+    void (async () => {
+      try {
+        const { data } = await supabase.auth.getSession();
+        if (!mounted) return;
+        const u = data.session?.user;
+        if (u) {
+          setAuth(toUser(u));
+          // Cold start with a live session → register this device's push token so
+          // "report ready" notifications can reach it. Best-effort.
+          registerPushToken(u.id).catch(() => undefined);
+        }
+      } catch (e) {
+        if (__DEV__) console.warn('[auth] initial session check failed', e);
+      } finally {
+        // Auth is settled enough for screens to query or show a load error; never
+        // leave the app stuck behind authReady if Supabase has a transient issue.
+        if (mounted) useSession.setState({ authReady: true });
       }
-      // Auth is now settled — screens can safely query Supabase.
-      useSession.setState({ authReady: true });
-    });
+    })();
 
     const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
       if (!mounted) return;

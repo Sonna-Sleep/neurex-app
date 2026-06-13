@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 
@@ -50,6 +50,7 @@ export function AccountScreen() {
   const user = useSession((s) => s.user);
   const avatarUri = useSession((s) => s.avatarUri);
   const signOut = useSession((s) => s.signOut);
+  const streaming = useSession((s) => s.streaming);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [editing, setEditing] = useState(false);
   const [legalDoc, setLegalDoc] = useState<LegalDocKey | null>(null);
@@ -78,6 +79,13 @@ export function AccountScreen() {
   const memberSince = memberSinceLabel(user?.memberSinceMs);
   const profileMeta = [sub || null, memberSince].filter(Boolean).join(' · ');
   const stats = useMemo(() => profileStats(sessions), [sessions]);
+  const onSignOut = useCallback(() => {
+    if (streaming) {
+      Alert.alert('Recording in progress', 'Stop the recording before logging out.');
+      return;
+    }
+    signOut();
+  }, [signOut, streaming]);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -119,7 +127,7 @@ export function AccountScreen() {
         </View>
 
         <View style={styles.accountCard}>
-          <Pressable onPress={signOut} hitSlop={8} style={styles.accountRow}>
+          <Pressable onPress={onSignOut} hitSlop={8} style={styles.accountRow}>
             <Text style={styles.logout}>Log out</Text>
           </Pressable>
           <View style={[styles.accountRow, styles.accountDivider]}>

@@ -20,7 +20,7 @@ import { Card } from '../../../components/Card';
 import { Body, Eyebrow, SerifHeadline } from '../../../theme/typography';
 import { colors, radii, spacing } from '../../../theme/tokens';
 import { useSession } from '../../../state/session';
-import { bleClient, type FoundDevice } from '../../../lib/ble';
+import { bleClient, isBleStubMode, type FoundDevice } from '../../../lib/ble';
 import { getBleManager } from '../../../lib/ble/manager';
 import {
   checkBleAvailability,
@@ -88,6 +88,7 @@ export function ConnectDeviceCard() {
     if (avail.state === 'bluetooth-off') return setState('bluetooth-off');
     if (avail.state === 'unauthorized') return setState('permission-denied');
     if (avail.state === 'unsupported' || avail.state === 'unknown') {
+      if (manager === null && !isBleStubMode) return setState('unsupported');
       if (manager !== null) return setState('unsupported');
     }
 
@@ -218,7 +219,7 @@ export function ConnectDeviceCard() {
 
         {state === 'unsupported' ? (
           <Body style={styles.subtext}>
-            This device doesn't support Bluetooth LE.
+            Bluetooth LE isn't available in this app build or on this device.
           </Body>
         ) : null}
 
