@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Alert, StyleSheet, TextInput } from 'react-native';
+import { StyleSheet, TextInput } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import { Segmented } from '../../components/Segmented';
@@ -8,6 +8,7 @@ import type { OnboardingStackParamList } from '../../navigation/types';
 import { ProfileCard } from './components/ProfileCard';
 import { DateOfBirthInput } from './components/DateOfBirthInput';
 import { saveProfile, type Sex } from '../../lib/profile';
+import { useSession } from '../../state/session';
 
 const SEX_OPTIONS: { value: Sex; label: string }[] = [
   { value: 'male', label: 'Male' },
@@ -23,18 +24,17 @@ export function Profile({ navigation }: Props) {
   const [dob, setDob] = useState<string | null>(null);
   const [sex, setSex] = useState<Sex | null>(null);
 
-  const done = async () => {
-    try {
-      await saveProfile({
-        firstName: firstName.trim() || null,
-        dob: dob ?? null,
-        sex: sex ?? null,
-      });
-    } catch (e) {
-      Alert.alert("Couldn't save your profile", e instanceof Error ? e.message : String(e));
-    } finally {
-      navigation.navigate('Pair');
-    }
+  const done = () => {
+    const patch = { firstName: firstName.trim() || null, dob: dob ?? null, sex: sex ?? null };
+    // Reflect the choices in the session immediately and move on. A stalled
+    // auth.updateUser must NEVER strand the user on this screen (it has), so
+    // persistence is fire-and-forget — saveProfile re-patches the session on
+    // success and the metadata re-syncs on the next auth refresh.
+    useSession.getState().patchUser(patch);
+    navigation.navigate('Pair');
+    saveProfile(patch).catch((e) => {
+      if (__DEV__) console.warn('[onboarding] profile save failed (will re-sync):', e);
+    });
   };
 
   const next = () => (step < 2 ? setStep(step + 1) : done());

@@ -301,13 +301,21 @@ export const realBleClient: BleClient = {
       }
       if (!device) return;
       const name = device.name ?? device.localName;
-      // Firmware advertises a per-color name ("Neurex Yellow"/"Neurex Red"/…),
-      // and older units advertise "Neurex-EEG-XXXX" — both share the "Neurex"
-      // prefix, which still excludes earbuds/phones/watches from the Pair UI.
-      if (!name || !name.startsWith('Neurex')) return;
+      // Accept a device if EITHER its name carries the "Neurex" prefix
+      // ("Neurex Yellow"/"Neurex-EEG-XXXX"/…) OR it advertises our stable
+      // service UUID. Matching the UUID means renamed devices and any future
+      // naming scheme still appear in the Pair UI without shipping an app
+      // update; the name check still catches units whose UUID only rides in a
+      // scan response some stacks drop. Either is enough, and both still keep
+      // earbuds/phones/watches out of the Pair UI.
+      const matchesName = !!name && name.startsWith('Neurex');
+      const matchesUuid = (device.serviceUUIDs ?? []).some(
+        (u) => u?.toLowerCase() === NEUREX_SERVICE_UUID,
+      );
+      if (!matchesName && !matchesUuid) return;
       onFound({
         deviceId: device.id,
-        serial: name,
+        serial: name ?? 'Neurex device',
         rssi: device.rssi ?? -127,
       });
     });

@@ -53,9 +53,12 @@ export const BATTERY_LEVEL_CHAR_UUID = '00002a19-0000-1000-8000-00805f9b34fb';
 export const NEUREX_BLE_RESTORE_IDENTIFIER = 'neurex-ble-bg' as const;
 
 // ── EEG signal scale ────────────────────────────────────────────────────────
-// ADS1299, gain 24, ±4.5 V reference. Matches firmware ADS1299_UV_PER_LSB and
-// tools/capture/ble_stream_recv.py (UV_PER_LSB = 4.5 / 2^23 / 24 * 1e6).
-export const EEG_UV_PER_LSB = (4.5 / Math.pow(2, 23) / 24) * 1e6;
+// ADS1299, gain 1, ±4.5 V reference. Matches the firmware register table (CHnSET
+// ×1) and tools/capture/ble_stream_recv.py (UV_PER_LSB = 4.5 / 2^23 / 1 * 1e6).
+// 2026-06-13: dropped ×24 → ×1 — dry forehead electrodes returned large DC
+// offsets that clipped CH1 at the ±187.5 mV gain-24 PGA rail. Firmware gain +
+// this constant MUST move together or recorded µV scales wrong.
+export const EEG_UV_PER_LSB = (4.5 / Math.pow(2, 23) / 1) * 1e6;
 
 // Nominal sample rate from the firmware ADS1299 driver (4 ms per sample).
 export const EEG_SAMPLE_RATE_HZ = 250;
