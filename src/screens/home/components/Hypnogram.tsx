@@ -2,8 +2,9 @@ import React, { useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import Svg, { Line, Rect, Text as SvgText } from 'react-native-svg';
 
-import { colors, stageColors } from '../../../theme/tokens';
+import { colors, signalQualityColors, stageColors } from '../../../theme/tokens';
 import type { CoreSleepStage, Epoch } from '../../../lib/repos';
+import { collapseHypnogramRuns, isCoreSleepStage } from './hypnogramRuns';
 
 type Props = {
   epochs: Epoch[];
@@ -25,7 +26,7 @@ const LANE_LABEL: Record<CoreSleepStage, string> = {
 // Hour labels nearer than this (in px) to either chart edge are dropped so
 // they don't collide with the bed/wake labels anchored at the edges.
 const EDGE_CLEARANCE_PX = 56;
-const VALID_STAGES = new Set<string>(['wake', 'rem', 'light', 'deep']);
+const NO_SIGNAL_LABEL_MIN_W = 74;
 
 export function Hypnogram({ epochs, startMs, endMs }: Props) {
   const [width, setWidth] = useState(0);
@@ -48,8 +49,8 @@ export function Hypnogram({ epochs, startMs, endMs }: Props) {
   const baselineY = PADDING_TOP + drawH;
   const axisY = baselineY + 15;
 
-  // Collapse epochs into contiguous runs of the same stage.
-  const runs = useMemo(() => collapseRuns(epochs), [epochs]);
+  // Collapse epochs into contiguous runs, including no-signal gaps.
+  const runs = useMemo(() => collapseHypnogramRuns(epochs), [epochs]);
   const ticks = useMemo(() => axisTicks(startMs, chartEndMs), [startMs, chartEndMs]);
 
   return (
@@ -92,10 +93,46 @@ export function Hypnogram({ epochs, startMs, endMs }: Props) {
             );
           })}
 
+          {/* No-signal blocks are data-quality gaps, not Wake. Draw them behind
+              the sleep lanes so the missing signal is visible without becoming
+              part of the stage breakdown. */}
+          {runs.map((run, i) => {
+            if (run.stage !== 'excluded') return null;
+            const x1 = xAt(startMs + run.startMs);
+            const x2 = xAt(startMs + run.startMs + run.durationMs);
+            const w = Math.max(x2 - x1, 0.75);
+            return (
+              <React.Fragment key={`excluded-${i}`}>
+                <Rect
+                  x={x1}
+                  y={PADDING_TOP}
+                  width={w}
+                  height={drawH}
+                  rx={3}
+                  fill={signalQualityColors.noSignalFill}
+                  opacity={0.72}
+                />
+                {w >= NO_SIGNAL_LABEL_MIN_W ? (
+                  <SvgText
+                    x={x1 + w / 2}
+                    y={PADDING_TOP + drawH / 2 + 4}
+                    fontSize={9}
+                    fill={signalQualityColors.noSignalText}
+                    textAnchor="middle"
+                    fontWeight="600"
+                  >
+                    NO SIGNAL
+                  </SvgText>
+                ) : null}
+              </React.Fragment>
+            );
+          })}
+
           {/* Stage bands only — the old vertical connector lines turned every
               rapid stage flip into a full-height streak, reading as a barcode.
               The bands alone make a clean, legible stage plot. */}
           {runs.map((run, i) => {
+            if (!isCoreSleepStage(run.stage)) return null;
             // Epoch startMs is recording-relative (0-based, written by the
             // backend), so shift by the absolute session start before mapping —
             // otherwise bands land ~startMs off-screen and the chart looks empty.
@@ -160,25 +197,6 @@ export function Hypnogram({ epochs, startMs, endMs }: Props) {
       </View>
     </View>
   );
-}
-
-function collapseRuns(epochs: Epoch[]) {
-  const runs: { stage: CoreSleepStage; startMs: number; durationMs: number }[] = [];
-  for (const e of epochs) {
-    if (!VALID_STAGES.has(e.stage)) continue;
-    const stage = e.stage as CoreSleepStage;
-    const last = runs[runs.length - 1];
-    if (last && last.stage === stage) {
-      last.durationMs += e.durationSec * 1000;
-    } else {
-      runs.push({
-        stage,
-        startMs: e.startMs,
-        durationMs: e.durationSec * 1000,
-      });
-    }
-  }
-  return runs;
 }
 
 function stagedEndMs(epochs: Epoch[], startMs: number, fallbackEndMs: number) {

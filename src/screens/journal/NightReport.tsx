@@ -48,7 +48,7 @@ export function NightReport({ session }: { session: Session }) {
             <Hypnogram epochs={session.epochs} startMs={session.startMs} endMs={session.endMs} />
             {session.excludedMinutes > 0 ? (
               <Secondary style={styles.signalNote}>
-                {`No-signal time excluded: ${fmtDur(session.excludedMinutes)}${
+                {`No-signal time excluded from sleep metrics: ${fmtDur(session.excludedMinutes)}${
                   session.signalEndMs != null
                     ? ` · usable signal ended around ${fmtTime(session.startMs + session.signalEndMs)}`
                     : ''

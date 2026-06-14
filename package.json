@@ -18,6 +18,7 @@
     "smoke:ble-reboot": "ts-node --transpile-only --project scripts/tsconfig.scripts.json scripts/smoke-ble-reboot.ts",
     "smoke:ble-watchdog": "ts-node --transpile-only --project scripts/tsconfig.scripts.json scripts/smoke-ble-watchdog.ts",
     "smoke:connect-timeout": "ts-node --transpile-only --project scripts/tsconfig.scripts.json scripts/smoke-connect-timeout.ts",
+    "smoke:hypnogram": "ts-node --transpile-only --project scripts/tsconfig.scripts.json scripts/smoke-hypnogram.ts",
     "smoke:recovery": "ts-node --transpile-only --project scripts/tsconfig.scripts.json scripts/smoke-recovery.ts",
     "prebuild": "expo prebuild",
     "lint": "eslint .",
