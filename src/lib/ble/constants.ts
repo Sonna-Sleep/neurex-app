@@ -7,7 +7,9 @@
 //   - EEG notify: 6e6b0000-1000-8000-0078-65726e6b0002
 // (Derived from NimBLE's little-endian BLE_UUID128_INIT byte order.)
 //
-// The device advertises with local name "Neurex-EEG".
+// Each device advertises a per-color local name ("Neurex Yellow"/"Neurex Red"/
+// "Neurex Blue"/"Neurex Green"); older units use "Neurex-EEG-XXXX". The scanner
+// matches the shared "Neurex" prefix client-side (see ble/real.ts).
 //
 // Treat NEUREX_BLE_RESTORE_IDENTIFIER as immutable across app versions.
 // iOS keys all preserved state to it; if it ever changes, every paired
@@ -16,9 +18,10 @@
 export const NEUREX_SERVICE_UUID = '6e6b0000-1000-8000-0078-65726e6b0001';
 export const NEUREX_EEG_NOTIFY_UUID = '6e6b0000-1000-8000-0078-65726e6b0002';
 
-// Advertised local name. We scan by service UUID (Apple-compliant) and use
-// the name as a human-readable fallback for the "found device" display.
-export const NEUREX_DEVICE_LOCAL_NAME = 'Neurex-EEG';
+// Shared advertised-name prefix. The scanner matches this prefix client-side
+// (see ble/real.ts) and uses the full name ("Neurex Yellow", …) as the
+// human-readable label in the "found device" display.
+export const NEUREX_DEVICE_LOCAL_NAME = 'Neurex';
 
 // ACK characteristic (write-no-response, 2 bytes {gen, seq}). The
 // phone writes its last contiguous frontier here so firmware-side accounting

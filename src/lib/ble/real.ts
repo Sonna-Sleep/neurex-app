@@ -285,7 +285,7 @@ export const realBleClient: BleClient = {
     }
     // Scan ALL advertisers (UUID filter passed as null) and match by name
     // client-side. The 128-bit service UUID doesn't fit the 31-byte
-    // advertising packet alongside the "Neurex-EEG" name + flags, so the
+    // advertising packet alongside the "Neurex <Color>" name + flags, so the
     // firmware puts the UUID in the SCAN RESPONSE instead (so iOS background
     // discovery still works). Android foreground scanning here matches the
     // name in the advertising packet — simpler than a two-packet UUID filter
@@ -301,7 +301,10 @@ export const realBleClient: BleClient = {
       }
       if (!device) return;
       const name = device.name ?? device.localName;
-      if (!name || !name.startsWith('Neurex-EEG')) return;
+      // Firmware advertises a per-color name ("Neurex Yellow"/"Neurex Red"/…),
+      // and older units advertise "Neurex-EEG-XXXX" — both share the "Neurex"
+      // prefix, which still excludes earbuds/phones/watches from the Pair UI.
+      if (!name || !name.startsWith('Neurex')) return;
       onFound({
         deviceId: device.id,
         serial: name,
