@@ -57,7 +57,14 @@ function u32be(bytes: Uint8Array, offset: number): number {
   );
 }
 
-export function parsePacket(bytes: Uint8Array, generation: number): ParseOutcome {
+// uvPerLsb is the device-reported µV-per-LSB (read from the Scale characteristic
+// at connect); it defaults to EEG_UV_PER_LSB so units that predate that
+// characteristic decode byte-identically to before.
+export function parsePacket(
+  bytes: Uint8Array,
+  generation: number,
+  uvPerLsb: number = EEG_UV_PER_LSB,
+): ParseOutcome {
   if (bytes.length !== PACKET_SIZE) return { ok: false, reason: 'size' };
   if (
     bytes[0] !== PACKET_START_HI ||
@@ -79,7 +86,7 @@ export function parsePacket(bytes: Uint8Array, generation: number): ParseOutcome
     const ms = (baseMs + s) >>> 0;
     samples[s] = {
       ms,
-      fp1_uV: i24be(bytes, o + CH_FP1 * 3) * EEG_UV_PER_LSB,
+      fp1_uV: i24be(bytes, o + CH_FP1 * 3) * uvPerLsb,
     };
   }
   return { ok: true, packet: { generation, seq, baseMs, samples } };

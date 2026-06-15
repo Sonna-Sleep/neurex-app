@@ -31,6 +31,17 @@ export const NEUREX_DEVICE_LOCAL_NAME = 'Neurex';
 // Same 6e6b... family as the service/notify UUIDs; firmware UUID is 6e6b0003.
 export const NEUREX_ACK_WRITE_UUID = '6e6b0000-1000-8000-0078-65726e6b0003';
 
+// Scale/DeviceInfo characteristic (READ-only, same 6e6b… family; firmware UUID
+// 6e6b0004). The device serializes its ACTUAL amplitude scale here — µV-per-LSB,
+// PGA gain, VREF, sample rate, channel map, firmware build id — as a 20-byte
+// little-endian struct (see ble/scale.ts for the layout). The app reads it once
+// at connect so the scale is self-describing instead of an assumption that
+// silently breaks when the firmware gain changes. Mirror the layout on nRF5340.
+export const NEUREX_SCALE_INFO_UUID = '6e6b0000-1000-8000-0078-65726e6b0004';
+// Bump in lockstep with NEUREX_SCALE_SCHEMA_VER in firmware neurex_scale.h.
+export const NEUREX_SCALE_INFO_SCHEMA_VER = 1;
+export const NEUREX_SCALE_INFO_BYTES = 20;
+
 // How often the ACK loop writes the contiguous frontier. Firmware just needs
 // SOMETHING periodic to drain the ring, not a per-packet ACK. Matches
 // ACK_INTERVAL_S in tools/capture/ble_stream_recv.py.
@@ -53,11 +64,16 @@ export const BATTERY_LEVEL_CHAR_UUID = '00002a19-0000-1000-8000-00805f9b34fb';
 export const NEUREX_BLE_RESTORE_IDENTIFIER = 'neurex-ble-bg' as const;
 
 // ── EEG signal scale ────────────────────────────────────────────────────────
-// ADS1299, gain 1, ±4.5 V reference. Matches the firmware register table (CHnSET
-// ×1) and tools/capture/ble_stream_recv.py (UV_PER_LSB = 4.5 / 2^23 / 1 * 1e6).
-// 2026-06-13: dropped ×24 → ×1 — dry forehead electrodes returned large DC
-// offsets that clipped CH1 at the ±187.5 mV gain-24 PGA rail. Firmware gain +
-// this constant MUST move together or recorded µV scales wrong.
+// FALLBACK ONLY. The device now reports its real µV-per-LSB over the Scale
+// characteristic (NEUREX_SCALE_INFO_UUID), which the app reads at connect and
+// uses for the code→µV conversion. This constant is used ONLY for units that
+// predate that characteristic (older firmware that doesn't expose it) — keeping
+// the old behavior byte-identical for them.
+//
+// ADS1299, gain 1, ±4.5 V reference: 4.5 / 2^23 / 1 * 1e6 ≈ 0.5364 µV/LSB.
+// Matches the firmware default (CHnSET ×1) and ble_stream_recv.py. 2026-06-13:
+// dropped ×24 → ×1 — dry forehead electrodes returned large DC offsets that
+// clipped CH1 at the ±187.5 mV gain-24 PGA rail.
 export const EEG_UV_PER_LSB = (4.5 / Math.pow(2, 23) / 1) * 1e6;
 
 // Nominal sample rate from the firmware ADS1299 driver (4 ms per sample).

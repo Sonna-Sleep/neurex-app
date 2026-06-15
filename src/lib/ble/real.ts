@@ -24,13 +24,17 @@ import { useSession } from '../../state/session';
 import {
   BATTERY_LEVEL_CHAR_UUID,
   BATTERY_SERVICE_UUID,
+  EEG_SAMPLE_INTERVAL_MS,
   NEUREX_ACK_INTERVAL_MS,
   NEUREX_ACK_WRITE_UUID,
   NEUREX_EEG_NOTIFY_UUID,
+  NEUREX_SCALE_INFO_UUID,
   NEUREX_SERVICE_UUID,
   SAMPLES_PER_PACKET,
 } from './constants';
 import { classifyResume, parsePacket } from './packet';
+import { FALLBACK_SCALE, parseScaleInfo, scaleProvenance } from './scale';
+import type { DeviceScaleInfo } from './scale';
 import type {
   BleClient,
   ConnectedDevice,
@@ -344,6 +348,33 @@ export const realBleClient: BleClient = {
     });
     await device.discoverAllServicesAndCharacteristics();
 
+    // Read the device's self-describing amplitude scale ONCE (µV-per-LSB, gain,
+    // VREF, firmware build id). The app converts raw ADS codes → µV with THIS
+    // value instead of a hardcoded constant, so a future PGA-gain change can't
+    // silently mis-scale recordings. Units that predate the Scale characteristic
+    // (older firmware), or a read failure, fall back to the gain-1 scale —
+    // byte-identical to the previous behavior.
+    let deviceScale: DeviceScaleInfo = FALLBACK_SCALE;
+    try {
+      const sc = await device.readCharacteristicForService(
+        NEUREX_SERVICE_UUID,
+        NEUREX_SCALE_INFO_UUID,
+      );
+      const parsed = sc?.value ? parseScaleInfo(b64ToBytes(sc.value)) : null;
+      if (parsed) {
+        deviceScale = parsed;
+        if (__DEV__)
+          console.log(
+            `[ble/real] device scale ${parsed.uvPerLsb.toFixed(4)} µV/LSB ` +
+              `(gain ${parsed.pgaGain}, schema ${parsed.schemaVer}, fw ${parsed.fwBuildId.toString(16)})`,
+          );
+      } else if (__DEV__) {
+        console.log('[ble/real] no/invalid Scale characteristic — fallback gain-1 scale');
+      }
+    } catch (e) {
+      if (__DEV__) console.warn('[ble/real] scale read failed; using fallback:', e);
+    }
+
     // Subscribe to the standard Battery Service. Firmware notifies every
     // ~5 s; we mirror straight into the Zustand session store so the
     // StatusPill and RecordingCard tick live without prop drilling. Read
@@ -392,6 +423,29 @@ export const realBleClient: BleClient = {
         if (!sessionDir.exists) sessionDir.create();
 
         const eeg = AppendingFile.open(sessionDir, 'EEG.BIN');
+
+        // Self-describing SCALE sidecar — scale.json, DELIBERATELY distinct from
+        // recovery.ts's meta.json (which owns startedAtMs/serial for crash
+        // recovery; reusing that name would clobber it). Written once at stream
+        // start so the cloud QC/staging knows the EXACT µV-per-LSB (and gain /
+        // firmware build) this recording used. Uploaded alongside the segments
+        // (cloudSync). Old recordings without it fall back to the gain-1 scale.
+        try {
+          const scaleMeta = {
+            schemaVer: 1,
+            sessionId,
+            sampleRateHz: deviceScale.sampleRateHz,
+            sampleIntervalMs: EEG_SAMPLE_INTERVAL_MS,
+            eegRecordBytes: EEG_RECORD_BYTES,
+            scale: scaleProvenance(deviceScale),
+          };
+          const scaleFile = new File(sessionDir, 'scale.json');
+          if (scaleFile.exists) scaleFile.delete();
+          scaleFile.create();
+          scaleFile.write(JSON.stringify(scaleMeta));
+        } catch (e) {
+          if (__DEV__) console.warn('[ble/real] scale.json write failed (non-fatal):', e);
+        }
 
         const stats: StreamStats = {
           packets: 0,
@@ -450,7 +504,7 @@ export const realBleClient: BleClient = {
           if (!b64) return;
 
           const bytes = b64ToBytes(b64);
-          const result = parsePacket(bytes, stats.generation);
+          const result = parsePacket(bytes, stats.generation, deviceScale.uvPerLsb);
           if (!result.ok) {
             stats.drops++;
             cb.onDrop?.(result.reason, stats);

@@ -181,6 +181,26 @@ export async function uploadFileAsSegments(
   });
 }
 
+/** Upload a small sidecar file (e.g. the scale-provenance scale.json) to
+ * `${prefix}/${name}` if it exists. Best-effort: sidecars are provenance, not
+ * sample data, so the caller treats a failure as non-fatal. */
+async function uploadSidecarIfPresent(
+  prefix: string,
+  file: File,
+  name: string,
+): Promise<void> {
+  if (!file.exists) return;
+  const supabase = getSupabase();
+  if (!supabase) throw new NotAuthedError();
+  const handle = file.open();
+  try {
+    const bytes = handle.readBytes(1 << 16); // sidecars are < 64 KB
+    await uploadChunkWithRetry(`${prefix}/${name}`, bytes);
+  } finally {
+    handle.close();
+  }
+}
+
 export type FinalizeInput = {
   sessionId: string;
   startMs: number;
@@ -236,6 +256,15 @@ export async function transmitSession(input: FinalizeInput): Promise<string> {
 
   const eeg = new File(dir, 'EEG.BIN');
   await uploadFileAsSegments(prefix, 'eeg', eeg);
+  // Self-describing scale/provenance sidecar (scale.json — separate from the
+  // recovery meta.json) uploaded BEFORE finalize so the backend sees it when
+  // staging. Best-effort: a missing/failed sidecar must not lose the night
+  // (older recordings have none and fall back to the assumed scale).
+  try {
+    await uploadSidecarIfPresent(prefix, new File(dir, 'scale.json'), 'scale.json');
+  } catch (e) {
+    if (__DEV__) console.warn('[cloudSync] scale.json upload failed (non-fatal):', e);
+  }
   await finalizeSession(input, prefix);
   deleteLocalSession(input.sessionId); // nothing stays on the phone
   return prefix;
