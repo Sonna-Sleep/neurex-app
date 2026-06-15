@@ -13,7 +13,6 @@ import {
   PKT_IDX_CHECKSUM,
   PKT_IDX_DATA,
   PKT_IDX_SEQ,
-  PKT_IDX_TS,
   SAMPLES_PER_PACKET,
 } from '../src/lib/ble/constants';
 import { parsePacket } from '../src/lib/ble/packet';
