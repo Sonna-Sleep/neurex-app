@@ -21,17 +21,11 @@ import { SerifDisplay, Body, Eyebrow } from '../../theme/typography';
 import { colors, fonts, layout, radii, spacing } from '../../theme/tokens';
 import { useSession } from '../../state/session';
 import { getSupabase, AUTH_REDIRECT_URL } from '../../lib/auth/supabase';
-import { ALLOW_DEV_BYPASS } from '../../lib/config';
 import type { OnboardingStackParamList } from '../../navigation/types';
 
 WebBrowser.maybeCompleteAuthSession();
 
 type Props = NativeStackScreenProps<OnboardingStackParamList, 'Auth'>;
-
-// Auth bypass for testing — reach the Pair/BLE flow without real auth.
-// Shown in dev (__DEV__) AND in internal test builds where EXPO_PUBLIC_DEV_BYPASS=1.
-// Hidden in normal production builds (flag unset) so it can't ship by accident.
-const ALLOW_AUTH_BYPASS = ALLOW_DEV_BYPASS;
 
 export function Auth({ navigation }: Props) {
   const setAuth = useSession((s) => s.setAuth);
@@ -233,16 +227,6 @@ export function Auth({ navigation }: Props) {
                   </View>
                 ) : null}
               </View>
-
-              {/* Auth bypass for testing — gated on ALLOW_AUTH_BYPASS so it only
-                  appears in dev or internal test builds, never in production. */}
-              {ALLOW_AUTH_BYPASS ? (
-                <Button
-                  label="Skip login (test)"
-                  variant="ghost"
-                  onPress={() => continueWithMockUser('dev-skip', null)}
-                />
-              ) : null}
             </View>
           </View>
         </ScrollView>
