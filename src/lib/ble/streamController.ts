@@ -12,7 +12,11 @@ import { bleClient } from './index';
 import type { ConnectedDevice, StreamHandle, StreamStats, StreamCallbacks } from './types';
 import { useSession } from '../../state/session';
 import { getBleManager } from './manager';
-import { startForegroundService, stopForegroundService } from './foregroundService';
+import {
+  ensureBatteryOptimizationExemption,
+  startForegroundService,
+  stopForegroundService,
+} from './foregroundService';
 import { nextBackoffMs } from './backoff';
 import {
   WATCHDOG_INTERVAL_MS,
@@ -197,6 +201,10 @@ export async function startSession(
 
   // Keep the process alive overnight (screen off / backgrounded).
   const fgStarted = startForegroundService();
+  // Overnight insurance: ask the OS to exempt us from Doze (no-op on iOS, when
+  // already exempt, or on older native builds). User-initiated start only — not
+  // the background restore path, where launching the system dialog would fail.
+  ensureBatteryOptimizationExemption();
 
   active = {
     sessionId,

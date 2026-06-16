@@ -6,6 +6,11 @@ export type NeurexForegroundServiceModule = {
    * should warn the user that background recording isn't protected. */
   start(title: string, body: string): boolean;
   stop(): void;
+  /** True if the app is already exempt from Doze battery optimization. */
+  isIgnoringBatteryOptimizations(): boolean;
+  /** Ask the OS to exempt the app from Doze (shows the system dialog only if not
+   * already exempt). Returns true if already exempt or the dialog launched. */
+  requestIgnoreBatteryOptimizations(): boolean;
 };
 
 // requireOptionalNativeModule returns null when the native module isn't

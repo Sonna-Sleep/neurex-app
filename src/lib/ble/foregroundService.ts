@@ -37,3 +37,21 @@ export function stopForegroundService(): void {
     if (__DEV__) console.warn('[fgs] stop failed:', e);
   }
 }
+
+/**
+ * Best-effort: ask Android to exempt the app from Doze battery optimization so an
+ * overnight BLE recording isn't throttled with the screen off. No-op on iOS/web
+ * (module absent), on older native builds that lack the method, and when already
+ * exempt (the native side checks first and won't re-prompt). The connectedDevice
+ * foreground service is the primary keep-alive; this is extra insurance for long
+ * unattended nights.
+ */
+export function ensureBatteryOptimizationExemption(): void {
+  const mod = NeurexForegroundServiceModule;
+  if (!mod || typeof mod.requestIgnoreBatteryOptimizations !== 'function') return;
+  try {
+    mod.requestIgnoreBatteryOptimizations();
+  } catch (e) {
+    if (__DEV__) console.warn('[fgs] battery-opt request failed:', e);
+  }
+}
