@@ -504,7 +504,12 @@ export const realBleClient: BleClient = {
           if (!b64) return;
 
           const bytes = b64ToBytes(b64);
-          const result = parsePacket(bytes, stats.generation, deviceScale.uvPerLsb);
+          const result = parsePacket(
+            bytes,
+            stats.generation,
+            deviceScale.uvPerLsb,
+            deviceScale.fp1Index,
+          );
           if (!result.ok) {
             stats.drops++;
             cb.onDrop?.(result.reason, stats);

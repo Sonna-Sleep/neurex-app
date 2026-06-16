@@ -109,8 +109,9 @@ export const PKT_IDX_DATA = 10;
 export const BYTES_PER_FRAME = 27;
 export const PKT_IDX_CHECKSUM = 223; // 7 (header) + 8 × 27 (samples)
 
-// Channel layout (beta hardware wiring): CH1 is FP1 active, referenced to FP2.
-// FPz is bias/DRL and is not exported as an EEG channel.
+// Fallback FP1 (Fpz) channel index, used ONLY when the device doesn't report one
+// over the Scale characteristic. The device is authoritative via fp1Index:
+// 0=CH1 (YELLOW/GREEN/BLUE/WHITE/LT), 4=CH5 (RED). See parsePacket + ble/scale.ts.
 export const CH_FP1 = 0;
 
 // A backward jump in baseMs (firmware ms-since-boot) larger than this means the

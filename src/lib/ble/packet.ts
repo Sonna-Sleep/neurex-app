@@ -64,6 +64,7 @@ export function parsePacket(
   bytes: Uint8Array,
   generation: number,
   uvPerLsb: number = EEG_UV_PER_LSB,
+  fp1Index: number = CH_FP1,
 ): ParseOutcome {
   if (bytes.length !== PACKET_SIZE) return { ok: false, reason: 'size' };
   if (
@@ -80,13 +81,18 @@ export function parsePacket(
 
   const seq = bytes[PKT_IDX_SEQ];
   const baseMs = u32be(bytes, PKT_IDX_TS);
+  // The device reports which channel carries FP1 (Fpz) over the Scale
+  // characteristic: 0=CH1 (YELLOW/GREEN/BLUE/WHITE/LT), 4=CH5 (RED). Honor it so
+  // one app build reads the right channel on every board. Guard to an in-frame
+  // channel (0..7); fall back to CH_FP1 if the device reports something invalid.
+  const ch = fp1Index >= 0 && fp1Index < 8 ? fp1Index : CH_FP1;
   const samples: EegSample[] = new Array(SAMPLES_PER_PACKET);
   for (let s = 0; s < SAMPLES_PER_PACKET; s++) {
     const o = PKT_IDX_DATA + s * BYTES_PER_FRAME;
     const ms = (baseMs + s) >>> 0;
     samples[s] = {
       ms,
-      fp1_uV: i24be(bytes, o + CH_FP1 * 3) * uvPerLsb,
+      fp1_uV: i24be(bytes, o + ch * 3) * uvPerLsb,
     };
   }
   return { ok: true, packet: { generation, seq, baseMs, samples } };
