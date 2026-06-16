@@ -3,59 +3,57 @@ import { StyleSheet, TextInput, View } from 'react-native';
 
 import { Eyebrow } from '../../../theme/typography';
 import { colors, spacing } from '../../../theme/tokens';
+import { cleanSegment, isoFromParts, partsFromIso } from '../../../lib/dob';
 
 type Props = { value: string | null; onChange: (iso: string | null) => void };
 
-// Builds an ISO 'YYYY-MM-DD' only when D/M/Y form a real, in-range date.
-function isoOrNull(d: string, m: string, y: string): string | null {
-  const dd = Number(d), mm = Number(m), yy = Number(y);
-  if (!dd || !mm || !yy || y.length !== 4) return null;
-  const dt = new Date(yy, mm - 1, dd);
-  if (dt.getFullYear() !== yy || dt.getMonth() !== mm - 1 || dt.getDate() !== dd) return null;
-  const age = new Date().getFullYear() - yy;
-  if (age < 13 || age > 120) return null;
-  return `${yy}-${String(mm).padStart(2, '0')}-${String(dd).padStart(2, '0')}`;
-}
-
 export function DateOfBirthInput({ value, onChange }: Props) {
-  const [d, setD] = React.useState(value ? value.slice(8, 10) : '');
-  const [m, setM] = React.useState(value ? value.slice(5, 7) : '');
-  const [y, setY] = React.useState(value ? value.slice(0, 4) : '');
+  const seed = partsFromIso(value);
+  const [d, setD] = React.useState(seed.d);
+  const [m, setM] = React.useState(seed.m);
+  const [y, setY] = React.useState(seed.y);
 
-  // Re-sync the visible fields when the parent changes `value` while we stay
-  // mounted (e.g. the Account edit sheet reopening). Only re-seed when the
-  // incoming value disagrees with what the fields already represent, so a
-  // parent that echoes our own onChange ISO back doesn't clobber in-progress
-  // typing of an as-yet-incomplete date.
+  // Re-sync the visible fields when the parent replaces `value` out-of-band
+  // (e.g. the account edit sheet reopening). Only re-seed when the incoming
+  // value disagrees with what the fields already represent, so a parent that
+  // echoes our own onChange ISO back doesn't clobber in-progress typing of an
+  // as-yet-incomplete date.
   React.useEffect(() => {
-    if (value === isoOrNull(d, m, y)) return;
-    // Intentional controlled-prop resync for a locally edited segmented date.
-    setD(value ? value.slice(8, 10) : '');
-    setM(value ? value.slice(5, 7) : '');
-    setY(value ? value.slice(0, 4) : '');
+    if (value === isoFromParts(d, m, y)) return;
+    const p = partsFromIso(value);
+    setD(p.d);
+    setM(p.m);
+    setY(p.y);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value]);
 
-  const update = (nd: string, nm: string, ny: string) => {
-    setD(nd); setM(nm); setY(ny);
-    onChange(isoOrNull(nd, nm, ny));
-  };
+  // Emit the ISO from one place, derived from the three fields. Doing this in an
+  // effect — rather than inside each field's onChangeText — is what makes the
+  // input lag-safe: a keystroke handler now touches ONLY its own field and never
+  // reads the other two from a render closure. Under JS-thread jank several
+  // keystrokes can fire before React re-renders; the previous shared-`update`
+  // path then wrote stale (empty) day/month back while the year was typed,
+  // wiping them. One setter per field makes that impossible.
+  React.useEffect(() => {
+    onChange(isoFromParts(d, m, y));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [d, m, y]);
 
   return (
     <View style={styles.row}>
       <View style={styles.field}>
         <Eyebrow>day</Eyebrow>
-        <TextInput style={styles.input} value={d} onChangeText={(t) => update(t.replace(/\D/g, '').slice(0, 2), m, y)}
+        <TextInput style={styles.input} value={d} onChangeText={(t) => setD(cleanSegment(t, 2))}
           keyboardType="number-pad" placeholder="DD" placeholderTextColor={colors.textTertiary} maxLength={2} />
       </View>
       <View style={styles.field}>
         <Eyebrow>month</Eyebrow>
-        <TextInput style={styles.input} value={m} onChangeText={(t) => update(d, t.replace(/\D/g, '').slice(0, 2), y)}
+        <TextInput style={styles.input} value={m} onChangeText={(t) => setM(cleanSegment(t, 2))}
           keyboardType="number-pad" placeholder="MM" placeholderTextColor={colors.textTertiary} maxLength={2} />
       </View>
       <View style={[styles.field, styles.year]}>
         <Eyebrow>year</Eyebrow>
-        <TextInput style={styles.input} value={y} onChangeText={(t) => update(d, m, t.replace(/\D/g, '').slice(0, 4))}
+        <TextInput style={styles.input} value={y} onChangeText={(t) => setY(cleanSegment(t, 4))}
           keyboardType="number-pad" placeholder="YYYY" placeholderTextColor={colors.textTertiary} maxLength={4} />
       </View>
     </View>

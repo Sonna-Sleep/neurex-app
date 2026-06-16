@@ -15,6 +15,7 @@
     "smoke:profile": "ts-node --transpile-only --project scripts/tsconfig.scripts.json scripts/smoke-profile.ts",
     "smoke:push": "ts-node --transpile-only --project scripts/tsconfig.scripts.json scripts/smoke-push.ts",
     "smoke:ble-packet": "ts-node --transpile-only --project scripts/tsconfig.scripts.json scripts/smoke-ble-packet.ts",
+    "smoke:dob": "ts-node --transpile-only --project scripts/tsconfig.scripts.json scripts/smoke-dob.ts",
     "smoke:ble-reboot": "ts-node --transpile-only --project scripts/tsconfig.scripts.json scripts/smoke-ble-reboot.ts",
     "smoke:ble-watchdog": "ts-node --transpile-only --project scripts/tsconfig.scripts.json scripts/smoke-ble-watchdog.ts",
     "smoke:ble-scale": "ts-node --transpile-only --project scripts/tsconfig.scripts.json scripts/smoke-ble-scale.ts",
