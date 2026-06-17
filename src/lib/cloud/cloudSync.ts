@@ -15,6 +15,11 @@ import { AppState } from 'react-native';
 import { getSupabase } from '../auth/supabase';
 import { supabaseSessionRepo } from '../repos/supabase';
 import type { Session } from '../repos/types';
+import { withUploadLock as runWithUploadLock, UPLOAD_LOCK_TIMEOUT_MS } from './uploadLock';
+
+// Re-export the surfaced stuck-upload counter so callers (e.g. a future health
+// readout) can see how often the upload lock had to abandon a wedged transfer.
+export { uploadLockStats } from './uploadLock';
 
 export const RECORDINGS_BUCKET = 'recordings';
 
@@ -43,12 +48,18 @@ function sleep(ms: number): Promise<void> {
 // Global upload mutex. Serializes every segment-upload loop so recordings can't
 // race the shared Supabase auth-token refresh or double the Storage request
 // rate. Calls queue and run one fully-before-the-next; order within a stream is
-// preserved.
-let uploadTail: Promise<unknown> = Promise.resolve();
+// preserved. The lock's wait on a predecessor is TIME-BOUNDED (see uploadLock.ts)
+// so one stuck transmission can't permanently block every future upload.
 function withUploadLock<T>(fn: () => Promise<T>): Promise<T> {
-  const run = uploadTail.then(fn, fn);
-  uploadTail = run.catch(() => {});
-  return run;
+  return runWithUploadLock(fn, UPLOAD_LOCK_TIMEOUT_MS, (timeouts) => {
+    if (__DEV__) {
+      console.warn(
+        `[cloudSync] upload lock held >${Math.round(
+          UPLOAD_LOCK_TIMEOUT_MS / 1000,
+        )}s — abandoning stuck upload so the queue can proceed (timeouts=${timeouts})`,
+      );
+    }
+  });
 }
 
 /**

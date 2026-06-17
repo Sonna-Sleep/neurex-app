@@ -22,6 +22,8 @@
     "smoke:connect-timeout": "ts-node --transpile-only --project scripts/tsconfig.scripts.json scripts/smoke-connect-timeout.ts",
     "smoke:hypnogram": "ts-node --transpile-only --project scripts/tsconfig.scripts.json scripts/smoke-hypnogram.ts",
     "smoke:recovery": "ts-node --transpile-only --project scripts/tsconfig.scripts.json scripts/smoke-recovery.ts",
+    "smoke:disk-space": "ts-node --transpile-only --project scripts/tsconfig.scripts.json scripts/smoke-disk-space.ts",
+    "smoke:upload-lock": "ts-node --transpile-only --project scripts/tsconfig.scripts.json scripts/smoke-upload-lock.ts",
     "prebuild": "expo prebuild",
     "lint": "eslint .",
     "smoke:support": "ts-node --transpile-only --project scripts/tsconfig.scripts.json scripts/smoke-support.ts"

@@ -29,6 +29,7 @@ import {
   writeSessionMeta,
   type RecordingMeta,
 } from '../cloud/recovery';
+import { checkDiskSpace, InsufficientStorageError } from './diskSpace';
 import type { Subscription } from 'react-native-ble-plx';
 
 // User-initiated session start: time-bounded so a device that's off or out of
@@ -167,6 +168,18 @@ export async function startSession(
   serial?: string | null,
 ): Promise<{ sessionId: string }> {
   if (active) return { sessionId: active.sessionId };
+
+  // Pre-flight: refuse to start a night the phone can't hold. An 8-h recording
+  // is written to EEG.BIN incrementally; if storage fills mid-night the native
+  // write fails and capture halts (surfaced via StorageWriteError, but only
+  // after data is already lost). Checking BEFORE the BLE connect fails fast with
+  // a clear, blocking message and without even touching the radio. A flaky
+  // disk-space read yields ok=true (never block a legit recording) — the live
+  // StorageWriteError path stays the backstop.
+  const disk = checkDiskSpace();
+  if (!disk.ok) {
+    throw new InsufficientStorageError(disk.freeBytes, disk.requiredBytes);
+  }
 
   const sessionId = generateSessionId();
   const startedAtMs = Date.now();
