@@ -41,6 +41,23 @@ const CONNECT_TIMEOUT_MS = 20_000;
 // device may return); this just stops pretending a long outage is a brief blip.
 const LOST_AFTER_MS = 90_000;
 
+// Thrown pre-flight (before any data is written) when the connected headband
+// reports variant_known === 0 — the firmware didn't recognize this board and is
+// running default settings whose channel/BIAS may be wrong, so the recording
+// can rail. Caught by the start-session caller (RecordingCard) and shown as a
+// prominent warning. The message is the user-facing text — keep it plain.
+export class UnconfiguredDeviceError extends Error {
+  constructor() {
+    super(
+      "This headband isn’t set up for recording yet — it’s running default " +
+        'settings, so the brain signal may be wrong or completely flat (railed). ' +
+        'Don’t record tonight: this board needs to be added to the firmware first. ' +
+        'Contact Neurex support with your device so we can configure it.',
+    );
+    this.name = 'UnconfiguredDeviceError';
+  }
+}
+
 type StatsRef = { current: StreamStats };
 
 type ActiveSession = {
@@ -185,6 +202,18 @@ export async function startSession(
   const startedAtMs = Date.now();
   // Time-bounded so a device that's off fails fast instead of hanging forever.
   const device = await bleClient.connect(deviceId, { timeoutMs: CONNECT_TIMEOUT_MS });
+
+  // Pre-flight: refuse to record on an UNCONFIGURED board. variant_known === 0
+  // means the firmware didn't recognize this board's MAC and is running YELLOW
+  // fallback defaults (CH1/0xFC) — the channel/BIAS may be wrong, so the night
+  // can come back fully railed (a real 4-h night was lost exactly this way and
+  // looked valid because nothing surfaced it). Block BEFORE any data is written.
+  // variantKnown === null (older v1 firmware) is "unknown but don't block" —
+  // back-compat: those units predate the byte and recorded fine for months.
+  if (device.scale.variantKnown === 0) {
+    await device.disconnect().catch(() => undefined);
+    throw new UnconfiguredDeviceError();
+  }
 
   const statsRef: StatsRef = { current: freshStats() };
   const cb = makeCallbacks(statsRef);

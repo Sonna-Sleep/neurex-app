@@ -18,7 +18,9 @@ import {
 import { parsePacket } from '../src/lib/ble/packet';
 import { FALLBACK_SCALE, parseScaleInfo, scaleProvenance } from '../src/lib/ble/scale';
 
-// Build the 20-byte neurex_scale_info_t the firmware serializes (little-endian).
+// Build the neurex_scale_info_t the firmware serializes (little-endian).
+// v1 = 20 bytes; pass `variantKnown` to emit the 21-byte schema-v2 payload
+// (one appended byte at offset 20).
 function makeScaleBytes(
   over: Partial<{
     schemaVer: number;
@@ -30,11 +32,13 @@ function makeScaleBytes(
     nChannels: number;
     fp1Index: number;
     fwBuildId: number;
+    variantKnown: number;
   }> = {},
 ): Uint8Array {
-  const buf = new ArrayBuffer(NEUREX_SCALE_INFO_BYTES);
+  const v2 = over.variantKnown !== undefined;
+  const buf = new ArrayBuffer(NEUREX_SCALE_INFO_BYTES + (v2 ? 1 : 0));
   const dv = new DataView(buf);
-  dv.setUint16(0, over.schemaVer ?? 1, true);
+  dv.setUint16(0, over.schemaVer ?? (v2 ? 2 : 1), true);
   dv.setUint8(2, over.pgaGain ?? 1);
   dv.setUint8(3, over.adcBits ?? 24);
   dv.setFloat32(4, over.vrefV ?? 4.5, true);
@@ -43,6 +47,7 @@ function makeScaleBytes(
   dv.setUint8(14, over.nChannels ?? 1);
   dv.setUint8(15, over.fp1Index ?? 0);
   dv.setUint32(16, over.fwBuildId ?? 0xdeadbeef, true);
+  if (v2) dv.setUint8(20, over.variantKnown as number);
   return new Uint8Array(buf);
 }
 
@@ -94,6 +99,28 @@ assert.equal(
 const future = parseScaleInfo(makeScaleBytes({ schemaVer: 2 }));
 assert.ok(future, 'future schema should still parse the v1 prefix');
 assert.equal(future!.schemaVer, 2);
+// A v2 schemaVer on a 20-byte payload (no appended byte) → variantKnown null,
+// never read past the buffer.
+assert.equal(future!.variantKnown, null, 'v2 schema but short (20B) payload → variantKnown null');
+
+// ── schema v2: variant_known (offset 20) parsed when present ─────────────────
+// Known board (configured) → 1.
+const knownBoard = parseScaleInfo(makeScaleBytes({ variantKnown: 1 }));
+assert.ok(knownBoard, 'v2 known-board payload should parse');
+assert.equal(knownBoard!.schemaVer, 2, 'variantKnown bytes default to schema v2');
+assert.equal(knownBoard!.variantKnown, 1, 'configured board → variantKnown 1');
+// Unknown board (YELLOW fallback defaults, can rail) → 0. This is the value the
+// app blocks on before recording a railed night.
+const unknownBoard = parseScaleInfo(makeScaleBytes({ variantKnown: 0 }));
+assert.ok(unknownBoard, 'v2 unknown-board payload should parse');
+assert.equal(unknownBoard!.variantKnown, 0, 'unconfigured board → variantKnown 0');
+// v1 (20-byte) firmware has no such byte → null (back-compat: don't block).
+const v1 = parseScaleInfo(makeScaleBytes());
+assert.equal(v1!.variantKnown, null, 'v1 20-byte payload → variantKnown null');
+// provenance carries variant_known into the scale.json sidecar (cloud flag).
+assert.equal(scaleProvenance(unknownBoard!).variantKnown, 0, 'provenance includes variantKnown 0');
+assert.equal(scaleProvenance(knownBoard!).variantKnown, 1, 'provenance includes variantKnown 1');
+assert.equal(scaleProvenance(v1!).variantKnown, null, 'provenance variantKnown null on v1');
 
 // ── fallback constant equals the legacy hardcoded scale ──────────────────────
 assert.equal(FALLBACK_SCALE.uvPerLsb, EEG_UV_PER_LSB);

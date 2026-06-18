@@ -22,6 +22,7 @@ import type {
   StreamHandle,
   StreamStats,
 } from './types';
+import { FALLBACK_SCALE } from './scale';
 
 const FAKE_DEVICE: FoundDevice = {
   deviceId: 'fake-deviceid-Neurex-EEG-STUB',
@@ -69,6 +70,9 @@ export const stubBleClient: BleClient = {
     await new Promise((r) => setTimeout(r, 700));
     return {
       deviceId,
+      // Synthetic path has no real board; report the gain-1 fallback
+      // (variantKnown null → never trips the unconfigured-board guard).
+      scale: FALLBACK_SCALE,
 
       async startStream(sessionId, cb: StreamCallbacks, _opts?: import('./types').StreamResumeOpts): Promise<StreamHandle> {
         const sessionsDir = new Directory(Paths.document, 'sessions');

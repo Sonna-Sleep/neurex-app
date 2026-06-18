@@ -5,6 +5,8 @@
 // Hz). We append decoded FP1-active / FP2-reference samples to a per-session
 // EEG.BIN file in the canonical on-disk format the analysis pipelines expect.
 
+import type { DeviceScaleInfo } from './scale';
+
 export type FoundDevice = {
   /** Platform-stable identifier — UUID on iOS, MAC address on Android. */
   deviceId: string;
@@ -73,6 +75,14 @@ export type StreamResumeOpts = {
 
 export type ConnectedDevice = {
   deviceId: string;
+  /**
+   * The device's self-describing amplitude scale, read once at connect (µV/LSB,
+   * gain, firmware build, and — schema v2+ — variantKnown). FALLBACK_SCALE when
+   * the unit predates the Scale characteristic or the read failed. Exposed so a
+   * caller can refuse to record on an unconfigured board (variantKnown === 0)
+   * before any data is written.
+   */
+  scale: DeviceScaleInfo;
   /** Subscribe to the notify characteristic and start writing samples to disk. */
   startStream(
     sessionId: string,

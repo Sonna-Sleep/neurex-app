@@ -1,7 +1,8 @@
 // Device-reported EEG amplitude scale, read once at connect from the
 // Scale/DeviceInfo characteristic (NEUREX_SCALE_INFO_UUID). The firmware
-// serializes neurex_scale_info_t (firmware/.../neurex_scale.h) as a 20-byte
-// little-endian struct; this is the app-side mirror.
+// serializes neurex_scale_info_t (firmware/.../neurex_scale.h) as a packed
+// little-endian struct; this is the app-side mirror. Schema v1 = 20 bytes;
+// schema v2 appends one byte (variant_known) at offset 20 → 21 bytes.
 //
 // Reading the device's ACTUAL µV-per-LSB (instead of hardcoding EEG_UV_PER_LSB)
 // means a future PGA-gain change propagates by itself — a firmware-only flash
@@ -30,6 +31,14 @@ export type DeviceScaleInfo = {
   fp1Index: number;
   /** First 4 bytes of the firmware ELF SHA256 — build provenance. */
   fwBuildId: number;
+  /**
+   * Schema-v2 field (offset 20). 1 = the board's MAC matched a known config in
+   * the firmware; 0 = an UNKNOWN board running YELLOW fallback defaults
+   * (CH1/0xFC) whose channel/BIAS may be wrong → the recording can RAIL.
+   * null when the firmware predates schema v2 (no such byte) — treat as
+   * "unknown, but don't block" for back-compat.
+   */
+  variantKnown: number | null;
 };
 
 /** Scale used when a unit predates the characteristic. Byte-identical to the old
@@ -44,6 +53,7 @@ export const FALLBACK_SCALE: DeviceScaleInfo = {
   nChannels: 1,
   fp1Index: 0,
   fwBuildId: 0,
+  variantKnown: null,
 };
 
 // Byte offsets — must match neurex_scale_info_t exactly (little-endian, packed).
@@ -57,6 +67,7 @@ const OFF = {
   nChannels: 14, // u8
   fp1Index: 15, // u8
   fwBuildId: 16, // u32
+  variantKnown: 20, // u8 — schema v2+ only (byte 20)
 } as const;
 
 /**
@@ -75,6 +86,11 @@ export function parseScaleInfo(
   if (schemaVer < 1) return null;
   const uvPerLsb = dv.getFloat32(OFF.uvPerLsb, true);
   if (!Number.isFinite(uvPerLsb) || uvPerLsb <= 0) return null;
+  // Schema v2 appends variant_known at offset 20. Read it only when the schema
+  // advertises >= 2 AND the payload is actually long enough; older firmware
+  // (v1, 20 bytes) has no such byte → null = "unknown, but don't block".
+  const variantKnown =
+    schemaVer >= 2 && bytes.length >= 21 ? dv.getUint8(OFF.variantKnown) : null;
   return {
     schemaVer,
     pgaGain: dv.getUint8(OFF.pgaGain),
@@ -85,6 +101,7 @@ export function parseScaleInfo(
     nChannels: dv.getUint8(OFF.nChannels),
     fp1Index: dv.getUint8(OFF.fp1Index),
     fwBuildId: dv.getUint32(OFF.fwBuildId, true),
+    variantKnown,
   };
 }
 
@@ -102,5 +119,8 @@ export function scaleProvenance(scale: DeviceScaleInfo) {
     nChannels: scale.nChannels,
     fp1Index: scale.fp1Index,
     fwBuildId: scale.fwBuildId,
+    // Lands in the scale.json sidecar so the cloud can flag a railed night
+    // recorded by an unconfigured board. null on pre-v2 firmware.
+    variantKnown: scale.variantKnown,
   };
 }

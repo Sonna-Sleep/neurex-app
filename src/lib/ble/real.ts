@@ -410,6 +410,9 @@ export const realBleClient: BleClient = {
 
     return {
       deviceId,
+      // Expose the scale read above so the session controller can refuse to
+      // record on an unconfigured board (deviceScale.variantKnown === 0).
+      scale: deviceScale,
 
       async startStream(
         sessionId: string,
