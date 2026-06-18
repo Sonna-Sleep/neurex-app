@@ -18,11 +18,21 @@ const DEFAULT_BODY = 'Recording your sleep…';
  *     if it threw (e.g. ForegroundServiceStartNotAllowed) — the caller surfaces
  *     a warning so the night doesn't die silently when the screen locks.
  */
-export function startForegroundService(opts?: { title?: string; body?: string }): boolean {
+export function startForegroundService(opts?: {
+  title?: string;
+  body?: string;
+  /** Epoch ms the recording started — drives the live elapsed chronometer in the
+   *  notification. Defaults to now. */
+  startMs?: number;
+}): boolean {
   const mod = NeurexForegroundServiceModule;
   if (!mod) return true; // iOS / web / Expo Go — no Android service to start
   try {
-    const ok = mod.start(opts?.title ?? DEFAULT_TITLE, opts?.body ?? DEFAULT_BODY);
+    const ok = mod.start(
+      opts?.title ?? DEFAULT_TITLE,
+      opts?.body ?? DEFAULT_BODY,
+      opts?.startMs ?? Date.now(),
+    );
     return ok !== false; // older builds returned void → treat undefined as ok
   } catch (e) {
     if (__DEV__) console.warn('[fgs] start failed:', e);

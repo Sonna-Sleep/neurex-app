@@ -17,6 +17,8 @@ class NeurexForegroundService : Service() {
     const val ACTION_STOP = "expo.modules.neurexforegroundservice.STOP"
     const val EXTRA_TITLE = "title"
     const val EXTRA_BODY = "body"
+    // Epoch ms the recording started — drives the live elapsed chronometer.
+    const val EXTRA_START_MS = "startMs"
     const val CHANNEL_ID = "neurex_recording"
     const val NOTIFICATION_ID = 7001
   }
@@ -33,7 +35,8 @@ class NeurexForegroundService : Service() {
       else -> {
         val title = intent?.getStringExtra(EXTRA_TITLE) ?: "Neurex"
         val body = intent?.getStringExtra(EXTRA_BODY) ?: "Recording your sleep…"
-        startInForeground(title, body)
+        val startMs = intent?.getLongExtra(EXTRA_START_MS, 0L) ?: 0L
+        startInForeground(title, body, if (startMs > 0L) startMs else System.currentTimeMillis())
       }
     }
     // START_NOT_STICKY: if the OS kills the process, the RN/JS runtime is gone
@@ -44,9 +47,9 @@ class NeurexForegroundService : Service() {
     return START_NOT_STICKY
   }
 
-  private fun startInForeground(title: String, body: String) {
+  private fun startInForeground(title: String, body: String, startMs: Long) {
     createChannel()
-    val notification = buildNotification(title, body)
+    val notification = buildNotification(title, body, startMs)
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
       // Android 14+ requires the type at startForeground time.
       startForeground(
@@ -76,12 +79,18 @@ class NeurexForegroundService : Service() {
     }
   }
 
-  private fun buildNotification(title: String, body: String): Notification {
+  private fun buildNotification(title: String, body: String, startMs: Long): Notification {
     val builder = Notification.Builder(this, CHANNEL_ID)
       .setContentTitle(title)
       .setContentText(body)
       .setSmallIcon(applicationInfo.icon)
       .setOngoing(true)
+      // Live elapsed timer ("0:00" ticking up): the OS renders + ticks the
+      // chronometer once/sec with zero app involvement, even backgrounded /
+      // screen-off, as long as this foreground notification is live.
+      .setWhen(startMs)
+      .setShowWhen(true)
+      .setUsesChronometer(true)
     // Tapping the notification re-opens the app's launcher activity. But
     // getLaunchIntentForPackage can return null, and PendingIntent.getActivity
     // with a null intent throws — which would crash before startForeground

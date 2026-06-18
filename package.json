@@ -27,7 +27,8 @@
     "prebuild": "expo prebuild",
     "lint": "eslint .",
     "smoke:support": "ts-node --transpile-only --project scripts/tsconfig.scripts.json scripts/smoke-support.ts",
-    "smoke:contact-quality": "ts-node --transpile-only --project scripts/tsconfig.scripts.json scripts/smoke-contact-quality.ts"
+    "smoke:contact-quality": "ts-node --transpile-only --project scripts/tsconfig.scripts.json scripts/smoke-contact-quality.ts",
+    "smoke:auto-stop": "ts-node --transpile-only --project scripts/tsconfig.scripts.json scripts/smoke-auto-stop.ts"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",

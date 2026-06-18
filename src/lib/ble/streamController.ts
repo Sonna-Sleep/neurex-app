@@ -14,6 +14,7 @@ import {
   startContactQuality,
   stopContactQuality,
 } from './contactQualityService';
+import { batteryShouldStop, DEVICE_ABANDONED_MS } from './autoStop';
 import type { ConnectedDevice, StreamHandle, StreamStats, StreamCallbacks } from './types';
 import { useSession } from '../../state/session';
 import { getBleManager } from './manager';
@@ -85,6 +86,11 @@ type ActiveSession = {
   disconnectSub: Subscription | null;
   // Escalates the UI to 'lost' if a reconnect drags past LOST_AFTER_MS.
   lostTimer: ReturnType<typeof setTimeout> | null;
+  // Auto-ends the night if a reconnect can't recover within DEVICE_ABANDONED_MS
+  // (device powered off / dead) — vs retrying forever. (Feature 3.)
+  abandonTimer: ReturnType<typeof setTimeout> | null;
+  // Unsubscribe for the battery-level watcher that auto-ends on low battery.
+  batteryUnsub: (() => void) | null;
   userStopped: boolean;
   reconnecting: boolean;
 };
@@ -250,7 +256,7 @@ export async function startSession(
   const watchdogTimer = startWatchdog();
 
   // Keep the process alive overnight (screen off / backgrounded).
-  const fgStarted = startForegroundService();
+  const fgStarted = startForegroundService({ startMs: startedAtMs });
   // Overnight insurance: ask the OS to exempt us from Doze (no-op on iOS, when
   // already exempt, or on older native builds). User-initiated start only — not
   // the background restore path, where launching the system dialog would fail.
@@ -268,11 +274,22 @@ export async function startSession(
     statsRef,
     disconnectSub: null,
     lostTimer: null,
+    abandonTimer: null,
+    batteryUnsub: null,
     userStopped: false,
     reconnecting: false,
   };
 
   registerDisconnectWatch();
+
+  // Auto-end on a dead battery (Feature 3). The battery level (0x2A19) flows to
+  // the store from a BLE callback even backgrounded, so this stays live with the
+  // screen off. Check the current value, then on every change.
+  const checkBattery = (level: number | null): void => {
+    if (active && !active.userStopped && batteryShouldStop(level)) void endSessionAuto('battery');
+  };
+  active.batteryUnsub = useSession.subscribe((s) => checkBattery(s.deviceBattery));
+  checkBattery(useSession.getState().deviceBattery);
 
   // If the Android keep-alive service didn't actually start, the recording can
   // die the moment the screen locks. Surface it instead of failing silently.
@@ -324,7 +341,7 @@ export async function resumeSessionAfterRestore(meta: RecordingMeta): Promise<vo
     });
     const statsTimer = startStatsTimer(statsRef);
     const watchdogTimer = startWatchdog();
-    startForegroundService();
+    startForegroundService({ startMs: startedAtMs });
     active = {
       sessionId,
       startedAtMs,
@@ -337,6 +354,8 @@ export async function resumeSessionAfterRestore(meta: RecordingMeta): Promise<vo
       statsRef,
       disconnectSub: null,
       lostTimer: null,
+      abandonTimer: null,
+      batteryUnsub: null,
       userStopped: false,
       reconnecting: false,
     };
@@ -379,6 +398,15 @@ async function reconnectLoop(): Promise<void> {
       useSession.getState().patchStreaming({ connection: 'lost' });
     }
   }, LOST_AFTER_MS);
+
+  // Device powered off / dead: if we still can't reconnect after this window,
+  // auto-finalize the night instead of retrying forever (Feature 3).
+  if (active.abandonTimer) clearTimeout(active.abandonTimer);
+  active.abandonTimer = setTimeout(() => {
+    if (active && active.reconnecting && !active.userStopped) {
+      void endSessionAuto('device-lost');
+    }
+  }, DEVICE_ABANDONED_MS);
 
   let attempt = 0;
   while (active && !active.userStopped) {
@@ -424,6 +452,10 @@ async function reconnectLoop(): Promise<void> {
         clearTimeout(active.lostTimer);
         active.lostTimer = null;
       }
+      if (active.abandonTimer) {
+        clearTimeout(active.abandonTimer);
+        active.abandonTimer = null;
+      }
       useSession.getState().patchStreaming({ connection: 'connected' });
       registerDisconnectWatch(); // re-arm for the new connection
       if (__DEV__) console.log(`[stream] reconnected after ${attempt} attempt(s)`);
@@ -454,6 +486,12 @@ async function failSession(message: string): Promise<void> {
     clearTimeout(active.lostTimer);
     active.lostTimer = null;
   }
+  if (active.abandonTimer) {
+    clearTimeout(active.abandonTimer);
+    active.abandonTimer = null;
+  }
+  active.batteryUnsub?.();
+  active.batteryUnsub = null;
   // Stop the watchdog — a fatal storage error must NOT trigger a reconnect (the
   // disk is full; reconnecting would just restart streaming into a full disk).
   if (active.watchdogTimer) {
@@ -475,6 +513,34 @@ export type StopResult = {
   stats: StreamStats;
 };
 
+// Auto-finalize an overnight recording when the headband is gone (battery dead or
+// powered off) — instead of reconnecting forever. Tears the session down like
+// stopSession but without a UI return; the on-disk EEG.BIN is left as a recoverable
+// orphan (recoverAll uploads it; with the chunked-upload pipeline most of it is
+// already in the cloud). Safe to call from a background callback/timer.
+async function endSessionAuto(reason: 'battery' | 'device-lost'): Promise<void> {
+  if (!active) return;
+  const session = active;
+  active.userStopped = true; // stops the reconnect loop
+  active = null;
+
+  session.disconnectSub?.remove();
+  if (session.lostTimer) clearTimeout(session.lostTimer);
+  if (session.abandonTimer) clearTimeout(session.abandonTimer);
+  session.batteryUnsub?.();
+  clearInterval(session.statsTimer);
+  if (session.watchdogTimer) clearInterval(session.watchdogTimer);
+  await session.handle.stop().catch(() => undefined);
+  await session.device.disconnect().catch(() => undefined);
+  stopContactQuality();
+  stopForegroundService();
+  // Finalized — no longer the active session to resume; the file stays on disk and
+  // is shipped by the chunked-upload queue / launch-time recovery.
+  void clearActiveRecording();
+  useSession.getState().setStreaming(null);
+  if (__DEV__) console.log(`[stream] auto-ended recording (${reason})`);
+}
+
 export async function stopSession(): Promise<StopResult | null> {
   if (!active) return null;
   const session = active;
@@ -483,6 +549,8 @@ export async function stopSession(): Promise<StopResult | null> {
 
   session.disconnectSub?.remove();
   if (session.lostTimer) clearTimeout(session.lostTimer);
+  if (session.abandonTimer) clearTimeout(session.abandonTimer);
+  session.batteryUnsub?.();
   clearInterval(session.statsTimer);
   if (session.watchdogTimer) clearInterval(session.watchdogTimer);
   const stats = await session.handle.stop().catch(() => session.statsRef.current);

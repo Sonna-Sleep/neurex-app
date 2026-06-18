@@ -4,7 +4,7 @@ export type NeurexForegroundServiceModule = {
   /** Returns true if the start intent was dispatched (context present, no
    * exception). false means the service could not be started — the caller
    * should warn the user that background recording isn't protected. */
-  start(title: string, body: string): boolean;
+  start(title: string, body: string, startMs: number): boolean;
   stop(): void;
   /** True if the app is already exempt from Doze battery optimization. */
   isIgnoringBatteryOptimizations(): boolean;

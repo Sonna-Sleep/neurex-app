@@ -25,7 +25,7 @@ class NeurexForegroundServiceModule : Module() {
     // Android 12+ ForegroundServiceStartNotAllowedException when started from the
     // background). Both branches yield Boolean, so there's no K2 Unit-return
     // mismatch (unlike a bare `return@Function`).
-    Function("start") { title: String, body: String ->
+    Function("start") { title: String, body: String, startMs: Double ->
       val context = appContext.reactContext
       if (context == null) {
         false
@@ -35,6 +35,7 @@ class NeurexForegroundServiceModule : Module() {
             action = NeurexForegroundService.ACTION_START
             putExtra(NeurexForegroundService.EXTRA_TITLE, title)
             putExtra(NeurexForegroundService.EXTRA_BODY, body)
+            putExtra(NeurexForegroundService.EXTRA_START_MS, startMs.toLong())
           }
           if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             context.startForegroundService(intent)
