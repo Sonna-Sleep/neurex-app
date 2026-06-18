@@ -89,6 +89,26 @@ export function readableLabel(
   return `${date}_${time}_${len}_${tag}`;
 }
 
+/**
+ * Length-free storage label for a recording whose end isn't known yet:
+ *   2026-06-03_2014_3f9ac1   (date _ HHMM _ short-id/serial-tail)
+ * The 30-min chunked upload (F2) ships segments DURING the night — before endMs
+ * exists — so the prefix must be derivable at session start and stay STABLE for
+ * every chunk + the eventual finalize. The recording length (cosmetic, "for the
+ * eye") is dropped from the folder name; the DB row still carries start_ms/end_ms.
+ * Used by the chunk driver; the post-session one-shot path keeps readableLabel().
+ */
+export function readableLabelStable(sessionId: string, startMs: number, serial?: string): string {
+  const d = new Date(startMs);
+  const p = (n: number) => String(n).padStart(2, '0');
+  const date = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  const time = `${p(d.getHours())}${p(d.getMinutes())}`;
+  const tag = serial
+    ? serial.replace(/[^A-Za-z0-9]/g, '').slice(-6) || 'rec'
+    : sessionId.replace(/-/g, '').slice(0, 6) || 'nodate';
+  return `${date}_${time}_${tag}`;
+}
+
 export class NotAuthedError extends Error {
   constructor() {
     super('not signed in');
@@ -259,6 +279,17 @@ export function deleteLocalSession(sessionId: string): void {
 export async function transmitSession(input: FinalizeInput): Promise<string> {
   const dir = new Directory(Paths.document, 'sessions', input.sessionId);
   if (!dir.exists) throw new Error(`no local session ${input.sessionId}`);
+
+  // Chunked recording (Feature 2: segments/eeg, no EEG.BIN)? Route through the
+  // chunk pipeline, which uploads any unconfirmed segments and finalizes ONLY
+  // when the local tail is fully in the cloud — so it never finalizes + deletes
+  // unconfirmed data the way the EEG.BIN path's unconditional cleanup would.
+  // Dynamic import avoids a static cloudSync ↔ chunkRecovery cycle.
+  const segEeg = new Directory(new Directory(dir, 'segments'), 'eeg');
+  if (segEeg.exists) {
+    const { transmitChunkedSession } = await import('./chunkRecovery');
+    return transmitChunkedSession(input);
+  }
 
   // {user_id}/{readable label} — account folder stays the opaque uid; the
   // session folder is human-readable date_time_length_shortid.

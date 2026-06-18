@@ -57,6 +57,22 @@ export type StreamCallbacks = {
   onDrop?: (reason: 'markers' | 'checksum' | 'size' | 'gap', stats: StreamStats) => void;
   /** Fired on a fatal stream error (connection lost mid-session, file I/O, etc.). */
   onError?: (err: Error) => void;
+  /** Fired when a recording segment is finalized — rolled at the chunk boundary or
+   * flushed on stop — for the 30-min chunked upload (Feature 2). Carries the
+   * segment's monotonic index, file URI, and byte length. Only fired when chunked
+   * upload is enabled; the single-file EEG.BIN path never emits it. */
+  onSegmentClosed?: (seg: SegmentClosed) => void;
+};
+
+/** A finalized recording segment ready to be hashed, uploaded, and (after the
+ * server confirms an exact byte+hash match) deleted to reclaim on-device space. */
+export type SegmentClosed = {
+  /** Monotonic index within the session — the segNNNN.bin name + upload seq. */
+  index: number;
+  /** file:// URI of the closed segment. */
+  uri: string;
+  /** Exact bytes in the segment (whole packets, lossless boundary). */
+  byteLength: number;
 };
 
 export type StreamHandle = {

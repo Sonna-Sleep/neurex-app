@@ -30,7 +30,9 @@
     "smoke:contact-quality": "ts-node --transpile-only --project scripts/tsconfig.scripts.json scripts/smoke-contact-quality.ts",
     "smoke:auto-stop": "ts-node --transpile-only --project scripts/tsconfig.scripts.json scripts/smoke-auto-stop.ts",
     "smoke:chunk-queue": "ts-node --transpile-only --project scripts/tsconfig.scripts.json scripts/smoke-chunk-queue.ts",
-    "smoke:chunk-upload": "ts-node --transpile-only --project scripts/tsconfig.scripts.json scripts/smoke-chunk-upload.ts"
+    "smoke:chunk-upload": "ts-node --transpile-only --project scripts/tsconfig.scripts.json scripts/smoke-chunk-upload.ts",
+    "smoke:chunk-uploader": "ts-node --transpile-only --project scripts/tsconfig.scripts.json scripts/smoke-chunk-uploader.ts",
+    "smoke:seg-roll": "ts-node --transpile-only --project scripts/tsconfig.scripts.json scripts/smoke-seg-roll.ts"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",

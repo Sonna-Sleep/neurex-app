@@ -15,3 +15,16 @@ export const MODAL_ENDPOINT_URL =
 
 export const ALLOW_DEV_BYPASS =
   (typeof __DEV__ !== 'undefined' && __DEV__) || process.env.EXPO_PUBLIC_DEV_BYPASS === '1';
+
+// 30-min chunked upload during recording (Feature 2). OFF by default: when off,
+// the recording is written to one EEG.BIN and uploaded after the night (the
+// proven path, unchanged). When on, the night is written as rolling segNNNN.bin
+// files that upload + delete-after-confirm DURING the recording, keeping on-device
+// storage low. Gated so it can ship dark and be flipped on for the overnight
+// verification build before becoming the default.
+export const CHUNKED_UPLOAD_ENABLED = process.env.EXPO_PUBLIC_CHUNKED_UPLOAD === '1';
+
+// Seconds of audio per rolled segment / per upload cycle. 1800 s = 30 min in
+// production; override to a small value (e.g. 60) in a debug build to verify the
+// upload→confirm→delete cycle in minutes instead of hours.
+export const CHUNK_SECONDS = Number(process.env.EXPO_PUBLIC_CHUNK_SECONDS) || 1800;

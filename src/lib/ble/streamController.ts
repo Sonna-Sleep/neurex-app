@@ -35,6 +35,12 @@ import {
   writeSessionMeta,
   type RecordingMeta,
 } from '../cloud/recovery';
+import {
+  drainChunks,
+  enqueueSegment,
+  startChunkDriver,
+  stopChunkDriver,
+} from '../cloud/chunkDriver';
 import { checkDiskSpace, InsufficientStorageError } from './diskSpace';
 import type { Subscription } from 'react-native-ble-plx';
 
@@ -139,6 +145,13 @@ function makeCallbacks(statsRef: StatsRef): StreamCallbacks {
     onError: (err) => {
       handleStreamError(err);
     },
+    // A recording segment rolled (or the final one flushed on stop) — hash it,
+    // queue it, and upload it to /ingest (Feature 2). No-op unless chunked upload
+    // is enabled. Fire-and-forget: the queue is durable, so a failure here just
+    // leaves the segment on disk for the next drain / launch-time recovery.
+    onSegmentClosed: (seg) => {
+      void enqueueSegment(seg);
+    },
   };
 }
 
@@ -230,6 +243,10 @@ export async function startSession(
 
   const statsRef: StatsRef = { current: freshStats() };
   const cb = makeCallbacks(statsRef);
+  // Drive the 30-min chunked upload (Feature 2). Set BEFORE startStream so the
+  // first rolled segment has a session context to enqueue against. No-op unless
+  // chunked upload is enabled.
+  startChunkDriver({ sessionId, startedAtMs, serial: serial ?? null });
   const handle = await device.startStream(sessionId, cb);
   startContactQuality(); // live contact ring during the recording
 
@@ -322,8 +339,12 @@ export async function resumeSessionAfterRestore(meta: RecordingMeta): Promise<vo
     const device = await bleClient.connect(deviceId);
     const statsRef: StatsRef = { current: freshStats() };
     const cb = makeCallbacks(statsRef);
+    // Resume chunked upload for the restored session (segments roll into the same
+    // segments/eeg dir, continuing past existing indices). No-op when disabled.
+    startChunkDriver({ sessionId, startedAtMs, serial: meta.serial ?? null });
     const handle = await device.startStream(sessionId, cb);
     if (active) {
+      await stopChunkDriver();
       await handle.stop().catch(() => undefined);
       await device.disconnect().catch(() => undefined);
       return;
@@ -458,6 +479,8 @@ async function reconnectLoop(): Promise<void> {
       }
       useSession.getState().patchStreaming({ connection: 'connected' });
       registerDisconnectWatch(); // re-arm for the new connection
+      // Link is back — flush any chunks queued during the outage (Feature 2).
+      void drainChunks();
       if (__DEV__) console.log(`[stream] reconnected after ${attempt} attempt(s)`);
       return;
     } catch (e) {
@@ -501,6 +524,9 @@ async function failSession(message: string): Promise<void> {
   active.disconnectSub?.remove();
   active.disconnectSub = null;
   await active.handle.stop().catch(() => undefined);
+  // Best-effort: ship whatever segments are already queued (uploading frees the
+  // disk that just filled), then stop the driver. No-op when disabled.
+  void stopChunkDriver();
   stopContactQuality();
   stopForegroundService();
   useSession.getState().patchStreaming({ connection: 'lost', error: message });
@@ -531,6 +557,9 @@ async function endSessionAuto(reason: 'battery' | 'device-lost'): Promise<void> 
   clearInterval(session.statsTimer);
   if (session.watchdogTimer) clearInterval(session.watchdogTimer);
   await session.handle.stop().catch(() => undefined);
+  // Drain the final + any queued segments before teardown (Feature 2). No-op when
+  // disabled; anything still unconfirmed stays queued for launch-time recovery.
+  await stopChunkDriver();
   await session.device.disconnect().catch(() => undefined);
   stopContactQuality();
   stopForegroundService();
@@ -554,6 +583,9 @@ export async function stopSession(): Promise<StopResult | null> {
   clearInterval(session.statsTimer);
   if (session.watchdogTimer) clearInterval(session.watchdogTimer);
   const stats = await session.handle.stop().catch(() => session.statsRef.current);
+  // handle.stop() flushed + emitted the final segment; drain it (and anything
+  // queued) before we tear down, then stop the driver. No-op when disabled.
+  await stopChunkDriver();
   await session.device.disconnect().catch(() => undefined);
   stopContactQuality();
 

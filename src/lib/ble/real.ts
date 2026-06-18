@@ -35,16 +35,19 @@ import {
 import { classifyResume, parsePacket } from './packet';
 import { FALLBACK_SCALE, parseScaleInfo, scaleProvenance } from './scale';
 import type { DeviceScaleInfo } from './scale';
+import { segObjectName, segThresholdBytes, shouldRollSeg } from './segRoll';
 import type {
   BleClient,
   ConnectedDevice,
   ConnectOpts,
   FoundDevice,
   ParsedPacket,
+  SegmentClosed,
   StreamCallbacks,
   StreamHandle,
   StreamStats,
 } from './types';
+import { CHUNK_SECONDS, CHUNKED_UPLOAD_ENABLED } from '../config';
 
 // ── helpers ────────────────────────────────────────────────────────────────
 
@@ -261,6 +264,121 @@ class AppendingFile {
   }
 }
 
+// ── sample sink (one EEG.BIN, or rolling segments) ─────────────────────────
+//
+// startStream writes through this interface so the hot path (onValue) is
+// identical whether we're appending to a single EEG.BIN (proven path) or rolling
+// segNNNN.bin chunks for the 30-min upload (Feature 2).
+interface SampleSink {
+  /** URI of the file currently being written (the open segment, in roll mode). */
+  readonly uri: string;
+  appendChunk(chunk: Uint8Array): void;
+  flush(): void;
+  /** Flush + close. In roll mode, also emits the final (partial) segment. */
+  close(): void;
+}
+
+/** Next unused segment index in a session's segments/eeg dir, so a resume after
+ * a crash/restore continues past existing chunks instead of overwriting them. */
+function nextSegIndex(eegDir: Directory): number {
+  let max = -1;
+  try {
+    for (const item of eegDir.list()) {
+      const name = item.uri.replace(/\/+$/, '').split('/').pop() ?? '';
+      const m = /^seg(\d{4})\.bin$/.exec(name);
+      if (m) max = Math.max(max, parseInt(m[1], 10));
+    }
+  } catch {
+    /* empty / unreadable dir → start at 0 */
+  }
+  return max + 1;
+}
+
+// Rolling-segment writer for chunked upload. Writes whole packets into the
+// current segNNNN.bin and, once it reaches the byte threshold, closes it (on the
+// whole-packet boundary — lossless) and opens the next one, firing onSegmentClosed
+// so the driver can hash + upload + delete-after-confirm. Each segment it creates
+// is fresh (starts at 0 bytes), so the reported byteLength equals the file size.
+class RollingSegWriter implements SampleSink {
+  private readonly eegDir: Directory;
+  private readonly thresholdBytes: number;
+  private readonly flushBytes: number;
+  private readonly onSegmentClosed?: (seg: SegmentClosed) => void;
+  private current: AppendingFile;
+  private index: number;
+  private curBytes = 0;
+
+  private constructor(
+    eegDir: Directory,
+    startIndex: number,
+    thresholdBytes: number,
+    flushBytes: number,
+    onSegmentClosed?: (seg: SegmentClosed) => void,
+  ) {
+    this.eegDir = eegDir;
+    this.index = startIndex;
+    this.thresholdBytes = thresholdBytes;
+    this.flushBytes = flushBytes;
+    this.onSegmentClosed = onSegmentClosed;
+    this.current = AppendingFile.open(eegDir, segObjectName(startIndex), flushBytes);
+  }
+
+  static open(
+    sessionDir: Directory,
+    thresholdBytes: number,
+    onSegmentClosed?: (seg: SegmentClosed) => void,
+    flushBytes = 2048,
+  ): RollingSegWriter {
+    // Mirror the cloud layout (<prefix>/segments/eeg/segNNNN.bin) on disk so
+    // recovery + assembly are symmetric.
+    const segDir = new Directory(sessionDir, 'segments');
+    const eegDir = new Directory(segDir, 'eeg');
+    if (!eegDir.exists) eegDir.create({ intermediates: true });
+    return new RollingSegWriter(
+      eegDir,
+      nextSegIndex(eegDir),
+      thresholdBytes,
+      flushBytes,
+      onSegmentClosed,
+    );
+  }
+
+  get uri(): string {
+    return this.current.uri;
+  }
+
+  appendChunk(chunk: Uint8Array): void {
+    this.current.appendChunk(chunk);
+    this.curBytes += chunk.length;
+    // Roll AFTER a whole packet so the boundary lands between samples (lossless).
+    if (shouldRollSeg(this.curBytes, this.thresholdBytes)) this.roll();
+  }
+
+  private roll(): void {
+    const closedUri = this.current.uri;
+    const closedBytes = this.curBytes;
+    const closedIndex = this.index;
+    this.current.close(); // flush + close the finished segment
+    this.index += 1;
+    this.curBytes = 0;
+    this.current = AppendingFile.open(this.eegDir, segObjectName(this.index), this.flushBytes);
+    this.onSegmentClosed?.({ index: closedIndex, uri: closedUri, byteLength: closedBytes });
+  }
+
+  flush(): void {
+    this.current.flush();
+  }
+
+  close(): void {
+    const uri = this.current.uri;
+    const bytes = this.curBytes;
+    const index = this.index;
+    this.current.close();
+    // Emit the final partial segment so the night's tail uploads too.
+    if (bytes > 0) this.onSegmentClosed?.({ index, uri, byteLength: bytes });
+  }
+}
+
 // ── BleClient implementation ───────────────────────────────────────────────
 
 class NotReadyError extends Error {
@@ -425,7 +543,16 @@ export const realBleClient: BleClient = {
         const sessionDir = new Directory(sessionsDir, sessionId);
         if (!sessionDir.exists) sessionDir.create();
 
-        const eeg = AppendingFile.open(sessionDir, 'EEG.BIN');
+        // Chunked upload (Feature 2): roll segNNNN.bin chunks that upload +
+        // delete-after-confirm DURING the night. Off by default → the proven
+        // single-EEG.BIN path. Either way the hot path writes via SampleSink.
+        const eeg: SampleSink = CHUNKED_UPLOAD_ENABLED
+          ? RollingSegWriter.open(
+              sessionDir,
+              segThresholdBytes(CHUNK_SECONDS, deviceScale.sampleRateHz),
+              cb.onSegmentClosed,
+            )
+          : AppendingFile.open(sessionDir, 'EEG.BIN');
 
         // Self-describing SCALE sidecar — scale.json, DELIBERATELY distinct from
         // recovery.ts's meta.json (which owns startedAtMs/serial for crash
