@@ -21,6 +21,10 @@ import { transmitSession, subscribeToResult } from '../../../lib/cloud/cloudSync
 import { MIN_STAGING_MIN, MIN_STAGING_SEC } from '../../../lib/cloud/recoveryMath';
 import { handleNightReady } from '../../../lib/nights/onNightReady';
 import type { Session } from '../../../lib/repos/types';
+import { useIsFocused } from '@react-navigation/native';
+import { ContactRing, BAND_COLORS, BAND_LABEL } from './ContactRing';
+import { useContactQuality } from '../../../lib/ble/useContactQuality';
+import { startPreview, stopPreview } from '../../../lib/ble/contactPreview';
 
 // Holds the just-finished local recording so the UI can offer a share button.
 type SavedRecording = {
@@ -37,6 +41,9 @@ export function RecordingCard({ idleFooter }: { idleFooter?: React.ReactNode }) 
   const streaming = useSession((s) => s.streaming);
   const pairedDeviceId = useSession((s) => s.pairedDeviceId);
   const pairedSerial = useSession((s) => s.pairedSerial);
+  const contact = useContactQuality();
+  const focused = useIsFocused();
+  const isStreaming = streaming != null;
 
   const [busy, setBusy] = useState<'idle' | 'starting' | 'stopping'>('idle');
   const [error, setError] = useState<string | null>(null);
@@ -71,6 +78,20 @@ export function RecordingCard({ idleFooter }: { idleFooter?: React.ReactNode }) 
     };
   }, [streaming]);
 
+  // Live contact preview: when the Sleep tab is focused, paired, and NOT recording,
+  // connect a non-persisted preview so the ring glows by contact before Start. Stops
+  // on blur / unpair / when recording begins (recording feeds the ring itself).
+  useEffect(() => {
+    if (!focused || !pairedDeviceId || isStreaming) {
+      void stopPreview();
+      return undefined;
+    }
+    void startPreview(pairedDeviceId);
+    return () => {
+      void stopPreview();
+    };
+  }, [focused, pairedDeviceId, isStreaming]);
+
   const onStart = useCallback(async () => {
     if (!pairedDeviceId) {
       setError('Pair your Neurex device first.');
@@ -79,6 +100,7 @@ export function RecordingCard({ idleFooter }: { idleFooter?: React.ReactNode }) 
     setError(null);
     setBusy('starting');
     try {
+      await stopPreview(); // release the preview BLE link before recording reconnects
       await startSession(pairedDeviceId, pairedSerial);
     } catch (e) {
       setError((e as Error).message);
@@ -207,24 +229,26 @@ export function RecordingCard({ idleFooter }: { idleFooter?: React.ReactNode }) 
     const isReconnecting = streaming.connection === 'reconnecting';
     return (
       <View style={styles.controlScreen}>
-        <Pressable
-          onPress={onStop}
-          disabled={busy === 'stopping'}
-          style={({ pressed }) => [
-            styles.sessionBubble,
-            styles.sessionBubbleActive,
-            pressed && styles.bubblePressed,
-            busy === 'stopping' && styles.bubbleDisabled,
-          ]}
-          accessibilityRole="button"
-          accessibilityLabel="Stop recording"
-        >
-          {busy === 'stopping' || isReconnecting ? (
-            <ActivityIndicator color={colors.textPrimary} />
-          ) : null}
-          <Text style={styles.elapsedValue}>{formatElapsed(elapsedSec)}</Text>
-          <Text style={styles.elapsedLabel}>{busy === 'stopping' ? 'saving' : 'elapsed'}</Text>
-        </Pressable>
+        <ContactRing band={contact.band} active={contact.active}>
+          <Pressable
+            onPress={onStop}
+            disabled={busy === 'stopping'}
+            style={({ pressed }) => [
+              styles.sessionBubble,
+              styles.sessionBubbleActive,
+              pressed && styles.bubblePressed,
+              busy === 'stopping' && styles.bubbleDisabled,
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel="Stop recording"
+          >
+            {busy === 'stopping' || isReconnecting ? (
+              <ActivityIndicator color={colors.textPrimary} />
+            ) : null}
+            <Text style={styles.elapsedValue}>{formatElapsed(elapsedSec)}</Text>
+            <Text style={styles.elapsedLabel}>{busy === 'stopping' ? 'saving' : 'elapsed'}</Text>
+          </Pressable>
+        </ContactRing>
 
         {streaming.error ? <Text style={styles.error}>{streaming.error}</Text> : null}
         {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -315,20 +339,27 @@ export function RecordingCard({ idleFooter }: { idleFooter?: React.ReactNode }) 
   if (!pairedDeviceId) return null;
   return (
     <View style={styles.controlScreen}>
-      <Pressable
-        onPress={onStart}
-        disabled={busy === 'starting'}
-        style={({ pressed }) => [
-          styles.sessionBubble,
-          pressed && styles.bubblePressed,
-          busy === 'starting' && styles.bubbleDisabled,
-        ]}
-        accessibilityRole="button"
-        accessibilityLabel="Start session"
-      >
-        {busy === 'starting' ? <ActivityIndicator color={colors.textPrimary} /> : null}
-        <Text style={styles.startLabel}>{busy === 'starting' ? 'Connecting' : 'Start\nSession'}</Text>
-      </Pressable>
+      <ContactRing band={contact.band} active={contact.active}>
+        <Pressable
+          onPress={onStart}
+          disabled={busy === 'starting'}
+          style={({ pressed }) => [
+            styles.sessionBubble,
+            pressed && styles.bubblePressed,
+            busy === 'starting' && styles.bubbleDisabled,
+          ]}
+          accessibilityRole="button"
+          accessibilityLabel="Start session"
+        >
+          {busy === 'starting' ? <ActivityIndicator color={colors.textPrimary} /> : null}
+          <Text style={styles.startLabel}>{busy === 'starting' ? 'Connecting' : 'Start\nSession'}</Text>
+        </Pressable>
+      </ContactRing>
+      {contact.active ? (
+        <Text style={[styles.contactLabel, { color: BAND_COLORS[contact.band] }]}>
+          {BAND_LABEL[contact.band]}
+        </Text>
+      ) : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
       {idleFooter ? <View style={styles.idleFooter}>{idleFooter}</View> : null}
     </View>
@@ -458,5 +489,11 @@ const styles = StyleSheet.create({
   error: {
     color: colors.warning,
     fontSize: 13,
+  },
+  contactLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    marginTop: 4,
+    letterSpacing: 0.3,
   },
 });

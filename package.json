@@ -26,7 +26,8 @@
     "smoke:upload-lock": "ts-node --transpile-only --project scripts/tsconfig.scripts.json scripts/smoke-upload-lock.ts",
     "prebuild": "expo prebuild",
     "lint": "eslint .",
-    "smoke:support": "ts-node --transpile-only --project scripts/tsconfig.scripts.json scripts/smoke-support.ts"
+    "smoke:support": "ts-node --transpile-only --project scripts/tsconfig.scripts.json scripts/smoke-support.ts",
+    "smoke:contact-quality": "ts-node --transpile-only --project scripts/tsconfig.scripts.json scripts/smoke-contact-quality.ts"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",

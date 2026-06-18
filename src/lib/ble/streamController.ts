@@ -9,6 +9,11 @@
 // restart recover the night even though THIS module's state is in-memory.
 
 import { bleClient } from './index';
+import {
+  feedContactQuality,
+  startContactQuality,
+  stopContactQuality,
+} from './contactQualityService';
 import type { ConnectedDevice, StreamHandle, StreamStats, StreamCallbacks } from './types';
 import { useSession } from '../../state/session';
 import { getBleManager } from './manager';
@@ -117,8 +122,10 @@ function freshStats(): StreamStats {
 
 function makeCallbacks(statsRef: StatsRef): StreamCallbacks {
   return {
-    onPacket: (_pkt, stats) => {
+    onPacket: (pkt, stats) => {
       statsRef.current = stats;
+      // Live contact-quality ring (free during recording — just an extra consumer).
+      feedContactQuality(pkt.samples.map((s) => s.fp1_uV));
     },
     onDrop: (_reason, stats) => {
       statsRef.current = stats;
@@ -218,6 +225,7 @@ export async function startSession(
   const statsRef: StatsRef = { current: freshStats() };
   const cb = makeCallbacks(statsRef);
   const handle = await device.startStream(sessionId, cb);
+  startContactQuality(); // live contact ring during the recording
 
   // Durable recovery hooks (best-effort; recording proceeds regardless): a
   // self-describing meta.json in the session dir + an active-recording marker
@@ -455,6 +463,7 @@ async function failSession(message: string): Promise<void> {
   active.disconnectSub?.remove();
   active.disconnectSub = null;
   await active.handle.stop().catch(() => undefined);
+  stopContactQuality();
   stopForegroundService();
   useSession.getState().patchStreaming({ connection: 'lost', error: message });
 }
@@ -478,6 +487,7 @@ export async function stopSession(): Promise<StopResult | null> {
   if (session.watchdogTimer) clearInterval(session.watchdogTimer);
   const stats = await session.handle.stop().catch(() => session.statsRef.current);
   await session.device.disconnect().catch(() => undefined);
+  stopContactQuality();
 
   stopForegroundService();
   // The night is finalized and about to be uploaded — it's no longer the

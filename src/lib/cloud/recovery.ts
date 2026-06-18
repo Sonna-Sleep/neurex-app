@@ -139,6 +139,9 @@ export function scanRecoverable(activeSessionId?: string | null): RecoverableRec
     if (!(item instanceof Directory)) continue;
     const sessionId = item.uri.replace(/\/+$/, '').split('/').pop() ?? '';
     if (!sessionId || sessionId === activeSessionId) continue;
+    // Reserved '__'-prefixed dirs are NOT recordings (e.g. the contact-quality
+    // preview '__contact_preview__') — never upload them as a night.
+    if (sessionId.startsWith('__')) continue;
     let eeg: File;
     try {
       eeg = new File(item, EEG_NAME);
