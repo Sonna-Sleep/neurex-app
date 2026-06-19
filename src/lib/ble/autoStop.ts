@@ -6,11 +6,15 @@
 //   - graceful: battery level (0x2A19) drops to/under BATTERY_STOP_PCT → stop while
 //     there's still time to flush the last chunk.
 //   - abrupt: the link is lost and can't be re-established for DEVICE_ABANDONED_MS
-//     (device powered off / out of range for good) → stop. Long enough that a brief
-//     overnight blip still doesn't kill the night.
+//     (device powered off / out of range for good) → stop. A short grace so a
+//     momentary BLE blip can still reconnect, but the night doesn't hang.
 
 export const BATTERY_STOP_PCT = 5;
-export const DEVICE_ABANDONED_MS = 10 * 60_000; // 10 min unrecoverable → device gone
+// 30 s grace: long enough to ride out a momentary BLE blip, short enough that a
+// real disconnect (headband off / out of range) stops promptly instead of
+// reconnecting for minutes. A "disconnected" notification fires immediately on
+// the drop, independent of this window.
+export const DEVICE_ABANDONED_MS = 30_000;
 
 /** True when a valid battery reading is at/under the cutoff. Unknown/invalid
  *  readings (null / out of 0–100) never trigger a stop. */

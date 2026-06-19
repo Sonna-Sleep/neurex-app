@@ -55,16 +55,22 @@ const uploader = makeIngestUploader({
   endpoint: MODAL_ENDPOINT_URL,
   getToken: async () => (await sessionAuth())?.token ?? null,
   upload: async (url, fileUri, headers) => {
-    const r = await LegacyFS.uploadAsync(url, fileUri, {
-      httpMethod: 'POST',
-      uploadType: LegacyFS.FileSystemUploadType.BINARY_CONTENT,
-      // FOREGROUND so the awaited result carries the confirm body and we delete
-      // in the same tick (the foreground service keeps the process alive on
-      // Android). iOS background URLSession + deferred confirm is separate work.
-      sessionType: LegacyFS.FileSystemSessionType.FOREGROUND,
-      headers,
-    });
-    return { status: r.status, body: r.body };
+    try {
+      const r = await LegacyFS.uploadAsync(url, fileUri, {
+        httpMethod: 'POST',
+        uploadType: LegacyFS.FileSystemUploadType.BINARY_CONTENT,
+        // FOREGROUND so the awaited result carries the confirm body and we delete
+        // in the same tick (the foreground service keeps the process alive on
+        // Android). iOS background URLSession + deferred confirm is separate work.
+        sessionType: LegacyFS.FileSystemSessionType.FOREGROUND,
+        headers,
+      });
+      console.log(`[F2C] upload -> ${url} status=${r.status} body=${(r.body || '').slice(0, 160)}`);
+      return { status: r.status, body: r.body };
+    } catch (e) {
+      console.warn(`[F2C] uploadAsync threw for ${fileUri}:`, (e as Error)?.message ?? e);
+      throw e;
+    }
   },
 });
 
@@ -74,9 +80,12 @@ export async function drainChunks(): Promise<void> {
   if (draining) return;
   draining = true;
   try {
-    await drainQueue(uploader, fileQueueStore);
+    const queued = fileQueueStore.load().length;
+    console.log(`[F2C] drain start queued=${queued}`);
+    const r = await drainQueue(uploader, fileQueueStore);
+    console.log(`[F2C] drain done uploaded=${r.uploaded} kept=${r.kept} stopped=${r.stopped}`);
   } catch (e) {
-    if (__DEV__) console.warn('[chunkDriver] drain error:', e);
+    console.warn('[F2C] drain error:', e);
   } finally {
     draining = false;
   }
@@ -86,14 +95,23 @@ export async function drainChunks(): Promise<void> {
  * Best-effort: on any failure the segment file stays on disk and is picked up by
  * the next drain / launch-time recovery — a chunk is never silently dropped. */
 export async function enqueueSegment(seg: SegmentClosed): Promise<void> {
+  console.log(
+    `[F2C] segClosed idx=${seg.index} bytes=${seg.byteLength} enabled=${CHUNKED_UPLOAD_ENABLED} hasCtx=${!!ctx}`,
+  );
   if (!CHUNKED_UPLOAD_ENABLED || !ctx || seg.byteLength <= 0) return;
   const session = ctx;
   const p = (async () => {
     try {
       const auth = await sessionAuth();
-      if (!auth) return; // logged out — leave on disk for recovery
+      if (!auth) {
+        console.warn('[F2C] enqueue: NO AUTH (signed out / no cached session) — seg kept on disk');
+        return; // logged out — leave on disk for recovery
+      }
       const bytes = readSegBytes(seg.uri);
-      if (bytes.length === 0) return;
+      if (bytes.length === 0) {
+        console.warn(`[F2C] enqueue: seg ${seg.index} read 0 bytes at ${seg.uri}`);
+        return;
+      }
       const sha256 = await sha256Hex(bytes);
       const prefix = `${auth.uid}/${readableLabelStable(
         session.sessionId,
@@ -111,8 +129,9 @@ export async function enqueueSegment(seg: SegmentClosed): Promise<void> {
           attempts: 0,
         }),
       );
+      console.log(`[F2C] enqueued seq=${seg.index} bytes=${bytes.length} prefix=${prefix}`);
     } catch (e) {
-      if (__DEV__) console.warn('[chunkDriver] enqueue failed (kept on disk):', e);
+      console.warn('[F2C] enqueue failed (kept on disk):', (e as Error)?.message ?? e);
     }
   })();
   pendingEnqueues.add(p);
@@ -123,6 +142,9 @@ export async function enqueueSegment(seg: SegmentClosed): Promise<void> {
 
 /** Begin driving uploads for a session. No-op when chunked upload is disabled. */
 export function startChunkDriver(c: DriverCtx): void {
+  console.log(
+    `[F2C] startChunkDriver enabled=${CHUNKED_UPLOAD_ENABLED} chunkSec=${CHUNK_SECONDS} session=${c.sessionId}`,
+  );
   if (!CHUNKED_UPLOAD_ENABLED) return;
   ctx = c;
   if (timer) clearInterval(timer);

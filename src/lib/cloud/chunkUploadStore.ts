@@ -87,13 +87,16 @@ function toHex(buf: ArrayBuffer): string {
 /** SHA-256 (lowercase hex) of the exact bytes — matches the backend's
  * hashlib.sha256(body).hexdigest(), so confirmMatches can gate the delete. */
 export async function sha256Hex(bytes: Uint8Array): Promise<string> {
-  // expo-crypto's digest wants a BufferSource; hand it a concrete ArrayBuffer
-  // (TS 5.7+ no longer accepts a Uint8Array<ArrayBufferLike> directly). Zero-copy
-  // for a clean, whole-buffer view (what readSegBytes returns); copies otherwise.
-  const clean =
-    bytes.byteOffset === 0 && bytes.byteLength === bytes.buffer.byteLength;
-  const ab = (clean ? bytes.buffer : bytes.slice().buffer) as ArrayBuffer;
-  const digest = await Crypto.digest(Crypto.CryptoDigestAlgorithm.SHA256, ab);
+  // Pass the Uint8Array ITSELF, not its ArrayBuffer: expo-crypto's native Android
+  // digest maps a typed array → Kotlin ByteArray, but a raw ArrayBuffer throws
+  // "Cannot convert [object ArrayBuffer] to a Kotlin type" (caught on-device, not
+  // by the fake-digest unit tests). The `as` only satisfies TS's BufferSource
+  // typing (TS 5.7 rejects Uint8Array<ArrayBufferLike>); the runtime value is the
+  // correct typed array. readSegBytes returns a clean whole-buffer view.
+  const digest = await Crypto.digest(
+    Crypto.CryptoDigestAlgorithm.SHA256,
+    bytes as unknown as ArrayBuffer,
+  );
   return toHex(digest);
 }
 

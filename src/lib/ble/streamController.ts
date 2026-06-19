@@ -41,6 +41,7 @@ import {
   startChunkDriver,
   stopChunkDriver,
 } from '../cloud/chunkDriver';
+import { notifyDeviceDisconnected, notifyRecordingStopped } from '../notifications/local';
 import { checkDiskSpace, InsufficientStorageError } from './diskSpace';
 import type { Subscription } from 'react-native-ble-plx';
 
@@ -400,6 +401,10 @@ function registerDisconnectWatch(): void {
   session.disconnectSub = manager.onDeviceDisconnected(session.deviceId, () => {
     if (!active || active.sessionId !== session.sessionId) return;
     if (active.userStopped || active.reconnecting) return;
+    // Tell the user the headband dropped, the moment it happens — before the
+    // reconnect grace window. The `reconnecting` guard above means this fires
+    // once per disconnect, not on every retry tick.
+    notifyDeviceDisconnected();
     reconnectLoop().catch((e) => {
       if (__DEV__) console.warn('[stream] reconnect loop crashed', e);
     });
@@ -567,6 +572,9 @@ async function endSessionAuto(reason: 'battery' | 'device-lost'): Promise<void> 
   // is shipped by the chunked-upload queue / launch-time recovery.
   void clearActiveRecording();
   useSession.getState().setStreaming(null);
+  // Tell the user it stopped (and why) — they may have walked away assuming it
+  // was still recording.
+  notifyRecordingStopped(reason);
   if (__DEV__) console.log(`[stream] auto-ended recording (${reason})`);
 }
 

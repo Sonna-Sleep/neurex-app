@@ -26,5 +26,6 @@ assert.equal(abandonShouldStop(DEVICE_ABANDONED_MS + 1), true);
 assert.equal(abandonShouldStop(DEVICE_ABANDONED_MS - 1), false);
 assert.equal(abandonShouldStop(0), false);
 assert.equal(abandonShouldStop(5_000, 2_000), true, 'custom window');
+assert.equal(DEVICE_ABANDONED_MS, 30_000, '30s reconnect grace before auto-stop');
 
 console.log('ALL AUTO-STOP ASSERTIONS PASSED');
