@@ -546,9 +546,10 @@ export const realBleClient: BleClient = {
         // Chunked upload (Feature 2): roll segNNNN.bin chunks that upload +
         // delete-after-confirm DURING the night. Off by default → the proven
         // single-EEG.BIN path. Either way the hot path writes via SampleSink.
-        console.log(
-          `[F2C] writer=${CHUNKED_UPLOAD_ENABLED ? 'rolling-seg' : 'EEG.BIN'} chunkSec=${CHUNK_SECONDS} sr=${deviceScale.sampleRateHz} thr=${segThresholdBytes(CHUNK_SECONDS, deviceScale.sampleRateHz)}B`,
-        );
+        if (__DEV__)
+          console.log(
+            `[F2C] writer=${CHUNKED_UPLOAD_ENABLED ? 'rolling-seg' : 'EEG.BIN'} chunkSec=${CHUNK_SECONDS} sr=${deviceScale.sampleRateHz} thr=${segThresholdBytes(CHUNK_SECONDS, deviceScale.sampleRateHz)}B`,
+          );
         const eeg: SampleSink = CHUNKED_UPLOAD_ENABLED
           ? RollingSegWriter.open(
               sessionDir,

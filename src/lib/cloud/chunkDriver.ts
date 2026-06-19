@@ -65,7 +65,7 @@ const uploader = makeIngestUploader({
         sessionType: LegacyFS.FileSystemSessionType.FOREGROUND,
         headers,
       });
-      console.log(`[F2C] upload -> ${url} status=${r.status} body=${(r.body || '').slice(0, 160)}`);
+      if (__DEV__) console.log(`[F2C] upload -> ${url} status=${r.status} body=${(r.body || '').slice(0, 160)}`);
       return { status: r.status, body: r.body };
     } catch (e) {
       console.warn(`[F2C] uploadAsync threw for ${fileUri}:`, (e as Error)?.message ?? e);
@@ -81,9 +81,9 @@ export async function drainChunks(): Promise<void> {
   draining = true;
   try {
     const queued = fileQueueStore.load().length;
-    console.log(`[F2C] drain start queued=${queued}`);
+    if (__DEV__) console.log(`[F2C] drain start queued=${queued}`);
     const r = await drainQueue(uploader, fileQueueStore);
-    console.log(`[F2C] drain done uploaded=${r.uploaded} kept=${r.kept} stopped=${r.stopped}`);
+    if (__DEV__) console.log(`[F2C] drain done uploaded=${r.uploaded} kept=${r.kept} stopped=${r.stopped}`);
   } catch (e) {
     console.warn('[F2C] drain error:', e);
   } finally {
@@ -95,9 +95,10 @@ export async function drainChunks(): Promise<void> {
  * Best-effort: on any failure the segment file stays on disk and is picked up by
  * the next drain / launch-time recovery — a chunk is never silently dropped. */
 export async function enqueueSegment(seg: SegmentClosed): Promise<void> {
-  console.log(
-    `[F2C] segClosed idx=${seg.index} bytes=${seg.byteLength} enabled=${CHUNKED_UPLOAD_ENABLED} hasCtx=${!!ctx}`,
-  );
+  if (__DEV__)
+    console.log(
+      `[F2C] segClosed idx=${seg.index} bytes=${seg.byteLength} enabled=${CHUNKED_UPLOAD_ENABLED} hasCtx=${!!ctx}`,
+    );
   if (!CHUNKED_UPLOAD_ENABLED || !ctx || seg.byteLength <= 0) return;
   const session = ctx;
   const p = (async () => {
@@ -129,7 +130,7 @@ export async function enqueueSegment(seg: SegmentClosed): Promise<void> {
           attempts: 0,
         }),
       );
-      console.log(`[F2C] enqueued seq=${seg.index} bytes=${bytes.length} prefix=${prefix}`);
+      if (__DEV__) console.log(`[F2C] enqueued seq=${seg.index} bytes=${bytes.length} prefix=${prefix}`);
     } catch (e) {
       console.warn('[F2C] enqueue failed (kept on disk):', (e as Error)?.message ?? e);
     }
@@ -142,9 +143,10 @@ export async function enqueueSegment(seg: SegmentClosed): Promise<void> {
 
 /** Begin driving uploads for a session. No-op when chunked upload is disabled. */
 export function startChunkDriver(c: DriverCtx): void {
-  console.log(
-    `[F2C] startChunkDriver enabled=${CHUNKED_UPLOAD_ENABLED} chunkSec=${CHUNK_SECONDS} session=${c.sessionId}`,
-  );
+  if (__DEV__)
+    console.log(
+      `[F2C] startChunkDriver enabled=${CHUNKED_UPLOAD_ENABLED} chunkSec=${CHUNK_SECONDS} session=${c.sessionId}`,
+    );
   if (!CHUNKED_UPLOAD_ENABLED) return;
   ctx = c;
   if (timer) clearInterval(timer);
