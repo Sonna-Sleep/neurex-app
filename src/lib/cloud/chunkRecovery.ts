@@ -29,6 +29,7 @@ import {
   type FinalizeInput,
   finalizeSession,
   readableLabelStable,
+  uploadSidecarIfPresent,
 } from './cloudSync';
 import { isStageableDurationMs } from './recoveryMath';
 
@@ -143,6 +144,16 @@ async function settleChunkedSession(
 
   // Still segments on disk → not fully confirmed; keep them for the next retry.
   if (listLocalSegs(eegDir).length > 0) return null;
+
+  // Ship the self-describing µV-scale sidecar (scale.json) so the backend stages
+  // with the EXACT scale this recording used, not the assumed fallback. Best-
+  // effort: a missing/failed sidecar must not block finalizing a confirmed night.
+  try {
+    const scaleFile = new File(new Directory(sessionsRoot(), sessionId), 'scale.json');
+    await uploadSidecarIfPresent(prefix, scaleFile, 'scale.json');
+  } catch {
+    /* non-fatal — older recordings have no sidecar and fall back to the assumed scale */
+  }
 
   const maxIndex = before.length > 0 ? before[before.length - 1].index : -1;
   const endMs =

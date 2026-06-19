@@ -215,7 +215,7 @@ export async function uploadFileAsSegments(
 /** Upload a small sidecar file (e.g. the scale-provenance scale.json) to
  * `${prefix}/${name}` if it exists. Best-effort: sidecars are provenance, not
  * sample data, so the caller treats a failure as non-fatal. */
-async function uploadSidecarIfPresent(
+export async function uploadSidecarIfPresent(
   prefix: string,
   file: File,
   name: string,
