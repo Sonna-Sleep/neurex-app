@@ -2,40 +2,52 @@
 // tools/capture/precheck.py. PURE: no React, no BLE, no RN imports, so it's fully
 // unit-testable. Drives the glowing ring on the Sleep-screen circle.
 //
-// Worst-dimension-wins over a rolling window:
-//   green  = good        no railing, RMS ~5–80 µV, low mains hum
-//   yellow = usable      RMS 80–120 µV or moderate hum
-//   orange = not enough  RMS 120–300 µV or high hum
-//   red    = bad         railed / flat / no contact / RMS >300 µV
+// Classification mirrors classify_epochs() in the Python analyzer (shared constants):
+//   green  = good epoch   brain-band RMS in [3,150] µV, rail≤20%, hum≤15 µV
+//   yellow = approaching  RMS >75 µV or hum >7.5 µV (within 2× of a limit)
+//   orange = near limit   RMS >100 µV or hum >10 µV (within 1.5× of a limit)
+//   red    = excluded     dead (<3 µV) / motion (>150 µV) / railed (>20%) / hum (>15 µV)
+//
+// The key change vs. the old ad-hoc ladder: a 1-45 Hz zero-phase bandpass is applied
+// BEFORE measuring RMS so that slow DC drift (sub-1 Hz electrode polarisation) does
+// not falsely redden the ring on a clean signal.
 
 export type ContactBand = 'red' | 'orange' | 'yellow' | 'green';
 
 export type ContactMetrics = {
   railFrac: number; // fraction of |µV| beyond the rail
-  rmsUv: number; // detrended AC RMS (µV)
-  humUv: number; // RMS at the mains line (µV)
+  rmsUv: number; // brain-band (1–45 Hz) RMS (µV)
+  humUv: number; // RMS at the mains line (µV) — measured on original signal
 };
 
 export type ContactThresholds = {
-  railUv: number;
-  railMaxFrac: number;
-  rmsDeadLow: number; // below this = flat/dead → red
-  rmsRedHigh: number; // above this = red
-  rmsOrangeHigh: number; // above this = orange
-  rmsYellowHigh: number; // above this = yellow
-  humOrange: number; // mains RMS above this = orange
-  humYellow: number; // mains RMS above this = yellow
+  railUv: number; // absolute |µV| value that counts as a rail sample
+  railMaxFrac: number; // RAIL_FRAC: fraction of railed samples → red
+  rmsDeadLow: number; // DEAD_RMS_UV: brain-band RMS below this → red (flat/dead)
+  rmsRedHigh: number; // MOTION_RMS_UV: brain-band RMS above this → red (motion)
+  rmsOrangeHigh: number; // rmsRedHigh / 1.5: above this → orange
+  rmsYellowHigh: number; // rmsRedHigh / 2: above this → yellow
+  humRedHigh: number; // HUM_ABS_UV: mains hum above this → red
+  humOrangeHigh: number; // HUM_ABS_UV / 1.5: mains hum above this → orange
+  humYellowHigh: number; // HUM_ABS_UV / 2: mains hum above this → yellow
 };
+
+// Shared constants that mirror classify_epochs() in tools/capture/precheck.py.
+export const DEAD_RMS_UV = 3;
+export const MOTION_RMS_UV = 150;
+export const RAIL_FRAC = 0.20;
+export const HUM_ABS_UV = 15;
 
 export const DEFAULT_THRESHOLDS: ContactThresholds = {
   railUv: 100_000,
-  railMaxFrac: 0.01,
-  rmsDeadLow: 0.5,
-  rmsRedHigh: 300,
-  rmsOrangeHigh: 120,
-  rmsYellowHigh: 80,
-  humOrange: 40,
-  humYellow: 20,
+  railMaxFrac: RAIL_FRAC,
+  rmsDeadLow: DEAD_RMS_UV,
+  rmsRedHigh: MOTION_RMS_UV,
+  rmsOrangeHigh: MOTION_RMS_UV / 1.5, // 100 µV
+  rmsYellowHigh: MOTION_RMS_UV / 2,   // 75 µV
+  humRedHigh: HUM_ABS_UV,
+  humOrangeHigh: HUM_ABS_UV / 1.5,    // 10 µV
+  humYellowHigh: HUM_ABS_UV / 2,      // 7.5 µV
 };
 
 /** Fraction of samples pinned beyond the rail (|µV| > railUv). 1.0 for no data. */
@@ -98,7 +110,94 @@ export function goertzelRms(uv: readonly number[], fs: number, freqHz: number): 
   return amp / Math.SQRT2; // → RMS
 }
 
-/** One-shot classification of a window of µV samples into a contact band. */
+// ── Zero-phase 1–45 Hz bandpass ───────────────────────────────────────────────
+// Implemented as biquad high-pass (fc=1 Hz) + biquad low-pass (fc=45 Hz), applied
+// forward then backward (filtfilt-style) to give zero phase shift.  The critical
+// property is sub-1 Hz rejection: slow electrode drift is stripped before RMS is
+// measured, preventing DC polarisation from falsely redding the ring.
+
+interface BiquadCoeffs {
+  b0: number; b1: number; b2: number;
+  a1: number; a2: number;
+}
+
+/** Compute biquad high-pass coefficients (Butterworth 2nd-order). */
+function hpCoeffs(fc: number, fs: number): BiquadCoeffs {
+  const wc = Math.tan((Math.PI * fc) / fs); // bilinear pre-warped
+  const k = 1 / (1 + Math.SQRT2 * wc + wc * wc);
+  return {
+    b0: k,
+    b1: -2 * k,
+    b2: k,
+    a1: 2 * (wc * wc - 1) * k,
+    a2: (1 - Math.SQRT2 * wc + wc * wc) * k,
+  };
+}
+
+/** Compute biquad low-pass coefficients (Butterworth 2nd-order). */
+function lpCoeffs(fc: number, fs: number): BiquadCoeffs {
+  const wc = Math.tan((Math.PI * fc) / fs);
+  const k = wc * wc / (1 + Math.SQRT2 * wc + wc * wc);
+  return {
+    b0: k,
+    b1: 2 * k,
+    b2: k,
+    a1: 2 * (wc * wc - 1) / (1 + Math.SQRT2 * wc + wc * wc),
+    a2: (1 - Math.SQRT2 * wc + wc * wc) / (1 + Math.SQRT2 * wc + wc * wc),
+  };
+}
+
+/** Apply a single biquad filter in one direction; returns a new array.
+ *  Initial conditions are set to DC steady-state at x[0] to suppress the
+ *  transient ringing that would otherwise occur when the signal has a large
+ *  DC offset (e.g. 8000 µV electrode polarisation). */
+function biquadFilter(c: BiquadCoeffs, x: readonly number[]): number[] {
+  const y = new Array<number>(x.length);
+  if (x.length === 0) return y;
+  // Steady-state DC init: for a DC input of x0 → y_ss = x0*(b0+b1+b2)/(1+a1+a2)
+  const x0 = x[0];
+  const dcGain = (1 + c.a1 + c.a2) !== 0
+    ? (c.b0 + c.b1 + c.b2) / (1 + c.a1 + c.a2)
+    : 0;
+  const y0 = x0 * dcGain;
+  let x1 = x0, x2 = x0, y1 = y0, y2 = y0;
+  for (let i = 0; i < x.length; i++) {
+    const xi = x[i];
+    const yi = c.b0 * xi + c.b1 * x1 + c.b2 * x2 - c.a1 * y1 - c.a2 * y2;
+    x2 = x1; x1 = xi;
+    y2 = y1; y1 = yi;
+    y[i] = yi;
+  }
+  return y;
+}
+
+/** Apply a biquad filter zero-phase (forward + backward). */
+function filtfiltBiquad(c: BiquadCoeffs, x: readonly number[]): number[] {
+  const fwd = biquadFilter(c, x);
+  const rev = biquadFilter(c, fwd.slice().reverse());
+  return rev.reverse();
+}
+
+/**
+ * Zero-phase 1–45 Hz bandpass.
+ * Removes sub-1 Hz electrode drift (the chronic source of false red) while keeping
+ * brain-band (delta 1 Hz → gamma 45 Hz) content intact.
+ * @param uv  raw µV samples
+ * @param fs  sample rate (Hz)
+ * @returns   bandpassed µV samples (same length)
+ */
+export function bandpass1to45(uv: readonly number[], fs: number): number[] {
+  if (uv.length < 4) return uv.slice();
+  const hp = filtfiltBiquad(hpCoeffs(1, fs), uv);
+  return filtfiltBiquad(lpCoeffs(45, fs), hp);
+}
+
+/** One-shot classification of a window of µV samples into a contact band.
+ *
+ * Mirrors classify_epochs() thresholds (DEAD_RMS_UV / MOTION_RMS_UV / RAIL_FRAC /
+ * HUM_ABS_UV). The 1–45 Hz bandpass is applied before measuring RMS so that slow
+ * DC drift does not falsely redden the ring.
+ */
 export function classifyContact(
   uv: readonly number[],
   fs: number,
@@ -106,17 +205,25 @@ export function classifyContact(
   t: ContactThresholds = DEFAULT_THRESHOLDS,
 ): { band: ContactBand; metrics: ContactMetrics } {
   const railFrac = railFraction(uv, t.railUv);
-  const rmsUv = acRms(uv);
+  // Hum is measured on the original signal (mains frequency may be above 45 Hz LP).
   const humUv = goertzelRms(uv, fs, mainsHz);
+  // Brain-band RMS: bandpass removes sub-1 Hz drift + above-45 Hz noise/artefacts.
+  const band1to45 = bandpass1to45(uv, fs);
+  const rmsUv = acRms(band1to45);
   let band: ContactBand;
-  if (railFrac > t.railMaxFrac || rmsUv > t.rmsRedHigh || rmsUv < t.rmsDeadLow) {
-    band = 'red';
-  } else if (rmsUv > t.rmsOrangeHigh || humUv > t.humOrange) {
-    band = 'orange';
-  } else if (rmsUv > t.rmsYellowHigh || humUv > t.humYellow) {
+  if (
+    railFrac > t.railMaxFrac ||
+    rmsUv < t.rmsDeadLow ||
+    rmsUv > t.rmsRedHigh ||
+    humUv > t.humRedHigh
+  ) {
+    band = 'red'; // excluded by classify_epochs
+  } else if (rmsUv > t.rmsOrangeHigh || humUv > t.humOrangeHigh) {
+    band = 'orange'; // approaching a limit
+  } else if (rmsUv > t.rmsYellowHigh || humUv > t.humYellowHigh) {
     band = 'yellow';
   } else {
-    band = 'green';
+    band = 'green'; // good epoch
   }
   return { band, metrics: { railFrac, rmsUv, humUv } };
 }
