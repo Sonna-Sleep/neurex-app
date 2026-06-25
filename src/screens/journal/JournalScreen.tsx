@@ -19,6 +19,7 @@ import { dateKey, weekStartOf } from '../../components/WeekStrip';
 import { scoreBand } from '../../components/ScoreRing';
 import { TabIcon } from '../../components/TabIcon';
 import { NightReport } from './NightReport';
+import { EmptyNightReport } from './EmptyNightReport';
 import { TAB_BAR_SPACE } from '../../navigation/FloatingTabBar';
 import type { JournalStackParamList } from '../../navigation/types';
 
@@ -130,6 +131,7 @@ export function JournalScreen({ navigation }: Props) {
   }, [selected, markNightViewed]);
 
   const selectedLabel = selectedDateLabel(selectedKey);
+  const today = todayKey();
   const railDays = useMemo(
     () =>
       Array.from({ length: DATE_RAIL_DAYS }, (_, i) => {
@@ -190,6 +192,7 @@ export function JournalScreen({ navigation }: Props) {
             const key = dateKey(d);
             const session = byDate[key] ?? null;
             const selectedDay = key === selectedKey;
+            const isToday = key === today;
             const band = session && isCompletedSession(session) ? scoreBand(session.score) : null;
             const weekdayIndex = (d.getDay() + 6) % 7;
             return (
@@ -199,6 +202,11 @@ export function JournalScreen({ navigation }: Props) {
                 onPress={() => selectDate(d)}
                 hitSlop={4}
                 accessibilityRole="button"
+                accessibilityLabel={`${d.toLocaleDateString(undefined, {
+                  weekday: 'long',
+                  month: 'long',
+                  day: 'numeric',
+                })}${isToday ? ', today' : ''}${session ? ', sleep recorded' : ', no recording'}`}
               >
                 <View
                   style={[
@@ -209,6 +217,7 @@ export function JournalScreen({ navigation }: Props) {
                     selectedDay && styles.dayCircleSelected,
                   ]}
                 >
+                  {isToday ? <View pointerEvents="none" style={styles.todayHalo} /> : null}
                   <Text style={[styles.dayLetter, (selectedDay || session) && styles.dayLetterActive]}>
                     {WEEKDAYS[weekdayIndex]}
                   </Text>
@@ -240,18 +249,16 @@ export function JournalScreen({ navigation }: Props) {
               <Secondary style={styles.retryText}>Retry</Secondary>
             </Pressable>
           </View>
-        ) : (
-          <View style={styles.empty}>
-            <Secondary style={styles.emptyText}>
-              {loaded ? `No recording for ${selectedLabel}.` : ''}
-            </Secondary>
+        ) : loaded ? (
+          <>
+            <EmptyNightReport />
             {journalSessions.length > 0 ? (
               <Pressable onPress={showLatestNight} hitSlop={8}>
                 <Secondary style={styles.retryText}>Show latest night</Secondary>
               </Pressable>
             ) : null}
-          </View>
-        )}
+          </>
+        ) : null}
       </ScrollView>
     </SafeAreaView>
   );
@@ -292,6 +299,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: DATE_RAIL_GAP,
     paddingRight: layout.screenPadding,
+    paddingVertical: spacing.xs, // breathing room so the today halo isn't clipped
   },
   day: {
     width: DATE_RAIL_ITEM_W,
@@ -309,6 +317,18 @@ const styles = StyleSheet.create({
   },
   dayCircleSelected: {
     backgroundColor: colors.bgElevated,
+  },
+  // Concentric outer ring marking today — sits outside the 36px circle so it
+  // never collides with the score-band ring or the selected-day fill.
+  todayHalo: {
+    position: 'absolute',
+    top: -3,
+    left: -3,
+    right: -3,
+    bottom: -3,
+    borderRadius: 21,
+    borderWidth: 1.5,
+    borderColor: colors.todayRing,
   },
   calendarCircle: {
     borderColor: colors.borderDivider,

@@ -23,6 +23,9 @@ export const colors = {
   positive: '#5FB89C',
   // Single restrained accent — soft periwinkle, used sparingly for emphasis.
   accent: '#7C9CE0',
+  // Soft white halo marking "today" in date pickers — just enough to notice
+  // without competing with the score-band ring or the selected-day fill.
+  todayRing: 'rgba(244, 246, 248, 0.6)',
 } as const;
 
 export const stageOpacity = {

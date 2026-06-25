@@ -122,6 +122,7 @@ export function JournalCalendarScreen({ navigation }: Props) {
 
   const calendarDays = useMemo(() => buildCalendarDays(visibleMonth), [visibleMonth]);
   const selectedSession = byDate[selectedKey] ?? null;
+  const today = todayKey();
   const shiftMonth = (deltaMonths: number) =>
     setVisibleMonth((m) => new Date(m.getFullYear(), m.getMonth() + deltaMonths, 1));
 
@@ -190,6 +191,7 @@ export function JournalCalendarScreen({ navigation }: Props) {
               const key = dateKey(d);
               const session = byDate[key] ?? null;
               const selectedDay = key === selectedKey;
+              const isToday = key === today;
               const inMonth = d.getMonth() === visibleMonth.getMonth();
               const band = session && isCompletedSession(session) ? scoreBand(session.score) : null;
               const pending = session ? isPendingAnalysisSession(session) : false;
@@ -208,8 +210,11 @@ export function JournalCalendarScreen({ navigation }: Props) {
                     weekday: 'long',
                     month: 'long',
                     day: 'numeric',
-                  })}${session ? (pending ? ', analysis pending' : ', sleep recorded') : ', no recording'}`}
+                  })}${isToday ? ', today' : ''}${
+                    session ? (pending ? ', analysis pending' : ', sleep recorded') : ', no recording'
+                  }`}
                 >
+                  {isToday ? <View pointerEvents="none" style={styles.todayRingCal} /> : null}
                   <Text
                     style={[
                       styles.dayNumber,
@@ -377,6 +382,19 @@ const styles = StyleSheet.create({
     height: 5,
     borderRadius: 3,
     backgroundColor: colors.textTertiary,
+  },
+  // Soft-white circle marking today, centered in the cell behind the date.
+  todayRingCal: {
+    position: 'absolute',
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    borderWidth: 1.5,
+    borderColor: colors.todayRing,
+    top: '50%',
+    left: '50%',
+    marginTop: -15,
+    marginLeft: -15,
   },
   footer: {
     minHeight: 84,
