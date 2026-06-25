@@ -10,12 +10,17 @@
 // The backend concatenates these (whole-sample boundaries) into eeg.bin.
 
 import { File, Directory, Paths } from 'expo-file-system';
-import { AppState } from 'react-native';
+import { AppState, Platform } from 'react-native';
+
+import appConfig from '../../../app.json';
 
 import { getSupabase } from '../auth/supabase';
+import type { DeviceScaleInfo } from '../ble/scale';
 import { supabaseSessionRepo } from '../repos/supabase';
 import type { Session } from '../repos/types';
+import { buildSessionMetadata } from './sessionMetadata';
 import { withUploadLock as runWithUploadLock, UPLOAD_LOCK_TIMEOUT_MS } from './uploadLock';
+import { useDiagnostics } from '../../state/diagnostics';
 
 // Re-export the surfaced stuck-upload counter so callers (e.g. a future health
 // readout) can see how often the upload lock had to abandon a wedged transfer.
@@ -24,7 +29,9 @@ export { uploadLockStats } from './uploadLock';
 export const RECORDINGS_BUCKET = 'recordings';
 
 // On-disk bytes per sample (must match real.ts encoders + backend decoders).
-const SAMPLE_BYTES = { eeg: 8 } as const;
+//   eeg = 8  (uint32 ms + float32 fp1_uV)
+//   raw = 40 (uint32 ms + uint8 seq + 3 status + 8×int32 counts) — RAW_RECORD_BYTES
+const SAMPLE_BYTES = { eeg: 8, raw: 40 } as const;
 export type Stream = keyof typeof SAMPLE_BYTES;
 
 // ~5 minutes per segment at 250 Hz — fine-grained crash protection without
@@ -238,15 +245,68 @@ export type FinalizeInput = {
   endMs: number;
 };
 
+/** Read the device/scale provenance the recording stamped locally (meta.json +
+ *  scale.json) plus the tester log, and assemble the sessions metadata columns.
+ *  Returns {} if nothing is available (older recordings) — never throws. */
+function readFinalizeMetadata(sessionId: string): Record<string, unknown> {
+  let deviceId: string | null | undefined;
+  let serial: string | null | undefined;
+  let scale: DeviceScaleInfo | undefined;
+  try {
+    const dir = new Directory(Paths.document, 'sessions', sessionId);
+    const metaF = new File(dir, 'meta.json');
+    if (metaF.exists) {
+      const m = JSON.parse(metaF.textSync()) as { deviceId?: string; serial?: string };
+      deviceId = m.deviceId;
+      serial = m.serial;
+    }
+    const scaleF = new File(dir, 'scale.json');
+    if (scaleF.exists) {
+      const s = JSON.parse(scaleF.textSync()) as { scale?: DeviceScaleInfo };
+      scale = s.scale;
+    }
+  } catch {
+    /* best-effort — a missing/corrupt sidecar just means fewer metadata columns */
+  }
+  const testerLog = useDiagnostics.getState().lastTesterLog;
+  // Per-platform build number (the night should be stamped with the binary that
+  // produced it). iOS has no buildNumber in app.json yet → null (honest) rather
+  // than wrongly stamping the Android versionCode.
+  let appBuild: number | null;
+  if (Platform.OS === 'ios') {
+    const b = (appConfig.expo as { ios?: { buildNumber?: string } }).ios?.buildNumber;
+    const n = b == null ? NaN : Number(b);
+    appBuild = Number.isFinite(n) ? n : null; // string buildNumber → int column
+  } else {
+    appBuild = appConfig.expo.android?.versionCode ?? null;
+  }
+  return buildSessionMetadata({ deviceId, serial, scale, testerLog, appBuild });
+}
+
+function isMissingColumnError(error: { code?: string; message?: string }): boolean {
+  // PostgREST returns PGRST204 ("column ... not found in the schema cache") when a
+  // column doesn't exist yet (migration 0015 not applied). Treat that — and the
+  // raw SQL "column ... does not exist" — as the additive-fallback trigger.
+  return (
+    error.code === 'PGRST204' ||
+    /could not find|does not exist|schema cache/i.test(error.message ?? '')
+  );
+}
+
 /**
  * Insert the sessions row (status='uploaded'). On the cloud this fires the DB
  * webhook → Modal assembles the segments → YASA → writes results back.
+ *
+ * Deploy-safe: the device/scale/tester metadata columns (migration 0015) ride the
+ * insert, but if 0015 hasn't landed on the live DB yet the insert is retried with
+ * the CORE columns only (mirrors the backend's additive fallback) so a night is
+ * never lost to a not-yet-applied migration.
  */
 export async function finalizeSession(input: FinalizeInput, prefix: string): Promise<void> {
   const supabase = getSupabase();
   if (!supabase) throw new NotAuthedError();
   const uid = await currentUserId();
-  const { error } = await supabase.from('sessions').insert({
+  const core = {
     id: input.sessionId,
     user_id: uid,
     status: 'uploaded',
@@ -254,7 +314,17 @@ export async function finalizeSession(input: FinalizeInput, prefix: string): Pro
     start_ms: input.startMs,
     end_ms: input.endMs,
     tib: Math.max(0, (input.endMs - input.startMs) / 60000),
-  });
+  };
+  const full = { ...core, ...readFinalizeMetadata(input.sessionId) };
+  let { error } = await supabase.from('sessions').insert(full);
+  if (error && isMissingColumnError(error)) {
+    if (__DEV__)
+      console.warn(
+        `[cloudSync] sessions metadata columns missing (migration 0015 not applied?) — ` +
+          `inserting core columns only: ${error.message}`,
+      );
+    ({ error } = await supabase.from('sessions').insert(core));
+  }
   // Idempotent: a retry with the same session id re-runs finalize after the row
   // already exists. A unique-violation (23505) just means "already finalized" —
   // the backend will still stage it — so it's a success, not an error. Anything
@@ -298,6 +368,23 @@ export async function transmitSession(input: FinalizeInput): Promise<string> {
 
   const eeg = new File(dir, 'EEG.BIN');
   await uploadFileAsSegments(prefix, 'eeg', eeg);
+  // Diagnostic raw ground truth, uploaded as a parallel 'raw' segment stream
+  // ({prefix}/segments/raw/segNNNN.bin → backend assembles raw.bin). Present only
+  // when raw capture was on. BEST-EFFORT: raw is a debugging bonus and must never
+  // block finalizing the night. NOTE: this post-session path (and the eeg upload
+  // above) writes directly to Supabase Storage via uploadChunkWithRetry — there is
+  // NO per-chunk /ingest sha256 verification here; that check exists only for the
+  // live chunked-recording eeg stream (chunkDriver/chunkRecovery → /ingest). The
+  // backend never treats an unverified raw as authoritative (it stages the complete
+  // eeg.bin), so a partial raw can't corrupt the night.
+  const rawBin = new File(dir, 'RAW.BIN');
+  if (rawBin.exists) {
+    try {
+      await uploadFileAsSegments(prefix, 'raw', rawBin);
+    } catch (e) {
+      if (__DEV__) console.warn('[cloudSync] raw upload failed (non-fatal):', e);
+    }
+  }
   // Self-describing scale/provenance sidecar (scale.json — separate from the
   // recovery meta.json) uploaded BEFORE finalize so the backend sees it when
   // staging. Best-effort: a missing/failed sidecar must not lose the night

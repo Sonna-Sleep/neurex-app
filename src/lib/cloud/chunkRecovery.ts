@@ -29,6 +29,7 @@ import {
   type FinalizeInput,
   finalizeSession,
   readableLabelStable,
+  uploadFileAsSegments,
   uploadSidecarIfPresent,
 } from './cloudSync';
 import { isStageableDurationMs } from './recoveryMath';
@@ -144,6 +145,16 @@ async function settleChunkedSession(
 
   // Still segments on disk → not fully confirmed; keep them for the next retry.
   if (listLocalSegs(eegDir).length > 0) return null;
+
+  // Upload the diagnostic raw ground truth (single RAW.BIN, written lockstep with
+  // the eeg chunks) as a parallel 'raw' segment stream. Best-effort: raw must
+  // never block finalizing a confirmed eeg night.
+  try {
+    const rawBin = new File(new Directory(sessionsRoot(), sessionId), 'RAW.BIN');
+    if (rawBin.exists) await uploadFileAsSegments(prefix, 'raw', rawBin);
+  } catch {
+    /* non-fatal — raw is a debugging bonus */
+  }
 
   // Ship the self-describing µV-scale sidecar (scale.json) so the backend stages
   // with the EXACT scale this recording used, not the assumed fallback. Best-

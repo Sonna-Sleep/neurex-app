@@ -11,7 +11,10 @@
     },
     "preview": {
       "distribution": "internal",
-      "channel": "preview"
+      "channel": "preview",
+      "env": {
+        "EXPO_PUBLIC_DIAGNOSTIC_CAPTURE": "1"
+      }
     },
     "ios-sim": {
       "distribution": "internal",
@@ -27,6 +30,14 @@
         "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_g7T0SDF7LgJ3kjhRCQ7ToQ_ofPwMVOt",
         "EXPO_PUBLIC_MODAL_ENDPOINT_URL": "https://goda-smulk--neurex-backend-fastapi-app.modal.run",
         "EXPO_PUBLIC_DEV_BYPASS": "0"
+      }
+    },
+    "android-apk": {
+      "extends": "production",
+      "distribution": "internal",
+      "android": { "buildType": "apk" },
+      "env": {
+        "EXPO_PUBLIC_DIAGNOSTIC_CAPTURE": "1"
       }
     }
   },

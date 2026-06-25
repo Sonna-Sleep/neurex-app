@@ -28,3 +28,14 @@ export const CHUNKED_UPLOAD_ENABLED = process.env.EXPO_PUBLIC_CHUNKED_UPLOAD ===
 // production; override to a small value (e.g. 60) in a debug build to verify the
 // upload→confirm→delete cycle in minutes instead of hours.
 export const CHUNK_SECONDS = Number(process.env.EXPO_PUBLIC_CHUNK_SECONDS) || 1800;
+
+// Diagnostic raw-bit capture (all-8-channel integer ground truth, ~3.7x the eeg
+// size). The build-time DEFAULT for the 'auto' setting: ON for the internal/dev
+// fleet build (so every test night keeps re-decodable ground truth), OFF for a
+// production build (prod users don't upload raw they didn't opt into). The
+// per-user setting ('on'/'off'/'auto') overrides this — see ble/diagnosticCapture.
+// NOTE: the app can't read the device MAC on iOS, so build-type (not a MAC
+// allowlist) is the reliable fleet-vs-prod discriminator.
+export const DIAGNOSTIC_CAPTURE_DEFAULT =
+  process.env.EXPO_PUBLIC_DIAGNOSTIC_CAPTURE === '1' ||
+  (typeof __DEV__ !== 'undefined' && __DEV__);

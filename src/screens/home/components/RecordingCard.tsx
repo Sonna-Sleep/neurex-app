@@ -25,6 +25,10 @@ import { useIsFocused } from '@react-navigation/native';
 import { ContactRing, BAND_COLORS, BAND_LABEL } from './ContactRing';
 import { useContactQuality } from '../../../lib/ble/useContactQuality';
 import { startPreview, stopPreview } from '../../../lib/ble/contactPreview';
+import { TesterLogSheet } from './TesterLogSheet';
+import { useDiagnostics } from '../../../state/diagnostics';
+import { shouldCaptureRaw } from '../../../lib/ble/diagnosticCapture';
+import { isTesterLogComplete } from '../../../lib/cloud/sessionMetadata';
 
 // Holds the just-finished local recording so the UI can offer a share button.
 type SavedRecording = {
@@ -48,6 +52,13 @@ export function RecordingCard({ idleFooter }: { idleFooter?: React.ReactNode }) 
   const [busy, setBusy] = useState<'idle' | 'starting' | 'stopping'>('idle');
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState<SavedRecording | null>(null);
+  // Diagnostic raw capture: when on, the tester log must be complete before Start
+  // (so a night is never recorded with un-comparable, unlogged conditions).
+  const diagnosticCapture = useDiagnostics((s) => s.diagnosticCapture);
+  const lastTesterLog = useDiagnostics((s) => s.lastTesterLog);
+  const captureRaw = shouldCaptureRaw(diagnosticCapture);
+  const logComplete = isTesterLogComplete(lastTesterLog);
+  const [logOpen, setLogOpen] = useState(false);
   // Cloud sync of the just-finished recording (transmit → analyze → summary).
   const [sync, setSync] = useState<
     'idle' | 'uploading' | 'analyzing' | 'slow' | 'done' | 'error' | 'analysis-error'
@@ -97,6 +108,13 @@ export function RecordingCard({ idleFooter }: { idleFooter?: React.ReactNode }) 
       setError('Pair your Neurex device first.');
       return;
     }
+    // A diagnostic capture must have its conditions logged — otherwise the night
+    // is un-comparable. Block Start and open the log instead of recording blind.
+    if (captureRaw && !logComplete) {
+      setError('Log the recording conditions before starting a diagnostic capture.');
+      setLogOpen(true);
+      return;
+    }
     setError(null);
     setBusy('starting');
     try {
@@ -107,7 +125,7 @@ export function RecordingCard({ idleFooter }: { idleFooter?: React.ReactNode }) 
     } finally {
       setBusy('idle');
     }
-  }, [pairedDeviceId, pairedSerial]);
+  }, [pairedDeviceId, pairedSerial, captureRaw, logComplete]);
 
   const onStop = useCallback(async () => {
     setBusy('stopping');
@@ -361,7 +379,15 @@ export function RecordingCard({ idleFooter }: { idleFooter?: React.ReactNode }) 
         </Text>
       ) : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
+      {captureRaw ? (
+        <Pressable onPress={() => setLogOpen(true)} hitSlop={8} accessibilityRole="button">
+          <Text style={[styles.diagRow, { color: logComplete ? colors.textTertiary : colors.warning }]}>
+            {logComplete ? '✓ conditions logged · edit' : '⚠ log recording conditions'}
+          </Text>
+        </Pressable>
+      ) : null}
       {idleFooter ? <View style={styles.idleFooter}>{idleFooter}</View> : null}
+      <TesterLogSheet visible={logOpen} onClose={() => setLogOpen(false)} />
     </View>
   );
 }
@@ -494,6 +520,12 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     marginTop: 4,
+    letterSpacing: 0.3,
+  },
+  diagRow: {
+    fontSize: 13,
+    fontWeight: '600',
+    marginTop: spacing.sm,
     letterSpacing: 0.3,
   },
 });

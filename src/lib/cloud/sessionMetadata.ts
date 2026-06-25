@@ -1,0 +1,109 @@
+// Session metadata assembler — the device/scale/app-version + tester-log columns
+// the app stamps onto the sessions row at finalize (migration 0015). Pure so it's
+// unit-testable (smoke-session-metadata.ts) without a device.
+
+import appConfig from '../../../app.json';
+import type { DeviceScaleInfo } from '../ble/scale';
+
+const KNOWN_COLORS = ['YELLOW', 'RED', 'BLUE', 'GREEN', 'WHITE', 'LT'] as const;
+
+/** Map a BLE advertised name to a fleet color: "Neurex Yellow" -> "YELLOW".
+ *  Unrecognized names (e.g. the "Neurex-EEG-XXXX" fallback) -> "UNKNOWN". */
+export function colorFromSerial(serial?: string | null): string {
+  if (!serial) return 'UNKNOWN';
+  const m = serial.match(/Neurex[\s-]+([A-Za-z]+)/i);
+  const word = m?.[1]?.toUpperCase();
+  return word && (KNOWN_COLORS as readonly string[]).includes(word) ? word : 'UNKNOWN';
+}
+
+/** Recording-conditions the tester logs (the firmware can't know these). */
+export type TesterLog = {
+  electrodeType?: string;
+  electrodeBatch?: string;
+  montage?: string;
+  referenceSite?: string;
+  biasSite?: string;
+  tester?: string;
+  notes?: string;
+};
+
+function blank(v?: string | null): boolean {
+  return v == null || v.trim() === '';
+}
+
+// Tester-logged fields required for a "complete" diagnostic capture. This gate
+// covers ONLY the tester-logged fields. The backend's REQUIRED_METADATA_FIELDS also
+// includes the device-intrinsic firmware_build_id + uv_per_lsb, which come from the
+// Scale characteristic — a unit on pre-Scale-char (fallback) firmware cannot supply
+// them, so such a night still lands 'incomplete' at the backend even when this gate
+// is satisfied. The fleet boards all report the Scale char, so in practice the two
+// agree; this is documented honestly rather than over-promised. notes + biasSite optional.
+export const REQUIRED_TESTER_FIELDS = [
+  'electrodeType',
+  'electrodeBatch',
+  'montage',
+  'referenceSite',
+  'tester',
+] as const;
+
+/** True when every required tester-log field is filled (non-blank). Gate for
+ *  allowing Start on a diagnostic capture. */
+export function isTesterLogComplete(log: TesterLog | null | undefined): boolean {
+  if (!log) return false;
+  return REQUIRED_TESTER_FIELDS.every((f) => !blank(log[f]));
+}
+
+/** Assemble the sessions-row metadata columns. Scale fields are emitted only when a
+ *  DeviceScaleInfo is present; blank tester-log fields are OMITTED so the backend's
+ *  metadata-completeness gate correctly sees them as missing. */
+export function buildSessionMetadata(opts: {
+  deviceId?: string | null;
+  serial?: string | null;
+  scale?: DeviceScaleInfo | null;
+  testerLog?: TesterLog | null;
+  // The platform build number that produced this night. The RN caller passes the
+  // Platform-aware value (Android versionCode / iOS buildNumber); defaults to the
+  // Android versionCode from app.json so this stays node-pure for the smoke test.
+  appBuild?: number | null;
+}): Record<string, unknown> {
+  const { deviceId, serial, scale, testerLog, appBuild } = opts;
+  const out: Record<string, unknown> = {
+    device_id: deviceId ?? null,
+    device_color: colorFromSerial(serial),
+    app_version: appConfig.expo.version,
+    app_build: appBuild !== undefined ? appBuild : (appConfig.expo.android?.versionCode ?? null),
+  };
+  if (scale) {
+    // fwBuildId is a uint32 device-ELF-sha256 prefix → lowercase hex. Emit it for any
+    // DEVICE-reported scale (schemaVer >= 1) even when the value is 0, so a genuine
+    // 0x00000000 prefix isn't mistaken for 'firmware did not report a build id'.
+    // FALLBACK_SCALE (schemaVer 0, pre-Scale-char firmware) stays null.
+    out.firmware_build_id =
+      scale.schemaVer >= 1 ? (scale.fwBuildId >>> 0).toString(16) : null;
+    out.uv_per_lsb = scale.uvPerLsb;
+    out.pga_gain = scale.pgaGain;
+    out.vref_v = scale.vrefV;
+    out.adc_bits = scale.adcBits;
+    out.sample_rate_hz = scale.sampleRateHz;
+    out.channel_count = scale.nChannels;
+    out.fp1_index = scale.fp1Index;
+    // boolean column: null on pre-v2 firmware (variantKnown not reported)
+    out.variant_known = scale.variantKnown == null ? null : scale.variantKnown === 1;
+  }
+  if (testerLog) {
+    const map: [keyof TesterLog, string][] = [
+      ['electrodeType', 'electrode_type'],
+      ['electrodeBatch', 'electrode_batch'],
+      ['montage', 'montage'],
+      ['referenceSite', 'reference_site'],
+      ['biasSite', 'bias_site'],
+      ['tester', 'tester'],
+      ['notes', 'notes'],
+    ];
+    for (const [k, col] of map) {
+      const v = testerLog[k];
+      if (!blank(v)) out[col] = v!.trim();
+    }
+  }
+  return out;
+}

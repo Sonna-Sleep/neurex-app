@@ -32,10 +32,13 @@ import {
   NEUREX_SERVICE_UUID,
   SAMPLES_PER_PACKET,
 } from './constants';
+import { shouldCaptureRaw } from './diagnosticCapture';
 import { classifyResume, parsePacket } from './packet';
+import { encodeRawPacket, rawHeader } from './rawRecord';
 import { FALLBACK_SCALE, parseScaleInfo, scaleProvenance } from './scale';
 import type { DeviceScaleInfo } from './scale';
 import { segObjectName, segThresholdBytes, shouldRollSeg } from './segRoll';
+import { useDiagnostics } from '../../state/diagnostics';
 import type {
   BleClient,
   ConnectedDevice,
@@ -581,6 +584,27 @@ export const realBleClient: BleClient = {
           if (__DEV__) console.warn('[ble/real] scale.json write failed (non-fatal):', e);
         }
 
+        // Diagnostic raw-bit capture: the immutable ALL-channel integer ground
+        // truth (RAW.BIN), written lockstep with EEG.BIN so a backend re-decode of
+        // the FP1 channel reproduces eeg.bin. Always a single file (uploaded as a
+        // 'raw' segment stream post-session), independent of the eeg chunked/single
+        // mode. Gated by the capture setting (fleet on / prod opt-in). BEST-EFFORT:
+        // a raw write failure NEVER fails the eeg night (it disables raw + keeps
+        // recording). The 16-byte v1 header is written once on a fresh start.
+        const captureRaw = shouldCaptureRaw(useDiagnostics.getState().diagnosticCapture);
+        const rawBinFile = new File(sessionDir, 'RAW.BIN');
+        const rawFresh = !rawBinFile.exists || (rawBinFile.size ?? 0) === 0;
+        let raw: SampleSink | null = null;
+        if (captureRaw) {
+          try {
+            raw = AppendingFile.open(sessionDir, 'RAW.BIN');
+            if (rawFresh) raw.appendChunk(rawHeader(deviceScale.sampleRateHz));
+          } catch (e) {
+            if (__DEV__) console.warn('[ble/real] raw capture init failed (non-fatal):', e);
+            raw = null;
+          }
+        }
+
         const stats: StreamStats = {
           packets: 0,
           samples: 0,
@@ -692,6 +716,24 @@ export const realBleClient: BleClient = {
             cb.onError?.(new StorageWriteError((e as Error)?.message));
             return;
           }
+          // Raw ground truth, LOCKSTEP with eeg (same accepted packet, same order;
+          // dup/reboot handled identically above). Best-effort: a raw write failure
+          // (raw is ~3.7x larger → may hit a full disk first) disables raw and lets
+          // the eeg night continue, rather than failing the recording.
+          if (raw) {
+            try {
+              raw.appendChunk(encodeRawPacket(bytes, pkt.baseMs, pkt.seq));
+            } catch (e) {
+              if (__DEV__)
+                console.warn('[ble/real] raw write failed — disabling raw, eeg continues:', e);
+              try {
+                raw.close();
+              } catch {
+                /* ignore */
+              }
+              raw = null;
+            }
+          }
 
           // Bytes are on the way to disk — now advance counters + ACK frontier.
           // Detect seq wrap → generation bump.
@@ -741,6 +783,11 @@ export const realBleClient: BleClient = {
               eeg.close();
             } catch (e) {
               if (__DEV__) console.warn('[ble/real] EEG close failed:', e);
+            }
+            try {
+              raw?.close();
+            } catch (e) {
+              if (__DEV__) console.warn('[ble/real] RAW close failed:', e);
             }
             return stats;
           },
