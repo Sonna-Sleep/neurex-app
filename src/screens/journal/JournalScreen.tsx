@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
@@ -21,6 +22,7 @@ import { TabIcon } from '../../components/TabIcon';
 import { NightReport } from './NightReport';
 import { EmptyNightReport } from './EmptyNightReport';
 import { TAB_BAR_SPACE } from '../../navigation/FloatingTabBar';
+import { dateRailGestureRef } from '../../navigation/gestureRefs';
 import type { JournalStackParamList } from '../../navigation/types';
 
 type Props = NativeStackScreenProps<JournalStackParamList, 'JournalHome'>;
@@ -58,7 +60,15 @@ export function JournalScreen({ navigation }: Props) {
   const [loadError, setLoadError] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const initialized = useRef(false);
+  // True once the user has tapped a day. Before that we auto-show the latest
+  // night; after, we respect their choice — including empty days (no recording),
+  // which must NOT bounce back to the last recording.
+  const userPicked = useRef(false);
   const dateRailRef = useRef<ScrollView>(null);
+  // Native gesture on the horizontal date-rail. The tab-swipe Pan
+  // requireExternalGestureToFail's against this ref, so a horizontal drag that
+  // starts on the rail scrolls the rail instead of switching tabs.
+  const railGesture = useMemo(() => Gesture.Native().withRef(dateRailGestureRef), []);
 
   const load = useCallback(async () => {
     if (!authReady) return;
@@ -122,7 +132,7 @@ export function JournalScreen({ navigation }: Props) {
   }, [journalSessions]);
 
   useEffect(() => {
-    if (!loaded || selected || journalSessions.length === 0) return;
+    if (!loaded || selected || journalSessions.length === 0 || userPicked.current) return;
     showLatestNight();
   }, [journalSessions.length, loaded, selected, showLatestNight]);
 
@@ -148,6 +158,7 @@ export function JournalScreen({ navigation }: Props) {
     setWeekStart((w) => new Date(w.getFullYear(), w.getMonth(), w.getDate() + deltaDays));
 
   const selectDate = (date: Date) => {
+    userPicked.current = true;
     setSelectedKey(dateKey(date));
     setWeekStart(weekStartOf(date));
   };
@@ -181,6 +192,7 @@ export function JournalScreen({ navigation }: Props) {
           </View>
         </View>
 
+        <GestureDetector gesture={railGesture}>
         <ScrollView
           ref={dateRailRef}
           horizontal
@@ -239,6 +251,7 @@ export function JournalScreen({ navigation }: Props) {
             <Text style={styles.dayNumber}>All</Text>
           </Pressable>
         </ScrollView>
+        </GestureDetector>
 
         {selected ? (
           <NightReport session={selected} />

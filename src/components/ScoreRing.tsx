@@ -26,7 +26,7 @@ type Props = {
   showLabel?: boolean;
 };
 
-export function ScoreRing({ score, size = 160, stroke = 11, showLabel = true }: Props) {
+function ScoreRingBase({ score, size = 160, stroke = 11, showLabel = true }: Props) {
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
   const band = scoreBand(score);
@@ -78,6 +78,10 @@ export function ScoreRing({ score, size = 160, stroke = 11, showLabel = true }: 
     </View>
   );
 }
+
+// Memoized: the only animation is a one-shot reveal on score change, so don't
+// re-run it when an unrelated parent state tick re-renders the report.
+export const ScoreRing = React.memo(ScoreRingBase);
 
 const styles = StyleSheet.create({
   center: {

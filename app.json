@@ -87,7 +87,8 @@
           "photosPermission": "Neurex uses your photos so you can set a profile picture."
         }
       ],
-      "expo-notifications"
+      "expo-notifications",
+      "./plugins/withHighRefreshRate"
     ],
     "web": {
       "favicon": "./assets/favicon.png"
