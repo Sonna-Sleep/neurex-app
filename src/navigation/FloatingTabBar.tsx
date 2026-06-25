@@ -1,15 +1,14 @@
 // Floating pill tab bar (reference-inspired): a rounded bar hovering above the
 // bottom safe-area, the active tab highlighted by a lighter inner pill.
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Rect } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
+import type { MaterialTopTabBarProps } from '@react-navigation/material-top-tabs';
 
 import { TabIcon } from '../components/TabIcon';
 import { useSession } from '../state/session';
 import { colors, radii, spacing, systemFontFamily } from '../theme/tokens';
-import { tabSwipe } from './gestureRefs';
 
 // Vertical space the floating bar occupies — screens reserve this much bottom
 // padding so scroll content clears it.
@@ -60,24 +59,10 @@ function TabHighlight() {
   );
 }
 
-export function FloatingTabBar({ state, navigation }: BottomTabBarProps) {
+export function FloatingTabBar({ state, navigation }: MaterialTopTabBarProps) {
   const insets = useSafeAreaInsets();
   // A night finished processing but hasn't been opened → dot on the Journal tab.
   const hasNewNight = useSession((s) => s.unviewedNightIds.length > 0);
-
-  // Publish live tab state so the full-screen swipe Pan (TabNavigator) can
-  // switch tabs with the exact same tabPress + navigate the bar does on tap.
-  useEffect(() => {
-    tabSwipe.index = state.index;
-    tabSwipe.routeNames = state.routes.map((r) => r.name);
-    tabSwipe.navigateTo = (name: string) => {
-      const route = state.routes.find((r) => r.name === name);
-      if (!route) return;
-      const focused = state.routes[state.index]?.name === name;
-      const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
-      if (!focused && !event.defaultPrevented) navigation.navigate(name);
-    };
-  }, [state, navigation]);
 
   return (
     <View style={[styles.wrap, { bottom: insets.bottom + spacing.sm }]} pointerEvents="box-none">
