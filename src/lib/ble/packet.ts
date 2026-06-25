@@ -2,6 +2,7 @@ import {
   BYTES_PER_FRAME,
   CH_FP1,
   DEVICE_REBOOT_GAP_MS,
+  EEG_SAMPLE_INTERVAL_MS,
   EEG_UV_PER_LSB,
   PACKET_END_HI,
   PACKET_END_LO,
@@ -89,7 +90,7 @@ export function parsePacket(
   const samples: EegSample[] = new Array(SAMPLES_PER_PACKET);
   for (let s = 0; s < SAMPLES_PER_PACKET; s++) {
     const o = PKT_IDX_DATA + s * BYTES_PER_FRAME;
-    const ms = (baseMs + s) >>> 0;
+    const ms = (baseMs + s * EEG_SAMPLE_INTERVAL_MS) >>> 0;
     samples[s] = {
       ms,
       fp1_uV: i24be(bytes, o + ch * 3) * uvPerLsb,

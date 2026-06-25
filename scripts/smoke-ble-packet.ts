@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 
 import {
   BYTES_PER_FRAME,
+  EEG_SAMPLE_INTERVAL_MS,
   PACKET_END_HI,
   PACKET_END_LO,
   PACKET_SIZE,
@@ -49,7 +50,8 @@ assert.equal(parsed.packet.seq, 7);
 assert.equal(parsed.packet.baseMs, 1234);
 assert.equal(parsed.packet.samples.length, 8);
 assert.equal(parsed.packet.samples[0].ms, 1234);
-assert.equal(parsed.packet.samples[7].ms, 1241);
+assert.equal(parsed.packet.samples[1].ms, 1234 + EEG_SAMPLE_INTERVAL_MS);
+assert.equal(parsed.packet.samples[7].ms, 1234 + 7 * EEG_SAMPLE_INTERVAL_MS);
 
 const badChecksum = makePacket();
 badChecksum[PKT_IDX_CHECKSUM] ^= 0xff;
