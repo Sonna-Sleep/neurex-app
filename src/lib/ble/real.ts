@@ -8,8 +8,8 @@
 //      FileSystem.documentDirectory/sessions/<sessionId>/.
 //
 // On-disk format is byte-identical to tools/capture/ble_stream_recv.py in the
-// algorithms repo, so the existing neurex_qc / neurex_stage / to_edf pipelines
-// consume it without changes.
+// algorithms repo, so existing Neurex QC/staging tooling can consume it without
+// changes.
 //
 // Best-effort, lossy by design: BLE drops are unavoidable. Drops surface as
 // onDrop callbacks + StreamStats counters; reconnect resumes the same files

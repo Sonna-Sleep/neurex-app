@@ -4,7 +4,7 @@
 // phone selects FP1 and applies uvPerLsb, the other 7 channels and the original
 // integer counts are gone forever. raw.bin keeps the device's full output so any
 // night can be re-decoded later (e.g. after finding a scale/channel bug) by a
-// versioned backend decoder. eeg.bin/eeg.edf become DERIVED artifacts.
+// versioned backend decoder. eeg.bin is a DERIVED artifact.
 //
 // The byte layout MUST match the backend reader (neurex-backend decoder.py,
 // parse_raw_header / decode_raw). All little-endian:
