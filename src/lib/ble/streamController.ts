@@ -9,11 +9,6 @@
 // restart recover the night even though THIS module's state is in-memory.
 
 import { bleClient } from './index';
-import {
-  feedContactQuality,
-  startContactQuality,
-  stopContactQuality,
-} from './contactQualityService';
 import { batteryShouldStop, DEVICE_ABANDONED_MS } from './autoStop';
 import type { ConnectedDevice, StreamHandle, StreamStats, StreamCallbacks } from './types';
 import { useSession } from '../../state/session';
@@ -147,10 +142,8 @@ function endMsFromSamples(startedAtMs: number, stats: StreamStats): number {
 
 function makeCallbacks(statsRef: StatsRef): StreamCallbacks {
   return {
-    onPacket: (pkt, stats) => {
+    onPacket: (_pkt, stats) => {
       statsRef.current = stats;
-      // Live contact-quality ring (free during recording — just an extra consumer).
-      feedContactQuality(pkt.samples.map((s) => s.fp1_uV));
     },
     onDrop: (_reason, stats) => {
       statsRef.current = stats;
@@ -261,7 +254,6 @@ export async function startSession(
   // chunked upload is enabled.
   startChunkDriver({ sessionId, startedAtMs, serial: serial ?? null });
   const handle = await device.startStream(sessionId, cb);
-  startContactQuality(); // live contact ring during the recording
 
   // Durable recovery hooks (best-effort; recording proceeds regardless): a
   // self-describing meta.json in the session dir + an active-recording marker
@@ -558,7 +550,6 @@ async function failSession(message: string): Promise<void> {
   // Best-effort: ship whatever segments are already queued (uploading frees the
   // disk that just filled), then stop the driver. No-op when disabled.
   void stopChunkDriver();
-  stopContactQuality();
   stopForegroundService();
   useSession.getState().patchStreaming({ connection: 'lost', error: message });
 }
@@ -600,7 +591,6 @@ async function endSessionAuto(reason: 'battery' | 'device-lost'): Promise<void> 
     stats,
   }).catch(() => undefined);
   await session.device.disconnect().catch(() => undefined);
-  stopContactQuality();
   stopForegroundService();
   // No longer the active session to resume. If cloud handoff below fails, launch-
   // time recovery still sees meta.endMs and finalizes with the real data length.
@@ -643,7 +633,6 @@ export async function stopSession(): Promise<StopResult | null> {
     stats,
   }).catch(() => undefined);
   await session.device.disconnect().catch(() => undefined);
-  stopContactQuality();
 
   stopForegroundService();
   // The night is finalized and about to be uploaded — it's no longer the
