@@ -1,4 +1,4 @@
-// Real /ingest upload contract for the 30-min chunked-upload pipeline (F2).
+// Real /ingest upload contract for the segments-first upload pipeline.
 //
 // PURE: the HTTP call, token lookup, and endpoint are all injected, so the
 // upload/confirm contract is fully unit-testable without a device or a live

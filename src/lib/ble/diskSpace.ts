@@ -1,12 +1,13 @@
 // Pre-flight disk-space guard for overnight recordings.
 //
-// An 8-hour night writes EEG.BIN incrementally to documentDirectory/sessions/
-// <id>/. If the phone's storage fills mid-night, the native file write fails and
-// EEG capture halts — surfaced (never silent) via StorageWriteError, but only
-// AFTER the user has already lost part of the night. This module moves that
-// check to BEFORE the recording starts: estimate the bytes a full night needs,
-// compare against free space, and refuse to start (with a clear, blocking
-// message) when there isn't enough headroom.
+// An 8-hour night writes EEG samples under documentDirectory/sessions/<id>/,
+// usually as rolling segments that upload/delete during recording. If the phone
+// is offline long enough, local segments can still accumulate; if storage fills
+// mid-night, the native file write fails and EEG capture halts — surfaced (never
+// silent) via StorageWriteError, but only AFTER the user has already lost part
+// of the night. This module moves that check to BEFORE the recording starts:
+// estimate the bytes a full night needs, compare against free space, and refuse
+// to start when there isn't enough headroom.
 //
 // The byte math is pure (no Expo/RN imports) so it's unit-testable in plain Node
 // (scripts/smoke-disk-space.ts), exactly like recoveryMath.ts / connectTimeout.ts.

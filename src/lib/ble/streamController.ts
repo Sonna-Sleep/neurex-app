@@ -152,9 +152,9 @@ function makeCallbacks(statsRef: StatsRef): StreamCallbacks {
       handleStreamError(err);
     },
     // A recording segment rolled (or the final one flushed on stop) — hash it,
-    // queue it, and upload it to /ingest (Feature 2). No-op unless chunked upload
-    // is enabled. Fire-and-forget: the queue is durable, so a failure here just
-    // leaves the segment on disk for the next drain / launch-time recovery.
+    // queue it, and upload it to /ingest. Fire-and-forget: the queue is durable,
+    // so a failure here just leaves the segment on disk for the next drain /
+    // launch-time recovery.
     onSegmentClosed: (seg) => {
       void enqueueSegment(seg);
     },
@@ -218,13 +218,13 @@ export async function startSession(
 ): Promise<{ sessionId: string }> {
   if (active) return { sessionId: active.sessionId };
 
-  // Pre-flight: refuse to start a night the phone can't hold. An 8-h recording
-  // is written to EEG.BIN incrementally; if storage fills mid-night the native
-  // write fails and capture halts (surfaced via StorageWriteError, but only
-  // after data is already lost). Checking BEFORE the BLE connect fails fast with
-  // a clear, blocking message and without even touching the radio. A flaky
-  // disk-space read yields ok=true (never block a legit recording) — the live
-  // StorageWriteError path stays the backstop.
+  // Pre-flight: refuse to start a night the phone can't hold. Segments-first
+  // upload keeps storage low, but a long outage can still leave segments queued
+  // locally; if storage fills mid-night the native write fails and capture halts.
+  // Checking BEFORE the BLE connect fails fast with a clear, blocking message
+  // and without even touching the radio. A flaky disk-space read yields ok=true
+  // (never block a legit recording) — the live StorageWriteError path stays the
+  // backstop.
   const disk = checkDiskSpace();
   if (!disk.ok) {
     throw new InsufficientStorageError(disk.freeBytes, disk.requiredBytes);
@@ -249,9 +249,9 @@ export async function startSession(
 
   const statsRef: StatsRef = { current: freshStats() };
   const cb = makeCallbacks(statsRef);
-  // Drive the 30-min chunked upload (Feature 2). Set BEFORE startStream so the
-  // first rolled segment has a session context to enqueue against. No-op unless
-  // chunked upload is enabled.
+  // Drive segments-first upload. Set BEFORE startStream so the first rolled
+  // segment has a session context to enqueue against. No-op only in the legacy
+  // EEG.BIN fallback.
   startChunkDriver({ sessionId, startedAtMs, serial: serial ?? null });
   const handle = await device.startStream(sessionId, cb);
 
@@ -328,9 +328,9 @@ export async function startSession(
 
 /**
  * Resume an interrupted recording after iOS state restoration cold-starts the
- * app in the background. Appends onto the SAME session dir (AppendingFile seeks
- * to EOF), so the night continues into one file. Best-effort and defensive —
- * any failure leaves the partial file on disk for launch-time recovery instead.
+ * app in the background. Appends onto the SAME session dir, continuing either
+ * the rolling segment sequence or the legacy EEG.BIN fallback. Best-effort and
+ * defensive — any failure leaves partial data on disk for launch-time recovery.
  */
 export async function resumeSessionAfterRestore(meta: RecordingMeta): Promise<void> {
   if (active) return; // already recording — nothing to restore
@@ -346,8 +346,9 @@ export async function resumeSessionAfterRestore(meta: RecordingMeta): Promise<vo
     const device = await bleClient.connect(deviceId);
     const statsRef: StatsRef = { current: freshStats() };
     const cb = makeCallbacks(statsRef);
-    // Resume chunked upload for the restored session (segments roll into the same
-    // segments/eeg dir, continuing past existing indices). No-op when disabled.
+    // Resume segments-first upload for the restored session (segments roll into
+    // the same segments/eeg dir, continuing past existing indices). No-op in the
+    // legacy EEG.BIN fallback.
     startChunkDriver({ sessionId, startedAtMs, serial: meta.serial ?? null });
     const handle = await device.startStream(sessionId, cb);
     if (active) {
@@ -492,7 +493,7 @@ async function reconnectLoop(): Promise<void> {
       }
       useSession.getState().patchStreaming({ connection: 'connected' });
       registerDisconnectWatch(); // re-arm for the new connection
-      // Link is back — flush any chunks queued during the outage (Feature 2).
+      // Link is back — flush any chunks queued during the outage.
       void drainChunks();
       if (__DEV__) console.log(`[stream] reconnected after ${attempt} attempt(s)`);
       return;
@@ -548,7 +549,7 @@ async function failSession(message: string): Promise<void> {
     stats,
   }).catch(() => undefined);
   // Best-effort: ship whatever segments are already queued (uploading frees the
-  // disk that just filled), then stop the driver. No-op when disabled.
+  // disk that just filled), then stop the driver. No-op in the legacy fallback.
   void stopChunkDriver();
   stopForegroundService();
   useSession.getState().patchStreaming({ connection: 'lost', error: message });
@@ -580,8 +581,8 @@ async function endSessionAuto(reason: 'battery' | 'device-lost'): Promise<void> 
   const stats = await session.handle.stop().catch(() => session.statsRef.current);
   const endMs = endMsFromSamples(session.startedAtMs, stats);
   writeSessionMeta({ ...session.meta, endMs });
-  // Drain the final + any queued segments before teardown (Feature 2). No-op when
-  // disabled; anything still unconfirmed stays queued for launch-time recovery.
+  // Drain the final + any queued segments before teardown. No-op in the legacy
+  // fallback; anything still unconfirmed stays queued for launch-time recovery.
   await stopChunkDriver();
   await writeStreamStatsSidecar({
     sessionId: session.sessionId,
@@ -623,7 +624,8 @@ export async function stopSession(): Promise<StopResult | null> {
   const endMs = endMsFromSamples(session.startedAtMs, stats);
   writeSessionMeta({ ...session.meta, endMs });
   // handle.stop() flushed + emitted the final segment; drain it (and anything
-  // queued) before we tear down, then stop the driver. No-op when disabled.
+  // queued) before we tear down, then stop the driver. No-op in the legacy
+  // fallback.
   await stopChunkDriver();
   await writeStreamStatsSidecar({
     sessionId: session.sessionId,

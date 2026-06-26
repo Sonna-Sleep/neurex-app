@@ -1,4 +1,4 @@
-// Worker for the 30-min chunked-upload pipeline (F2). Persists the queue so chunks
+// Worker for the segments-first upload pipeline. Persists the queue so chunks
 // survive restarts + an offline stretch, drains it in order, and deletes a local
 // chunk ONLY after the backend confirms an exact byte+hash match. Stops at the
 // first failure (offline / mismatch) and resumes on the next drain (timer tick or

@@ -1,4 +1,4 @@
-// File-backed persistence + I/O adapters for the 30-min chunked-upload pipeline
+// File-backed persistence + I/O adapters for the segments-first upload pipeline
 // (F2). The pure queue model lives in chunkQueue.ts and the drain loop in
 // chunkUpload.ts; this module is the thin RN/expo-file-system layer that makes
 // them durable:

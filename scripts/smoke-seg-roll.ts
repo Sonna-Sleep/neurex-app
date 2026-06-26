@@ -43,7 +43,6 @@ assert.equal(segThresholdBytes(1, 250), 250 * 8);
 
   const segments: number[] = []; // bytes per closed segment
   let curBytes = 0;
-  let curPackets = 0;
   let totalBytes = 0;
 
   const closeSeg = () => {
@@ -51,12 +50,10 @@ assert.equal(segThresholdBytes(1, 250), 250 * 8);
     // every packet in a segment is whole → segment size is a multiple of 64
     assert.equal(curBytes % PACKET_BYTES, 0, 'segment must be whole packets (no split sample)');
     curBytes = 0;
-    curPackets = 0;
   };
 
   for (let i = 0; i < totalPackets; i++) {
     curBytes += PACKET_BYTES;
-    curPackets += 1;
     totalBytes += PACKET_BYTES;
     // roll AFTER appending a whole packet
     if (shouldRollSeg(curBytes, threshold)) closeSeg();

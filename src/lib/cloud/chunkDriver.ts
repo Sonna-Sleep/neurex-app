@@ -1,5 +1,5 @@
-// Driver for the 30-min chunked-upload pipeline (Feature 2). The RN glue that
-// ties the pure pieces together:
+// Driver for the segments-first upload pipeline. The RN glue that ties the pure
+// pieces together:
 //
 //   real.ts rolls a segNNNN.bin every CHUNK_SECONDS → onSegmentClosed →
 //   enqueueSegment() hashes it + queues it (durably) → drainChunks() uploads it
@@ -141,7 +141,8 @@ export async function enqueueSegment(seg: SegmentClosed): Promise<void> {
   void drainChunks(); // upload now (also covers platforms where the timer sleeps)
 }
 
-/** Begin driving uploads for a session. No-op when chunked upload is disabled. */
+/** Begin driving uploads for a session. No-op only when the legacy EEG.BIN
+ * fallback is explicitly enabled. */
 export function startChunkDriver(c: DriverCtx): void {
   if (__DEV__)
     console.log(

@@ -1,9 +1,11 @@
-// Crash / kill recovery for overnight recordings.
+// Crash / kill recovery for legacy local-EEG.BIN overnight recordings.
 //
-// A night is written to documentDirectory/sessions/<id>/EEG.BIN incrementally.
-// If the app is killed mid-night (OOM, crash, force-stop, reboot) the bytes are
-// on disk but the in-memory session state is gone, so without this nothing
-// would ever upload them — a silently lost night. This module closes that gap:
+// Current recordings default to segments/eeg/segNNNN.bin and are recovered by
+// chunkRecovery.ts. This module stays for older local EEG.BIN recordings and for
+// the emergency EXPO_PUBLIC_CHUNKED_UPLOAD=0 fallback. If the app is killed
+// mid-night (OOM, crash, force-stop, reboot), the bytes are on disk but the
+// in-memory session state is gone, so without this nothing would upload them.
+// This module closes that gap:
 //
 //   - At session start, streamController writes a self-describing meta.json into
 //     the session dir AND a durable "active recording" marker in AsyncStorage

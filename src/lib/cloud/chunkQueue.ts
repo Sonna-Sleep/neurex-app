@@ -1,4 +1,4 @@
-// Pure model for the 30-min chunked-upload pipeline (Feature 2). No RN/BLE/IO so
+// Pure model for the segments-first upload pipeline. No RN/BLE/IO so
 // it's fully unit-testable; the file-backed persistence + the upload worker that
 // drive it live in chunkUpload.ts.
 //

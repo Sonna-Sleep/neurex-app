@@ -2,8 +2,9 @@
 // active, otherwise renders a richer "start recording" surface when paired.
 // Owns the start/stop orchestration via streamController.
 //
-// On stop, the raw EEG.BIN is uploaded to Supabase Storage for staging. In dev,
-// the local file can still be shared manually for diagnostics.
+// On stop, local recording data is handed to Supabase Storage for staging. New
+// recordings are segments-first; the old EEG.BIN local file remains a fallback.
+// In dev, the local debug file/segment can still be shared manually.
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
@@ -111,8 +112,8 @@ export function RecordingCard({ idleFooter }: { idleFooter?: React.ReactNode }) 
     try {
       const result = await stopSession();
       if (!result) return;
-      // The raw EEG.BIN is already written to the phone
-      // (documentDirectory/sessions/<id>/) and persists across app restarts until
+      // The local recording bytes are already written under
+      // documentDirectory/sessions/<id>/ and persist across app restarts until
       // transmitSession confirms cloud upload + finalize.
       // Duration/endMs come from RECEIVED SAMPLES, not wall-clock: if the
       // headband stops sending mid-night (brownout / contact loss) wall-clock
@@ -310,7 +311,7 @@ export function RecordingCard({ idleFooter }: { idleFooter?: React.ReactNode }) 
           ) : null}
 
           {__DEV__ ? (
-            <Button label="share EEG.BIN" variant="ghost" onPress={() => onShare(saved.eegUri)} />
+            <Button label="Share debug file" variant="ghost" onPress={() => onShare(saved.eegUri)} />
           ) : null}
           <Button
             label="Done"

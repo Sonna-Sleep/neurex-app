@@ -4,12 +4,12 @@
 //   1. scan(): scoped by NEUREX_SERVICE_UUID (Apple-compliant for background BLE).
 //   2. connect(deviceId, { autoConnect: true }): MTU bump to fit a 226 B packet.
 //   3. startStream(sessionId, cb): subscribe to the notify characteristic,
-//      decode each 226-byte packet, append FP1 samples to EEG.BIN under
+//      decode each 226-byte packet, append FP1 samples to rolling segments under
 //      FileSystem.documentDirectory/sessions/<sessionId>/.
 //
-// On-disk format is byte-identical to tools/capture/ble_stream_recv.py in the
-// algorithms repo, so existing Neurex QC/staging tooling can consume it without
-// changes.
+// On-disk sample format is byte-identical to tools/capture/ble_stream_recv.py in
+// the algorithms repo, so existing Neurex QC/staging tooling can consume ordered
+// segment concatenation without changes.
 //
 // Best-effort, lossy by design: BLE drops are unavoidable. Drops surface as
 // onDrop callbacks + StreamStats counters; reconnect resumes the same files
@@ -267,11 +267,11 @@ class AppendingFile {
   }
 }
 
-// ── sample sink (one EEG.BIN, or rolling segments) ─────────────────────────
+// ── sample sink (rolling segments, or legacy EEG.BIN fallback) ─────────────
 //
 // startStream writes through this interface so the hot path (onValue) is
-// identical whether we're appending to a single EEG.BIN (proven path) or rolling
-// segNNNN.bin chunks for the 30-min upload (Feature 2).
+// identical whether we're writing rolling segNNNN.bin chunks (default) or
+// appending to a single EEG.BIN fallback.
 interface SampleSink {
   /** URI of the file currently being written (the open segment, in roll mode). */
   readonly uri: string;
@@ -297,11 +297,12 @@ function nextSegIndex(eegDir: Directory): number {
   return max + 1;
 }
 
-// Rolling-segment writer for chunked upload. Writes whole packets into the
-// current segNNNN.bin and, once it reaches the byte threshold, closes it (on the
-// whole-packet boundary — lossless) and opens the next one, firing onSegmentClosed
-// so the driver can hash + upload + delete-after-confirm. Each segment it creates
-// is fresh (starts at 0 bytes), so the reported byteLength equals the file size.
+// Rolling-segment writer for segments-first upload. Writes whole packets into
+// the current segNNNN.bin and, once it reaches the byte threshold, closes it (on
+// the whole-packet boundary — lossless) and opens the next one, firing
+// onSegmentClosed so the driver can hash + upload + delete-after-confirm. Each
+// segment it creates is fresh (starts at 0 bytes), so the reported byteLength
+// equals the file size.
 class RollingSegWriter implements SampleSink {
   private readonly eegDir: Directory;
   private readonly thresholdBytes: number;
@@ -546,9 +547,10 @@ export const realBleClient: BleClient = {
         const sessionDir = new Directory(sessionsDir, sessionId);
         if (!sessionDir.exists) sessionDir.create();
 
-        // Chunked upload (Feature 2): roll segNNNN.bin chunks that upload +
-        // delete-after-confirm DURING the night. Off by default → the proven
-        // single-EEG.BIN path. Either way the hot path writes via SampleSink.
+        // Segments-first upload: roll segNNNN.bin chunks that upload +
+        // delete-after-confirm DURING the night. EXPO_PUBLIC_CHUNKED_UPLOAD=0
+        // falls back to one local EEG.BIN. Either way the hot path writes via
+        // SampleSink.
         if (__DEV__)
           console.log(
             `[F2C] writer=${CHUNKED_UPLOAD_ENABLED ? 'rolling-seg' : 'EEG.BIN'} chunkSec=${CHUNK_SECONDS} sr=${deviceScale.sampleRateHz} thr=${segThresholdBytes(CHUNK_SECONDS, deviceScale.sampleRateHz)}B`,
@@ -585,10 +587,11 @@ export const realBleClient: BleClient = {
         }
 
         // Diagnostic raw-bit capture: the immutable ALL-channel integer ground
-        // truth (RAW.BIN), written lockstep with EEG.BIN so a backend re-decode of
-        // the FP1 channel reproduces eeg.bin. Always a single file (uploaded as a
-        // 'raw' segment stream post-session), independent of the eeg chunked/single
-        // mode. Gated by the capture setting (fleet on / prod opt-in). BEST-EFFORT:
+        // truth (RAW.BIN), written lockstep with accepted EEG samples so a backend
+        // re-decode of the FP1 channel reproduces the EEG stream. Always a single
+        // file (uploaded as a 'raw' segment stream post-session), independent of
+        // the eeg segment/fallback mode. Gated by the capture setting (fleet on /
+        // prod opt-in). BEST-EFFORT:
         // a raw write failure NEVER fails the eeg night (it disables raw + keeps
         // recording). The 16-byte v1 header is written once on a fresh start.
         const captureRaw = shouldCaptureRaw(useDiagnostics.getState().diagnosticCapture);

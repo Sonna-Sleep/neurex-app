@@ -1,6 +1,6 @@
-// Pure rolling-segment boundary logic for the 30-min chunked-upload pipeline
-// (F2). No RN/IO, so the losslessness of the segment boundaries is provable in a
-// plain Node test before it ever touches a device.
+// Pure rolling-segment boundary logic for the segments-first upload pipeline. No
+// RN/IO, so the losslessness of the segment boundaries is provable in a plain
+// Node test before it ever touches a device.
 //
 // The recording is written as a sequence of segNNNN.bin files instead of one
 // growing EEG.BIN. A segment is closed (and handed to the upload queue) once it

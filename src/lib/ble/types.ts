@@ -2,8 +2,10 @@
 //
 // Live-stream model: scan → connect → startStream(sessionId, callbacks).
 // The firmware notifies 226-byte packets at ~31.25 Hz (8 samples/packet @ 250
-// Hz). We append decoded FP1-active / FP2-reference samples to a per-session
-// EEG.BIN file in the canonical on-disk format the analysis pipelines expect.
+// Hz). The app persists decoded FP1-active / FP2-reference samples in the
+// canonical 8-byte sample format. New recordings default to rolling
+// segments/eeg/segNNNN.bin files; the legacy local EEG.BIN writer remains as an
+// emergency fallback and old-recording recovery path.
 
 import type { DeviceScaleInfo } from './scale';
 
@@ -57,10 +59,9 @@ export type StreamCallbacks = {
   onDrop?: (reason: 'markers' | 'checksum' | 'size' | 'gap', stats: StreamStats) => void;
   /** Fired on a fatal stream error (connection lost mid-session, file I/O, etc.). */
   onError?: (err: Error) => void;
-  /** Fired when a recording segment is finalized — rolled at the chunk boundary or
-   * flushed on stop — for the 30-min chunked upload (Feature 2). Carries the
-   * segment's monotonic index, file URI, and byte length. Only fired when chunked
-   * upload is enabled; the single-file EEG.BIN path never emits it. */
+  /** Fired when a recording segment is finalized — rolled at the chunk boundary
+   * or flushed on stop. Carries the segment's monotonic index, file URI, and
+   * byte length. Only the legacy local EEG.BIN fallback does not emit it. */
   onSegmentClosed?: (seg: SegmentClosed) => void;
 };
 
@@ -78,7 +79,7 @@ export type SegmentClosed = {
 export type StreamHandle = {
   /** Path to the per-session directory under FileSystem.documentDirectory. */
   sessionDir: string;
-  /** file:// URI of the EEG.BIN file being written. */
+  /** file:// URI for sharing/debug: current segment by default, EEG.BIN in fallback mode. */
   eegUri: string;
   /** Stop notifications, flush + close file handles. Idempotent. */
   stop(): Promise<StreamStats>;

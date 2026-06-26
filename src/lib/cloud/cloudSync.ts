@@ -5,9 +5,9 @@
 // local copy once the cloud confirms it, and exposes raw download-on-demand +
 // live result delivery.
 //
-// Storage layout (matches backend assemble_if_needed):
+// Storage layout for normal QC:
 //   {uid}/{readable-label}/segments/eeg/segNNNN.bin
-// The backend concatenates these (whole-sample boundaries) into eeg.bin.
+// The backend concatenates these in memory; storage stays segment-shaped.
 
 import { File, Directory, Paths } from 'expo-file-system';
 import { AppState, Platform } from 'react-native';
@@ -104,11 +104,11 @@ export function readableLabel(
 /**
  * Length-free storage label for a recording whose end isn't known yet:
  *   2026-06-03_2014_3f9ac1   (date _ HHMM _ short-id/serial-tail)
- * The 30-min chunked upload (F2) ships segments DURING the night — before endMs
- * exists — so the prefix must be derivable at session start and stay STABLE for
- * every chunk + the eventual finalize. The recording length (cosmetic, "for the
- * eye") is dropped from the folder name; the DB row still carries start_ms/end_ms.
- * Used by the chunk driver; the post-session one-shot path keeps readableLabel().
+ * Segments-first upload ships chunks DURING the night — before endMs exists —
+ * so the prefix must be derivable at session start and stay STABLE for every
+ * chunk + the eventual finalize. The recording length (cosmetic, "for the eye")
+ * is dropped from the folder name; the DB row still carries start_ms/end_ms. Used
+ * by the chunk driver; the legacy post-session EEG.BIN path keeps readableLabel().
  */
 export function readableLabelStable(sessionId: string, startMs: number, serial?: string): string {
   const d = new Date(startMs);
@@ -355,10 +355,10 @@ export async function transmitSession(input: FinalizeInput): Promise<string> {
   const dir = new Directory(Paths.document, 'sessions', input.sessionId);
   if (!dir.exists) throw new Error(`no local session ${input.sessionId}`);
 
-  // Chunked recording (Feature 2: segments/eeg, no EEG.BIN)? Route through the
+  // Segments-first recording (segments/eeg, no local EEG.BIN): route through the
   // chunk pipeline, which uploads any unconfirmed segments and finalizes ONLY
   // when the local tail is fully in the cloud — so it never finalizes + deletes
-  // unconfirmed data the way the EEG.BIN path's unconditional cleanup would.
+  // unconfirmed data the way the legacy EEG.BIN fallback would.
   // Dynamic import avoids a static cloudSync ↔ chunkRecovery cycle.
   const segEeg = new Directory(new Directory(dir, 'segments'), 'eeg');
   if (segEeg.exists) {
@@ -371,6 +371,10 @@ export async function transmitSession(input: FinalizeInput): Promise<string> {
   const uid = await currentUserId();
   const prefix = `${uid}/${readableLabel(input.sessionId, input.startMs, input.endMs)}`;
 
+  // Legacy fallback: upload the completed local EEG.BIN as ordered cloud
+  // segments. This stays for old recordings and the explicit
+  // EXPO_PUBLIC_CHUNKED_UPLOAD=0 emergency path; new recordings write local
+  // segments directly.
   const eeg = new File(dir, 'EEG.BIN');
   await uploadFileAsSegments(prefix, 'eeg', eeg);
   // Diagnostic raw ground truth, uploaded as a parallel 'raw' segment stream
@@ -420,8 +424,10 @@ export async function transmitSession(input: FinalizeInput): Promise<string> {
 }
 
 /**
- * Download the assembled raw recording back to the phone, on demand.
+ * Download a whole-file artifact back to the phone, on demand.
  * `prefix` is the session's storage_prefix ({user_id}/{readable label}).
+ * Normal segment-first QC sessions may not have this root file unless it was a
+ * legacy upload or a raw-derived reprocess artifact.
  */
 export async function downloadRaw(prefix: string, stream: Stream): Promise<string> {
   const supabase = getSupabase();

@@ -1,5 +1,5 @@
-// Launch-time recovery + post-session transmit for the 30-min chunked-upload
-// pipeline (Feature 2).
+// Launch-time recovery + post-session transmit for the segments-first upload
+// pipeline.
 //
 // A chunked night is written as segments/eeg/segNNNN.bin and uploaded +
 // deleted-after-confirm DURING the recording. Two gaps this closes:
@@ -215,9 +215,9 @@ export async function transmitChunkedSession(input: FinalizeInput): Promise<stri
 
 /**
  * Recover every crashed chunked session at launch. Safe to call alongside
- * recoverAll() (disjoint layouts: EEG.BIN vs segments/eeg). No-op when chunked
- * upload is disabled or signed out. `liveSessionId` is excluded so a live /
- * resuming session is never touched.
+ * recoverAll() (disjoint layouts: EEG.BIN vs segments/eeg). No-op only when the
+ * legacy EEG.BIN fallback is explicitly enabled or signed out. `liveSessionId`
+ * is excluded so a live / resuming session is never touched.
  */
 export async function recoverChunkedSessions(liveSessionId?: string | null): Promise<void> {
   if (!CHUNKED_UPLOAD_ENABLED) return;
