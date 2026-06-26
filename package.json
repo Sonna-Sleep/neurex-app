@@ -33,7 +33,8 @@
     "smoke:chunk-queue": "ts-node --transpile-only --project scripts/tsconfig.scripts.json scripts/smoke-chunk-queue.ts",
     "smoke:chunk-upload": "ts-node --transpile-only --project scripts/tsconfig.scripts.json scripts/smoke-chunk-upload.ts",
     "smoke:chunk-uploader": "ts-node --transpile-only --project scripts/tsconfig.scripts.json scripts/smoke-chunk-uploader.ts",
-    "smoke:seg-roll": "ts-node --transpile-only --project scripts/tsconfig.scripts.json scripts/smoke-seg-roll.ts"
+    "smoke:seg-roll": "ts-node --transpile-only --project scripts/tsconfig.scripts.json scripts/smoke-seg-roll.ts",
+    "smoke:stream-stats": "ts-node --transpile-only --project scripts/tsconfig.scripts.json scripts/smoke-stream-stats.ts"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",

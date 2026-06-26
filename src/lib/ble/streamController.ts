@@ -46,6 +46,10 @@ import { checkDiskSpace, InsufficientStorageError } from './diskSpace';
 import type { Subscription } from 'react-native-ble-plx';
 import { EEG_SAMPLE_RATE_HZ } from './constants';
 import { transmitSession } from '../cloud/cloudSync';
+import {
+  writeStreamStatsSidecar,
+  type StreamStatsStopReason,
+} from '../cloud/streamStatsSidecar';
 
 // User-initiated session start: time-bounded so a device that's off or out of
 // range fails fast with an error instead of an infinite spinner. The background
@@ -103,6 +107,7 @@ type ActiveSession = {
   batteryUnsub: (() => void) | null;
   userStopped: boolean;
   reconnecting: boolean;
+  terminalReason: StreamStatsStopReason | null;
 };
 
 let active: ActiveSession | null = null;
@@ -304,6 +309,7 @@ export async function startSession(
     batteryUnsub: null,
     userStopped: false,
     reconnecting: false,
+    terminalReason: null,
   };
 
   registerDisconnectWatch();
@@ -389,6 +395,7 @@ export async function resumeSessionAfterRestore(meta: RecordingMeta): Promise<vo
       batteryUnsub: null,
       userStopped: false,
       reconnecting: false,
+      terminalReason: null,
     };
     registerDisconnectWatch();
     if (__DEV__) console.log('[stream] resumed session after iOS restore', sessionId);
@@ -518,6 +525,7 @@ async function reconnectLoop(): Promise<void> {
 // safe on disk; the surfaced error explains why it stopped.
 async function failSession(message: string): Promise<void> {
   if (!active) return;
+  active.terminalReason = 'storage-error';
   active.reconnecting = false;
   if (active.lostTimer) {
     clearTimeout(active.lostTimer);
@@ -537,7 +545,16 @@ async function failSession(message: string): Promise<void> {
   }
   active.disconnectSub?.remove();
   active.disconnectSub = null;
-  await active.handle.stop().catch(() => undefined);
+  const stats = await active.handle.stop().catch(() => active?.statsRef.current ?? freshStats());
+  const endMs = endMsFromSamples(active.startedAtMs, stats);
+  writeSessionMeta({ ...active.meta, endMs });
+  await writeStreamStatsSidecar({
+    sessionId: active.sessionId,
+    startedAtMs: active.startedAtMs,
+    endMs,
+    stopReason: 'storage-error',
+    stats,
+  }).catch(() => undefined);
   // Best-effort: ship whatever segments are already queued (uploading frees the
   // disk that just filled), then stop the driver. No-op when disabled.
   void stopChunkDriver();
@@ -575,6 +592,13 @@ async function endSessionAuto(reason: 'battery' | 'device-lost'): Promise<void> 
   // Drain the final + any queued segments before teardown (Feature 2). No-op when
   // disabled; anything still unconfirmed stays queued for launch-time recovery.
   await stopChunkDriver();
+  await writeStreamStatsSidecar({
+    sessionId: session.sessionId,
+    startedAtMs: session.startedAtMs,
+    endMs,
+    stopReason: reason,
+    stats,
+  }).catch(() => undefined);
   await session.device.disconnect().catch(() => undefined);
   stopContactQuality();
   stopForegroundService();
@@ -606,10 +630,18 @@ export async function stopSession(): Promise<StopResult | null> {
   clearInterval(session.statsTimer);
   if (session.watchdogTimer) clearInterval(session.watchdogTimer);
   const stats = await session.handle.stop().catch(() => session.statsRef.current);
-  writeSessionMeta({ ...session.meta, endMs: endMsFromSamples(session.startedAtMs, stats) });
+  const endMs = endMsFromSamples(session.startedAtMs, stats);
+  writeSessionMeta({ ...session.meta, endMs });
   // handle.stop() flushed + emitted the final segment; drain it (and anything
   // queued) before we tear down, then stop the driver. No-op when disabled.
   await stopChunkDriver();
+  await writeStreamStatsSidecar({
+    sessionId: session.sessionId,
+    startedAtMs: session.startedAtMs,
+    endMs,
+    stopReason: session.terminalReason ?? 'manual',
+    stats,
+  }).catch(() => undefined);
   await session.device.disconnect().catch(() => undefined);
   stopContactQuality();
 

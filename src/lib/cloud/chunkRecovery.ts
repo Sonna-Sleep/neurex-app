@@ -33,6 +33,11 @@ import {
   uploadSidecarIfPresent,
 } from './cloudSync';
 import { isStageableDurationMs } from './recoveryMath';
+import {
+  ensureStreamStatsSidecar,
+  refreshStreamStatsSidecarUploadCounts,
+  streamStatsFile,
+} from './streamStatsSidecar';
 
 const META_NAME = 'meta.json';
 
@@ -146,6 +151,10 @@ async function settleChunkedSession(
   // Still segments on disk → not fully confirmed; keep them for the next retry.
   if (listLocalSegs(eegDir).length > 0) return null;
 
+  const maxIndex = before.length > 0 ? before[before.length - 1].index : -1;
+  const endMs =
+    endMsOverride ?? meta.endMs ?? meta.startedAtMs + estimateChunkedDurationMs(maxIndex, CHUNK_SECONDS);
+
   // Upload the diagnostic raw ground truth (single RAW.BIN, written lockstep with
   // the eeg chunks) as a parallel 'raw' segment stream. Best-effort: raw must
   // never block finalizing a confirmed eeg night.
@@ -166,9 +175,22 @@ async function settleChunkedSession(
     /* non-fatal — older recordings have no sidecar and fall back to the assumed scale */
   }
 
-  const maxIndex = before.length > 0 ? before[before.length - 1].index : -1;
-  const endMs =
-    endMsOverride ?? meta.endMs ?? meta.startedAtMs + estimateChunkedDurationMs(maxIndex, CHUNK_SECONDS);
+  // Ship the BLE/upload stats sidecar before finalize when possible. Recovery can
+  // synthesize one from meta/endMs if the live stop path never got to write it.
+  try {
+    await ensureStreamStatsSidecar({
+      sessionId,
+      startedAtMs: meta.startedAtMs,
+      endMs,
+      stopReason: 'recovery',
+      prefix,
+    });
+    await refreshStreamStatsSidecarUploadCounts(sessionId, prefix);
+    await uploadSidecarIfPresent(prefix, streamStatsFile(sessionId), 'stream_stats.json');
+  } catch {
+    /* non-fatal — QC will flag missing stream_stats.json inside the report */
+  }
+
   await finalizeSession({ sessionId, startMs: meta.startedAtMs, endMs }, prefix);
   deleteLocalSession(sessionId);
   return prefix;
