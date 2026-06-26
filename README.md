@@ -2,8 +2,8 @@
 
 Mobile companion app for the Neurex EEG sleep mask. It connects to the
 sleep mask over Bluetooth Low Energy, records EEG through the night, uploads the
-recording to the cloud, and shows you a staged hypnogram and a sleep score the
-next morning.
+recording to the cloud, and shows the finished session once backend QC/sleep
+analysis has completed.
 
 Built with React Native + Expo (SDK 54, new architecture). iOS and Android.
 
@@ -16,9 +16,9 @@ Built with React Native + Expo (SDK 54, new architecture). iOS and Android.
 - **Cloud sync** — recordings upload to Supabase Storage in resumable segments,
   with retry and a stable per-recording prefix so interrupted uploads resume
   instead of starting over (`src/lib/cloud/cloudSync.ts`).
-- **Sleep staging** — a serverless backend ([neurex-backend](https://github.com/aleksaspetro/neurex-backend))
-  runs YASA on the uploaded EEG, writes a session row back to Supabase, and the
-  app renders the hypnogram, stage breakdown, and score.
+- **Automated analysis** — a serverless backend ([neurex-backend](https://github.com/aleksaspetro/neurex-backend))
+  reads the uploaded EEG segments, writes one unified QC report to Supabase, and
+  keeps beta sleep staging available for users who already rely on it.
 - **Journal** — past nights with a detail view per session.
 - **Email auth** — passwordless magic-link login via Supabase Auth.
 
@@ -31,7 +31,7 @@ Built with React Native + Expo (SDK 54, new architecture). iOS and Android.
 | Navigation | React Navigation (native-stack + bottom-tabs) |
 | State | Zustand |
 | Backend | Supabase (Auth, Postgres, Storage) |
-| Staging | Modal serverless (YASA) — separate `neurex-backend` repo |
+| Analysis | Modal serverless QC + beta sleep staging — separate `neurex-backend` repo |
 | BLE | `react-native-ble-plx` |
 | Charts | `react-native-svg` |
 
@@ -52,7 +52,7 @@ src/
   navigation/     navigators
 modules/
   neurex-foreground-service/   native Android module (keep recording alive)
-scripts/          smoke tests (BLE, recovery, profile, support)
+scripts/          smoke tests (BLE, segment upload, recovery, profile, support)
 docs/             Supabase, app review, listing, and legal notes
 ```
 
@@ -114,20 +114,38 @@ Install with `adb install -r <apk>` (in-place `-r` preserves app data).
 | `npm run smoke:ble-packet` | BLE packet decoder smoke test |
 | `npm run smoke:backoff` | BLE reconnect/backoff smoke test |
 | `npm run smoke:connect-timeout` | BLE connection timeout smoke test |
+| `npm run smoke:ble-scale` | BLE scale sidecar parsing smoke test |
+| `npm run smoke:raw-record` | Raw diagnostic capture smoke test |
+| `npm run smoke:disk-space` | Overnight storage preflight smoke test |
+| `npm run smoke:auto-stop` | Battery/device-lost auto-stop smoke test |
+| `npm run smoke:seg-roll` | Segment rolling boundary smoke test |
+| `npm run smoke:chunk-queue` | Segment upload queue smoke test |
+| `npm run smoke:chunk-upload` | Segment upload worker smoke test |
+| `npm run smoke:chunk-uploader` | `/ingest` uploader contract smoke test |
+| `npm run smoke:stream-stats` | `stream_stats.json` sidecar smoke test |
 | `npm run smoke:recovery` | Local recording recovery smoke test |
 | `npm run smoke:account-deletion` | Account deletion API smoke test |
 | `npm run smoke:profile` | Profile state smoke test |
+| `npm run smoke:dob` | Date-of-birth validation smoke test |
+| `npm run smoke:hypnogram` | Hypnogram rendering math smoke test |
 | `npm run smoke:push` | Push token ownership/cleanup smoke test |
 | `npm run smoke:support` | Support message smoke test |
+| `npm run smoke:diagnostic-capture` | Raw diagnostic capture setting smoke test |
+| `npm run smoke:session-metadata` | Session metadata/provenance smoke test |
+| `npm run smoke:upload-lock` | Upload lock timeout smoke test |
 
 ## How a night flows
 
 1. Phone connects to one sleep mask over BLE and streams EEG, buffered to disk by
    a foreground service.
-2. In the morning, the recording uploads to Supabase Storage as resumable
-   segments.
-3. The Modal backend stages the EEG with YASA and writes a `sessions` row.
-4. The app reads that row and renders the hypnogram + score in Journal.
+2. During the recording, the app writes `segments/eeg/segNNNN.bin`, uploads each
+   closed segment, and deletes local chunks only after server byte/hash
+   confirmation.
+3. On stop, auto-stop, or recovery, the app uploads `scale.json` and
+   `stream_stats.json`, then inserts one `public.sessions` row.
+4. The Modal backend reads the segments, writes `signal_quality_report`, and
+   preserves beta sleep staging.
+5. The app reads the finished row and renders it in Journal.
 
 ## Android push setup
 

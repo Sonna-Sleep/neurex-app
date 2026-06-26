@@ -160,10 +160,10 @@ export function RecordingCard({ idleFooter }: { idleFooter?: React.ReactNode }) 
   }, []);
 
   // Ship the just-finished recording to the cloud: upload as segments, finalize
-  // (→ webhook → YASA), delete the local copy, then live-subscribe for the
-  // summary. Upload/finalize errors keep the local files and can be retried;
-  // backend analysis failures happen after cloud handoff, so there is no local
-  // retry path to offer.
+  // (→ webhook → backend QC/sleep analysis), delete the local copy, then
+  // live-subscribe for the summary. Upload/finalize errors keep the local files
+  // and can be retried; backend analysis failures happen after cloud handoff, so
+  // there is no local retry path to offer.
   const onSyncToCloud = useCallback(async () => {
     if (!saved || sync === 'uploading' || sync === 'analyzing' || sync === 'done') return;
     if (saved.durationSec < MIN_STAGING_SEC) {

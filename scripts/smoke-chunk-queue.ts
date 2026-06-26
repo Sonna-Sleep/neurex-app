@@ -4,8 +4,6 @@ import {
   addTask,
   bumpAttempt,
   type ChunkTask,
-  CHUNK_INTERVAL_MS,
-  chunkReady,
   confirmMatches,
   nextTask,
   removeTask,
@@ -56,11 +54,5 @@ assert.equal(confirmMatches({ bytes: 1000, sha256: 'dead' }, { bytes_received: 9
 assert.equal(confirmMatches({ bytes: 1000, sha256: 'dead' }, { bytes_received: 1000, sha256: 'beef' }), false);
 assert.equal(confirmMatches({ bytes: 1000, sha256: 'dead' }, { sha256: 'dead' }), false, 'missing byte count → no delete');
 assert.equal(confirmMatches({ bytes: 1000, sha256: 'dead' }, { bytes_received: 1000 }), false, 'missing hash → no delete');
-
-// chunkReady
-assert.equal(chunkReady(CHUNK_INTERVAL_MS), true);
-assert.equal(chunkReady(CHUNK_INTERVAL_MS - 1), false);
-assert.equal(chunkReady(0), false);
-assert.equal(chunkReady(5000, 2000), true);
 
 console.log('ALL CHUNK-QUEUE ASSERTIONS PASSED');

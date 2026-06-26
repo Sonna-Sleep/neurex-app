@@ -1,9 +1,9 @@
 // Cloud sync client for the "phone = transmitter" pipeline.
 //
 // Ships a recording to Supabase Storage as ordered segment chunks, finalizes
-// the session (which the backend webhook turns into YASA staging), deletes the
-// local copy once the cloud confirms it, and exposes raw download-on-demand +
-// live result delivery.
+// the session (which the backend webhook turns into the unified QC report and
+// beta sleep staging), deletes the local copy once the cloud confirms it, and
+// exposes artifact download-on-demand + live result delivery.
 //
 // Storage layout for normal QC:
 //   {uid}/{readable-label}/segments/eeg/segNNNN.bin
@@ -300,7 +300,7 @@ function isMissingColumnError(error: { code?: string; message?: string }): boole
 
 /**
  * Insert the sessions row (status='uploaded'). On the cloud this fires the DB
- * webhook → Modal assembles the segments → YASA → writes results back.
+ * webhook → Modal reads the segment stream → QC/YASA → writes results back.
  *
  * Deploy-safe: the device/scale/tester metadata columns (migration 0015) ride the
  * insert, but if 0015 hasn't landed on the live DB yet the insert is retried with
@@ -378,7 +378,7 @@ export async function transmitSession(input: FinalizeInput): Promise<string> {
   const eeg = new File(dir, 'EEG.BIN');
   await uploadFileAsSegments(prefix, 'eeg', eeg);
   // Diagnostic raw ground truth, uploaded as a parallel 'raw' segment stream
-  // ({prefix}/segments/raw/segNNNN.bin → backend assembles raw.bin). Present only
+  // ({prefix}/segments/raw/segNNNN.bin → backend reads it in order). Present only
   // when raw capture was on. BEST-EFFORT: raw is a debugging bonus and must never
   // block finalizing the night. NOTE: this post-session path (and the eeg upload
   // above) writes directly to Supabase Storage via uploadChunkWithRetry — there is
@@ -502,7 +502,8 @@ export function subscribeToResult(
   });
   // Only fire for a row the backend has actually staged. byId returns the row at
   // ANY status (including the just-inserted 'uploaded'), so without this guard
-  // the immediate read below would flip the UI to "done" before YASA ever runs.
+  // the immediate read below would flip the UI to "done" before backend analysis
+  // ever runs.
   const fail = (message?: string) => {
     if (!done) {
       done = true;

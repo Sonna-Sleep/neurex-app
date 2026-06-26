@@ -36,7 +36,7 @@ export function removeTask(queue: readonly ChunkTask[], sessionId: string, seq: 
 }
 
 /** FIFO next chunk to upload — oldest session, then lowest seq, so a night uploads
- *  in order and the backend assembles a contiguous run. */
+ *  in order and the backend reads a contiguous segment run. */
 export function nextTask(queue: readonly ChunkTask[]): ChunkTask | null {
   if (queue.length === 0) return null;
   return [...queue].sort((a, b) =>
@@ -63,13 +63,4 @@ export function confirmMatches(
     typeof server.sha256 === 'string' &&
     server.sha256.toLowerCase() === local.sha256.toLowerCase()
   );
-}
-
-export const CHUNK_INTERVAL_MS = 30 * 60_000; // upload roughly every 30 min
-
-/** Roll a new chunk once at least this much wall-clock (from the chunk's first
- *  sample ms) has been buffered. Driven off sample ms so it's lossless + works
- *  off BLE packets on iOS (no wall-clock timer needed). */
-export function chunkReady(bufferedMs: number, intervalMs: number = CHUNK_INTERVAL_MS): boolean {
-  return bufferedMs >= intervalMs;
 }
