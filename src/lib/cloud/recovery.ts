@@ -35,6 +35,7 @@ const EEG_NAME = 'EEG.BIN';
 export type RecordingMeta = {
   sessionId: string;
   startedAtMs: number;
+  endMs?: number;
   deviceId?: string | null;
   serial?: string | null;
 };

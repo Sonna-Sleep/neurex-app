@@ -36,7 +36,7 @@ import { isStageableDurationMs } from './recoveryMath';
 
 const META_NAME = 'meta.json';
 
-type ChunkMeta = { sessionId: string; startedAtMs: number; serial?: string | null };
+type ChunkMeta = { sessionId: string; startedAtMs: number; endMs?: number; serial?: string | null };
 
 function sessionsRoot(): Directory {
   return new Directory(Paths.document, 'sessions');
@@ -168,7 +168,7 @@ async function settleChunkedSession(
 
   const maxIndex = before.length > 0 ? before[before.length - 1].index : -1;
   const endMs =
-    endMsOverride ?? meta.startedAtMs + estimateChunkedDurationMs(maxIndex, CHUNK_SECONDS);
+    endMsOverride ?? meta.endMs ?? meta.startedAtMs + estimateChunkedDurationMs(maxIndex, CHUNK_SECONDS);
   await finalizeSession({ sessionId, startMs: meta.startedAtMs, endMs }, prefix);
   deleteLocalSession(sessionId);
   return prefix;

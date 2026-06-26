@@ -10,11 +10,10 @@
 //     momentary BLE blip can still reconnect, but the night doesn't hang.
 
 export const BATTERY_STOP_PCT = 5;
-// 30 s grace: long enough to ride out a momentary BLE blip, short enough that a
-// real disconnect (headband off / out of range) stops promptly instead of
-// reconnecting for minutes. A "disconnected" notification fires immediately on
-// the drop, independent of this window.
-export const DEVICE_ABANDONED_MS = 30_000;
+// 30 min grace: overnight BLE can disappear briefly when the phone sleeps, the
+// body blocks RF, or the OS delays background reconnect. Keep trying long enough
+// that a transient drop becomes a QC gap instead of ending the night.
+export const DEVICE_ABANDONED_MS = 30 * 60_000;
 
 /** True when a valid battery reading is at/under the cutoff. Unknown/invalid
  *  readings (null / out of 0–100) never trigger a stop. */

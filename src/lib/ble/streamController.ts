@@ -44,6 +44,8 @@ import {
 import { notifyDeviceDisconnected, notifyRecordingStopped } from '../notifications/local';
 import { checkDiskSpace, InsufficientStorageError } from './diskSpace';
 import type { Subscription } from 'react-native-ble-plx';
+import { EEG_SAMPLE_RATE_HZ } from './constants';
+import { transmitSession } from '../cloud/cloudSync';
 
 // User-initiated session start: time-bounded so a device that's off or out of
 // range fails fast with an error instead of an infinite spinner. The background
@@ -77,6 +79,7 @@ type ActiveSession = {
   sessionId: string;
   startedAtMs: number;
   deviceId: string;
+  meta: RecordingMeta;
   handle: StreamHandle;
   device: ConnectedDevice;
   statsTimer: ReturnType<typeof setInterval>;
@@ -131,6 +134,10 @@ function freshStats(): StreamStats {
     lastBaseMs: null,
     deviceReboots: 0,
   };
+}
+
+function endMsFromSamples(startedAtMs: number, stats: StreamStats): number {
+  return startedAtMs + Math.round((stats.samples / EEG_SAMPLE_RATE_HZ) * 1000);
 }
 
 function makeCallbacks(statsRef: StatsRef): StreamCallbacks {
@@ -284,6 +291,7 @@ export async function startSession(
     sessionId,
     startedAtMs,
     deviceId,
+    meta,
     handle,
     device,
     statsTimer,
@@ -368,6 +376,7 @@ export async function resumeSessionAfterRestore(meta: RecordingMeta): Promise<vo
       sessionId,
       startedAtMs,
       deviceId,
+      meta,
       handle,
       device,
       statsTimer,
@@ -546,9 +555,8 @@ export type StopResult = {
 
 // Auto-finalize an overnight recording when the headband is gone (battery dead or
 // powered off) — instead of reconnecting forever. Tears the session down like
-// stopSession but without a UI return; the on-disk EEG.BIN is left as a recoverable
-// orphan (recoverAll uploads it; with the chunked-upload pipeline most of it is
-// already in the cloud). Safe to call from a background callback/timer.
+// stopSession, then sends the same cloud finalize path used by manual sync so a
+// partial night still produces a database row + backend report.
 async function endSessionAuto(reason: 'battery' | 'device-lost'): Promise<void> {
   if (!active) return;
   const session = active;
@@ -561,17 +569,24 @@ async function endSessionAuto(reason: 'battery' | 'device-lost'): Promise<void> 
   session.batteryUnsub?.();
   clearInterval(session.statsTimer);
   if (session.watchdogTimer) clearInterval(session.watchdogTimer);
-  await session.handle.stop().catch(() => undefined);
+  const stats = await session.handle.stop().catch(() => session.statsRef.current);
+  const endMs = endMsFromSamples(session.startedAtMs, stats);
+  writeSessionMeta({ ...session.meta, endMs });
   // Drain the final + any queued segments before teardown (Feature 2). No-op when
   // disabled; anything still unconfirmed stays queued for launch-time recovery.
   await stopChunkDriver();
   await session.device.disconnect().catch(() => undefined);
   stopContactQuality();
   stopForegroundService();
-  // Finalized — no longer the active session to resume; the file stays on disk and
-  // is shipped by the chunked-upload queue / launch-time recovery.
-  void clearActiveRecording();
+  // No longer the active session to resume. If cloud handoff below fails, launch-
+  // time recovery still sees meta.endMs and finalizes with the real data length.
+  await clearActiveRecording();
   useSession.getState().setStreaming(null);
+  try {
+    await transmitSession({ sessionId: session.sessionId, startMs: session.startedAtMs, endMs });
+  } catch (e) {
+    if (__DEV__) console.warn('[stream] auto-finalize failed; recovery will retry', e);
+  }
   // Tell the user it stopped (and why) — they may have walked away assuming it
   // was still recording.
   notifyRecordingStopped(reason);
@@ -591,6 +606,7 @@ export async function stopSession(): Promise<StopResult | null> {
   clearInterval(session.statsTimer);
   if (session.watchdogTimer) clearInterval(session.watchdogTimer);
   const stats = await session.handle.stop().catch(() => session.statsRef.current);
+  writeSessionMeta({ ...session.meta, endMs: endMsFromSamples(session.startedAtMs, stats) });
   // handle.stop() flushed + emitted the final segment; drain it (and anything
   // queued) before we tear down, then stop the driver. No-op when disabled.
   await stopChunkDriver();
