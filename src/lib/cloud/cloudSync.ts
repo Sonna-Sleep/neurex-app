@@ -20,6 +20,7 @@ import { manifestFile } from '../ble/recordingManifest';
 import { supabaseSessionRepo } from '../repos/supabase';
 import type { Session } from '../repos/types';
 import { buildSessionMetadata } from './sessionMetadata';
+import { storagePrefix } from './storagePaths';
 import {
   ensureStreamStatsSidecar,
   refreshStreamStatsSidecarUploadCounts,
@@ -120,6 +121,19 @@ export function readableLabelStable(sessionId: string, startMs: number, serial?:
     ? serial.replace(/[^A-Za-z0-9]/g, '').slice(-6) || 'rec'
     : sessionId.replace(/-/g, '').slice(0, 6) || 'nodate';
   return `${date}_${time}_${tag}`;
+}
+
+let cachedHandle: string | null = null;
+/** This account's stable storage handle (auto-created server-side on first call
+ *  via the ensure_my_handle RPC). Cached for the session. */
+export async function ensureMyHandle(): Promise<string> {
+  if (cachedHandle) return cachedHandle;
+  const supabase = getSupabase();
+  if (!supabase) throw new NotAuthedError();
+  const { data, error } = await supabase.rpc('ensure_my_handle');
+  if (error || !data) throw new Error(`ensure_my_handle failed: ${error?.message ?? 'no handle'}`);
+  cachedHandle = data as string;
+  return cachedHandle;
 }
 
 export class NotAuthedError extends Error {
@@ -367,10 +381,17 @@ export async function transmitSession(input: FinalizeInput): Promise<string> {
     return transmitChunkedSession(input);
   }
 
-  // {user_id}/{readable label} — account folder stays the opaque uid; the
-  // session folder is human-readable date_time_length_shortid.
-  const uid = await currentUserId();
-  const prefix = `${uid}/${readableLabel(input.sessionId, input.startMs, input.endMs)}`;
+  // {handle}/{device}/{night} — readable layout. Device colour from the BLE
+  // serial stamped in meta.json (best-effort; missing -> unknown-device).
+  const handle = await ensureMyHandle();
+  let serial: string | undefined;
+  try {
+    const metaF = new File(dir, 'meta.json');
+    if (metaF.exists) serial = (JSON.parse(metaF.textSync()) as { serial?: string }).serial ?? undefined;
+  } catch {
+    /* no serial -> unknown-device */
+  }
+  const prefix = storagePrefix(handle, serial, input.startMs);
 
   // Legacy fallback: upload the completed local EEG.BIN as ordered cloud
   // segments. This stays for old recordings and the explicit

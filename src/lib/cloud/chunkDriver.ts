@@ -22,7 +22,8 @@ import { addTask } from './chunkQueue';
 import { drainQueue } from './chunkUpload';
 import { fileQueueStore, readSegBytes, sha256Hex } from './chunkUploadStore';
 import { makeIngestUploader } from './chunkUploader';
-import { readableLabelStable } from './cloudSync';
+import { ensureMyHandle } from './cloudSync';
+import { storagePrefix } from './storagePaths';
 
 type DriverCtx = { sessionId: string; startedAtMs: number; serial?: string | null };
 
@@ -114,11 +115,8 @@ export async function enqueueSegment(seg: SegmentClosed): Promise<void> {
         return;
       }
       const sha256 = await sha256Hex(bytes);
-      const prefix = `${auth.uid}/${readableLabelStable(
-        session.sessionId,
-        session.startedAtMs,
-        session.serial ?? undefined,
-      )}`;
+      const handle = await ensureMyHandle();
+      const prefix = storagePrefix(handle, session.serial ?? undefined, session.startedAtMs);
       fileQueueStore.save(
         addTask(fileQueueStore.load(), {
           sessionId: session.sessionId,
