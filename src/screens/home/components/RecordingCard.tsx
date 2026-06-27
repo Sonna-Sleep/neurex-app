@@ -6,7 +6,7 @@
 // recordings are segments-first; the old EEG.BIN local file remains a fallback.
 // In dev, the local debug file/segment can still be shared manually.
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import * as Sharing from 'expo-sharing';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
@@ -14,14 +14,12 @@ import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { Button } from '../../../components/Button';
 import { Card } from '../../../components/Card';
 import { Body, SerifHeadline, Secondary } from '../../../theme/typography';
-import { colors, spacing, typeScale } from '../../../theme/tokens';
+import { colors, spacing } from '../../../theme/tokens';
 import { useSession } from '../../../state/session';
 import { startSession, stopSession } from '../../../lib/ble/streamController';
 import { EEG_SAMPLE_RATE_HZ } from '../../../lib/ble/constants';
-import { transmitSession, subscribeToResult } from '../../../lib/cloud/cloudSync';
+import { transmitSession } from '../../../lib/cloud/cloudSync';
 import { MIN_STAGING_MIN, MIN_STAGING_SEC } from '../../../lib/cloud/recoveryMath';
-import { handleNightReady } from '../../../lib/nights/onNightReady';
-import type { Session } from '../../../lib/repos/types';
 import { TesterLogSheet } from './TesterLogSheet';
 import { useDiagnostics } from '../../../state/diagnostics';
 import { shouldCaptureRaw } from '../../../lib/ble/diagnosticCapture';
@@ -53,13 +51,9 @@ export function RecordingCard({ idleFooter }: { idleFooter?: React.ReactNode }) 
   const captureRaw = shouldCaptureRaw(diagnosticCapture);
   const logComplete = isTesterLogComplete(lastTesterLog);
   const [logOpen, setLogOpen] = useState(false);
-  // Cloud sync of the just-finished recording (transmit → analyze → summary).
-  const [sync, setSync] = useState<
-    'idle' | 'uploading' | 'analyzing' | 'slow' | 'done' | 'error' | 'analysis-error'
-  >('idle');
-  const [summary, setSummary] = useState<Session | null>(null);
-  const unsubRef = useRef<(() => void) | null>(null);
-  useEffect(() => () => unsubRef.current?.(), []);
+  // Cloud sync of the just-finished recording. This screen only reflects the
+  // phone handoff (upload + sessions row finalize), not backend QC outcome.
+  const [sync, setSync] = useState<'idle' | 'uploading' | 'done' | 'error'>('idle');
   // Re-render once per second so the elapsed timer ticks even when no
   // packet arrives, while keeping render pure.
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -160,12 +154,11 @@ export function RecordingCard({ idleFooter }: { idleFooter?: React.ReactNode }) 
   }, []);
 
   // Ship the just-finished recording to the cloud: upload as segments, finalize
-  // (→ webhook → backend QC/sleep analysis), delete the local copy, then
-  // live-subscribe for the summary. Upload/finalize errors keep the local files
-  // and can be retried; backend analysis failures happen after cloud handoff, so
-  // there is no local retry path to offer.
+  // the sessions row, and delete the local copy only after cloud confirmation.
+  // Backend QC runs after this handoff, but this control only answers the simple
+  // question the user needs at End: did the recording upload safely?
   const onSyncToCloud = useCallback(async () => {
-    if (!saved || sync === 'uploading' || sync === 'analyzing' || sync === 'done') return;
+    if (!saved || sync === 'uploading' || sync === 'done') return;
     if (saved.durationSec < MIN_STAGING_SEC) {
       setError(
         `Record at least ${MIN_STAGING_MIN} minutes before syncing. This short recording is still saved on this phone.`,
@@ -173,7 +166,6 @@ export function RecordingCard({ idleFooter }: { idleFooter?: React.ReactNode }) 
       return;
     }
     setError(null);
-    setSummary(null);
     setSync('uploading');
     try {
       await transmitSession({
@@ -181,28 +173,7 @@ export function RecordingCard({ idleFooter }: { idleFooter?: React.ReactNode }) 
         startMs: saved.startedAtMs,
         endMs: saved.endMs,
       });
-      setSync('analyzing');
-      unsubRef.current?.();
-      unsubRef.current = subscribeToResult(
-        saved.sessionId,
-        (s) => {
-          setSummary(s);
-          setSync('done');
-          // Notify + flag the night as new (no-op banner when foregrounded).
-          handleNightReady(s);
-        },
-        {
-          // Don't spin on "Analyzing…" forever if the backend never flips the
-          // row to ready (flaky webhook). After this, switch to a reassuring
-          // message — the scheduled reconcile + push still deliver the result.
-          timeoutMs: 3 * 60_000,
-          onSlow: () => setSync((cur) => (cur === 'analyzing' ? 'slow' : cur)),
-          onFailed: (message) => {
-            setSync('analysis-error');
-            setError(message ?? 'Analysis failed. The raw recording is safely stored in cloud.');
-          },
-        },
-      );
+      setSync('done');
     } catch (e) {
       setSync('error');
       setError((e as Error).message);
@@ -262,30 +233,20 @@ export function RecordingCard({ idleFooter }: { idleFooter?: React.ReactNode }) 
   if (saved) {
     const mins = Math.floor(saved.durationSec / 60);
     const secs = saved.durationSec % 60;
-    const syncing = sync === 'uploading' || sync === 'analyzing';
+    const syncing = sync === 'uploading';
     const canStage = saved.durationSec >= MIN_STAGING_SEC;
     const headline =
       sync === 'uploading'
         ? 'Uploading your night…'
-        : sync === 'analyzing'
-          ? 'Analyzing your night…'
-          : sync === 'slow'
-            ? 'Still analyzing…'
-            : sync === 'done'
-              ? 'Your night is ready'
-              : sync === 'analysis-error'
-                ? 'Analysis failed'
-                : sync === 'error'
-                  ? "Couldn't sync"
-                  : 'Night saved';
+        : sync === 'done'
+          ? 'Uploaded'
+          : sync === 'error'
+            ? "Couldn't upload"
+            : 'Night saved';
     const sub = syncing
-      ? 'This usually takes under a minute.'
-      : sync === 'slow'
-        ? 'This one is taking a little longer — we’ll notify you when it’s ready. You can close the app.'
+      ? 'Making sure your recording is stored safely.'
       : sync === 'done'
-        ? 'Saved to your journal.'
-      : sync === 'analysis-error'
-        ? 'The upload finished, but analysis failed. The raw recording is stored in cloud.'
+        ? 'Your recording is stored in cloud.'
       : canStage
         ? `Your recording is saved${saved.durationSec > 0 ? ` · ${mins}m ${secs}s` : ''}.`
         : `Your recording is saved · ${mins}m ${secs}s. Record at least ${MIN_STAGING_MIN} minutes to analyze.`;
@@ -300,15 +261,6 @@ export function RecordingCard({ idleFooter }: { idleFooter?: React.ReactNode }) 
             </Secondary>
           ) : null}
           {error ? <Text style={styles.error}>{error}</Text> : null}
-          {sync === 'done' && summary ? (
-            <View style={styles.stats}>
-              <Stat label="Score" value={summary.score != null ? `${summary.score}%` : '—'} />
-              <Stat label="Deep" value={`${Math.round(summary.stageMinutes?.deep ?? 0)}m`} />
-              <Stat label="REM" value={`${Math.round(summary.stageMinutes?.rem ?? 0)}m`} />
-              <Stat label="Light" value={`${Math.round(summary.stageMinutes?.light ?? 0)}m`} />
-            </View>
-          ) : null}
-
           {syncing ? (
             <ActivityIndicator color={colors.textSecondary} />
           ) : sync === 'idle' && canStage ? (
@@ -324,12 +276,9 @@ export function RecordingCard({ idleFooter }: { idleFooter?: React.ReactNode }) 
             label="Done"
             variant="ghost"
             onPress={() => {
-              unsubRef.current?.();
-              unsubRef.current = null;
               setSaved(null);
               setError(null);
               setSync('idle');
-              setSummary(null);
             }}
           />
         </Card>
@@ -365,26 +314,6 @@ export function RecordingCard({ idleFooter }: { idleFooter?: React.ReactNode }) 
       ) : null}
       {idleFooter ? <View style={styles.idleFooter}>{idleFooter}</View> : null}
       <TesterLogSheet visible={logOpen} onClose={() => setLogOpen(false)} />
-    </View>
-  );
-}
-
-function Stat({
-  label,
-  value,
-  hint,
-}: {
-  label: string;
-  value: string;
-  hint?: string;
-}) {
-  return (
-    <View style={styles.stat}>
-      <Text style={styles.statValue} allowFontScaling={false}>
-        {value}
-      </Text>
-      <Secondary style={styles.statLabel}>{label}</Secondary>
-      {hint ? <Secondary style={styles.statHint}>{hint}</Secondary> : null}
     </View>
   );
 }
@@ -468,26 +397,6 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 1,
     color: colors.textSecondary,
-  },
-  stats: {
-    flexDirection: 'row',
-  },
-  stat: {
-    flex: 1,
-    gap: spacing.xs,
-  },
-  statValue: {
-    ...typeScale.statNumber,
-    fontSize: 24,
-  },
-  statLabel: {
-    color: colors.textTertiary,
-    fontSize: 12,
-    letterSpacing: 0.3,
-  },
-  statHint: {
-    color: colors.textTertiary,
-    fontSize: 11,
   },
   error: {
     color: colors.warning,
