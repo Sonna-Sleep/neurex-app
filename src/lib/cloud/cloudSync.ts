@@ -251,6 +251,14 @@ export type FinalizeInput = {
   endMs: number;
 };
 
+function recordingLabel(startMs: number): string {
+  const d = new Date(startMs);
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(
+    d.getMinutes(),
+  )}`;
+}
+
 /** Read the device/scale provenance the recording stamped locally (meta.json +
  *  scale.json) plus the tester log, and assemble the sessions metadata columns.
  *  Returns {} if nothing is available (older recordings) — never throws. */
@@ -321,7 +329,10 @@ export async function finalizeSession(input: FinalizeInput, prefix: string): Pro
     end_ms: input.endMs,
     tib: Math.max(0, (input.endMs - input.startMs) / 60000),
   };
-  const full = { ...core, ...readFinalizeMetadata(input.sessionId) };
+  const readable = {
+    recording_label: recordingLabel(input.startMs),
+  };
+  const full = { ...core, ...readable, ...readFinalizeMetadata(input.sessionId) };
   let { error } = await supabase.from('sessions').insert(full);
   if (error && isMissingColumnError(error)) {
     if (__DEV__)

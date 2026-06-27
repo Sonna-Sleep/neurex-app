@@ -16,6 +16,16 @@ export function colorFromSerial(serial?: string | null): string {
   return word && (KNOWN_COLORS as readonly string[]).includes(word) ? word : 'UNKNOWN';
 }
 
+function deviceLabelFromColor(color: string): string | null {
+  if (!color || color === 'UNKNOWN') return null;
+  return color === 'LT' ? 'LT' : color.charAt(0) + color.slice(1).toLowerCase();
+}
+
+function cleanDisplayName(serial?: string | null): string | null {
+  const s = serial?.trim();
+  return s ? s : null;
+}
+
 /** Recording-conditions the tester logs (the firmware can't know these). */
 export type TesterLog = {
   electrodeType?: string;
@@ -67,9 +77,12 @@ export function buildSessionMetadata(opts: {
   appBuild?: number | null;
 }): Record<string, unknown> {
   const { deviceId, serial, scale, testerLog, appBuild } = opts;
+  const deviceColor = colorFromSerial(serial);
   const out: Record<string, unknown> = {
     device_id: deviceId ?? null,
-    device_color: colorFromSerial(serial),
+    device_color: deviceColor,
+    device_label: deviceLabelFromColor(deviceColor),
+    device_display_name: cleanDisplayName(serial),
     app_version: appConfig.expo.version,
     app_build: appBuild !== undefined ? appBuild : (appConfig.expo.android?.versionCode ?? null),
   };
