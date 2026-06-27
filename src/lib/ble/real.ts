@@ -38,6 +38,7 @@ import { encodeRawPacket, rawHeader } from './rawRecord';
 import { FALLBACK_SCALE, parseScaleInfo, scaleProvenance } from './scale';
 import type { DeviceScaleInfo } from './scale';
 import { segObjectName, segThresholdBytes, shouldRollSeg } from './segRoll';
+import { RecordingManifestTracker, readRecordingManifest } from './recordingManifest';
 import { useDiagnostics } from '../../state/diagnostics';
 import type {
   BleClient,
@@ -308,6 +309,8 @@ class RollingSegWriter implements SampleSink {
   private readonly thresholdBytes: number;
   private readonly flushBytes: number;
   private readonly onSegmentClosed?: (seg: SegmentClosed) => void;
+  private readonly onSegmentOpened?: (index: number) => void;
+  private readonly onSegmentBytes?: (bytes: number) => void;
   private current: AppendingFile;
   private index: number;
   private curBytes = 0;
@@ -318,19 +321,27 @@ class RollingSegWriter implements SampleSink {
     thresholdBytes: number,
     flushBytes: number,
     onSegmentClosed?: (seg: SegmentClosed) => void,
+    onSegmentOpened?: (index: number) => void,
+    onSegmentBytes?: (bytes: number) => void,
   ) {
     this.eegDir = eegDir;
     this.index = startIndex;
     this.thresholdBytes = thresholdBytes;
     this.flushBytes = flushBytes;
     this.onSegmentClosed = onSegmentClosed;
+    this.onSegmentOpened = onSegmentOpened;
+    this.onSegmentBytes = onSegmentBytes;
     this.current = AppendingFile.open(eegDir, segObjectName(startIndex), flushBytes);
+    this.onSegmentOpened?.(startIndex);
   }
 
   static open(
     sessionDir: Directory,
     thresholdBytes: number,
     onSegmentClosed?: (seg: SegmentClosed) => void,
+    startIndex?: number,
+    onSegmentOpened?: (index: number) => void,
+    onSegmentBytes?: (bytes: number) => void,
     flushBytes = 2048,
   ): RollingSegWriter {
     // Mirror the cloud layout (<prefix>/segments/eeg/segNNNN.bin) on disk so
@@ -340,10 +351,12 @@ class RollingSegWriter implements SampleSink {
     if (!eegDir.exists) eegDir.create({ intermediates: true });
     return new RollingSegWriter(
       eegDir,
-      nextSegIndex(eegDir),
+      Math.max(startIndex ?? 0, nextSegIndex(eegDir)),
       thresholdBytes,
       flushBytes,
       onSegmentClosed,
+      onSegmentOpened,
+      onSegmentBytes,
     );
   }
 
@@ -354,6 +367,7 @@ class RollingSegWriter implements SampleSink {
   appendChunk(chunk: Uint8Array): void {
     this.current.appendChunk(chunk);
     this.curBytes += chunk.length;
+    this.onSegmentBytes?.(chunk.length);
     // Roll AFTER a whole packet so the boundary lands between samples (lossless).
     if (shouldRollSeg(this.curBytes, this.thresholdBytes)) this.roll();
   }
@@ -367,6 +381,7 @@ class RollingSegWriter implements SampleSink {
     this.curBytes = 0;
     this.current = AppendingFile.open(this.eegDir, segObjectName(this.index), this.flushBytes);
     this.onSegmentClosed?.({ index: closedIndex, uri: closedUri, byteLength: closedBytes });
+    this.onSegmentOpened?.(this.index);
   }
 
   flush(): void {
@@ -546,6 +561,13 @@ export const realBleClient: BleClient = {
         if (!sessionsDir.exists) sessionsDir.create({ intermediates: true });
         const sessionDir = new Directory(sessionsDir, sessionId);
         if (!sessionDir.exists) sessionDir.create();
+        const manifestStartedAtMs = readRecordingManifest(sessionId)?.startedAtMs || Date.now();
+        const manifest = new RecordingManifestTracker({
+          sessionId,
+          startedAtMs: manifestStartedAtMs,
+          sampleRateHz: deviceScale.sampleRateHz,
+          eegRecordBytes: EEG_RECORD_BYTES,
+        });
 
         // Segments-first upload: roll segNNNN.bin chunks that upload +
         // delete-after-confirm DURING the night. EXPO_PUBLIC_CHUNKED_UPLOAD=0
@@ -559,7 +581,13 @@ export const realBleClient: BleClient = {
           ? RollingSegWriter.open(
               sessionDir,
               segThresholdBytes(CHUNK_SECONDS, deviceScale.sampleRateHz),
-              cb.onSegmentClosed,
+              (seg) => {
+                manifest.markSegmentClosed(seg.index, seg.byteLength);
+                cb.onSegmentClosed?.(seg);
+              },
+              manifest.nextSegmentIndex(),
+              (index) => manifest.markSegmentOpened(index),
+              (bytes) => manifest.addCurrentSegmentBytes(bytes),
             )
           : AppendingFile.open(sessionDir, 'EEG.BIN');
 
@@ -608,16 +636,10 @@ export const realBleClient: BleClient = {
           }
         }
 
-        const stats: StreamStats = {
-          packets: 0,
-          samples: 0,
-          drops: 0,
-          dupSkips: 0,
-          lastSeq: null,
-          generation: 0,
-          lastBaseMs: opts?.resumeFromBaseMs ?? null,
-          deviceReboots: 0,
-        };
+        const stats: StreamStats = manifest.stats();
+        if (stats.lastBaseMs == null && opts?.resumeFromBaseMs != null) {
+          stats.lastBaseMs = opts.resumeFromBaseMs;
+        }
         let stopped = false;
         // Set on a fatal write failure (storage full). Distinct from `stopped`
         // (user/teardown) so stop() can still flush+close what fits. Once set,
@@ -673,6 +695,7 @@ export const realBleClient: BleClient = {
           );
           if (!result.ok) {
             stats.drops++;
+            manifest.markDrop();
             cb.onDrop?.(result.reason, stats);
             return;
           }
@@ -693,6 +716,7 @@ export const realBleClient: BleClient = {
                   `(baseMs ${stats.lastBaseMs}→${pkt.baseMs}); kept recording`,
               );
             stats.deviceReboots++;
+            manifest.markReboot();
             stats.lastSeq = null;
             stats.generation = 0;
             pkt.generation = 0;
@@ -701,6 +725,7 @@ export const realBleClient: BleClient = {
             // lastBaseMs to this epoch's baseMs and restarts gap/wrap tracking.
           } else if (resume === 'dup') {
             stats.dupSkips++;
+            manifest.markDuplicate();
             cb.onPacket?.(pkt, stats);
             return;
           }
@@ -744,6 +769,7 @@ export const realBleClient: BleClient = {
             const gap = (pkt.seq - stats.lastSeq - 1) & 0xff;
             if (gap > 0) {
               stats.drops += gap;
+              manifest.markDrop(gap);
               cb.onDrop?.('gap', stats);
             }
             if (pkt.seq < stats.lastSeq) {
@@ -755,6 +781,12 @@ export const realBleClient: BleClient = {
           stats.packets++;
           stats.samples += SAMPLES_PER_PACKET;
           stats.lastBaseMs = pkt.baseMs;
+          manifest.markPacketWritten({
+            seq: pkt.seq,
+            generation: stats.generation,
+            lastBaseMs: pkt.baseMs,
+            bytesWritten: SAMPLES_PER_PACKET * EEG_RECORD_BYTES,
+          });
 
           // Advance the ACK frontier only over in-order packets. The tracker
           // parks on a gap instead of pretending dropped data arrived.
@@ -784,6 +816,7 @@ export const realBleClient: BleClient = {
             }
             try {
               eeg.close();
+              manifest.flush();
             } catch (e) {
               if (__DEV__) console.warn('[ble/real] EEG close failed:', e);
             }

@@ -16,6 +16,7 @@ import appConfig from '../../../app.json';
 
 import { getSupabase } from '../auth/supabase';
 import type { DeviceScaleInfo } from '../ble/scale';
+import { manifestFile } from '../ble/recordingManifest';
 import { supabaseSessionRepo } from '../repos/supabase';
 import type { Session } from '../repos/types';
 import { buildSessionMetadata } from './sessionMetadata';
@@ -402,6 +403,11 @@ export async function transmitSession(input: FinalizeInput): Promise<string> {
     await uploadSidecarIfPresent(prefix, new File(dir, 'scale.json'), 'scale.json');
   } catch (e) {
     if (__DEV__) console.warn('[cloudSync] scale.json upload failed (non-fatal):', e);
+  }
+  try {
+    await uploadSidecarIfPresent(prefix, manifestFile(input.sessionId), 'recording_manifest.json');
+  } catch (e) {
+    if (__DEV__) console.warn('[cloudSync] recording_manifest.json upload failed (non-fatal):', e);
   }
   // App-side BLE/upload forensic sidecar. Best-effort, but written/uploaded
   // before finalize so the backend can include it in the one QC report.

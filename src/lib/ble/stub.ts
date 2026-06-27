@@ -23,6 +23,7 @@ import type {
   StreamStats,
 } from './types';
 import { FALLBACK_SCALE } from './scale';
+import { RecordingManifestTracker, readRecordingManifest } from './recordingManifest';
 
 const FAKE_DEVICE: FoundDevice = {
   deviceId: 'fake-deviceid-Neurex-EEG-STUB',
@@ -81,17 +82,15 @@ export const stubBleClient: BleClient = {
         if (!sessionDir.exists) sessionDir.create();
 
         const eeg = openAppending(sessionDir, 'EEG.BIN');
+        const manifestStartedAtMs = readRecordingManifest(sessionId)?.startedAtMs || Date.now();
+        const manifest = new RecordingManifestTracker({
+          sessionId,
+          startedAtMs: manifestStartedAtMs,
+          sampleRateHz: FALLBACK_SCALE.sampleRateHz,
+          eegRecordBytes: EEG_RECORD_BYTES,
+        });
 
-        const stats: StreamStats = {
-          packets: 0,
-          samples: 0,
-          drops: 0,
-          dupSkips: 0,
-          lastSeq: null,
-          generation: 0,
-          lastBaseMs: null,
-          deviceReboots: 0,
-        };
+        const stats: StreamStats = manifest.stats();
         const startedAt = Date.now();
         let stopped = false;
         let nextSeq = 0;
@@ -122,9 +121,16 @@ export const stubBleClient: BleClient = {
           stats.lastSeq = pkt.seq;
           stats.packets++;
           stats.samples += SAMPLES_PER_PACKET;
+          stats.lastBaseMs = pkt.baseMs;
 
           try {
             eeg.handle.writeBytes(encodePacketEeg(pkt));
+            manifest.markPacketWritten({
+              seq: pkt.seq,
+              generation: stats.generation,
+              lastBaseMs: pkt.baseMs,
+              bytesWritten: SAMPLES_PER_PACKET * EEG_RECORD_BYTES,
+            });
           } catch (e) {
             cb.onError?.(e as Error);
             return;
@@ -141,6 +147,7 @@ export const stubBleClient: BleClient = {
             clearInterval(interval);
             try {
               eeg.handle.close();
+              manifest.flush();
             } catch {
               /* ignore */
             }

@@ -45,6 +45,12 @@ import {
   writeStreamStatsSidecar,
   type StreamStatsStopReason,
 } from '../cloud/streamStatsSidecar';
+import {
+  endMsFromManifest,
+  ensureRecordingManifest,
+  readRecordingManifest,
+  statsFromManifest,
+} from './recordingManifest';
 
 // User-initiated session start: time-bounded so a device that's off or out of
 // range fails fast with an error instead of an infinite spinner. The background
@@ -138,6 +144,18 @@ function freshStats(): StreamStats {
 
 function endMsFromSamples(startedAtMs: number, stats: StreamStats): number {
   return startedAtMs + Math.round((stats.samples / EEG_SAMPLE_RATE_HZ) * 1000);
+}
+
+function statsFromSession(sessionId: string, fallback: StreamStats): StreamStats {
+  const manifest = readRecordingManifest(sessionId);
+  const manifestStats = statsFromManifest(manifest);
+  return manifestStats.samples >= fallback.samples ? manifestStats : fallback;
+}
+
+function endMsFromSession(sessionId: string, startedAtMs: number, fallback: StreamStats): number {
+  const manifest = readRecordingManifest(sessionId);
+  if (manifest && manifest.samplesWritten >= fallback.samples) return endMsFromManifest(manifest);
+  return endMsFromSamples(startedAtMs, fallback);
 }
 
 function makeCallbacks(statsRef: StatsRef): StreamCallbacks {
@@ -247,7 +265,12 @@ export async function startSession(
     throw new UnconfiguredDeviceError();
   }
 
-  const statsRef: StatsRef = { current: freshStats() };
+  const initialManifest = ensureRecordingManifest({
+    sessionId,
+    startedAtMs,
+    sampleRateHz: device.scale.sampleRateHz,
+  });
+  const statsRef: StatsRef = { current: statsFromManifest(initialManifest) };
   const cb = makeCallbacks(statsRef);
   // Drive segments-first upload. Set BEFORE startStream so the first rolled
   // segment has a session context to enqueue against. No-op only in the legacy
@@ -265,11 +288,11 @@ export async function startSession(
   useSession.getState().setStreaming({
     sessionId,
     startedAtMs,
-    packets: 0,
-    samples: 0,
-    drops: 0,
-    lastSeq: null,
-    generation: 0,
+    packets: statsRef.current.packets,
+    samples: statsRef.current.samples,
+    drops: statsRef.current.drops,
+    lastSeq: statsRef.current.lastSeq,
+    generation: statsRef.current.generation,
     connection: 'connected',
     error: null,
   });
@@ -344,7 +367,12 @@ export async function resumeSessionAfterRestore(meta: RecordingMeta): Promise<vo
     // Restored peripheral connects fast (already linked at the OS level). No
     // timeout — this runs backgrounded where the pending connect is desirable.
     const device = await bleClient.connect(deviceId);
-    const statsRef: StatsRef = { current: freshStats() };
+    const initialManifest = ensureRecordingManifest({
+      sessionId,
+      startedAtMs,
+      sampleRateHz: device.scale.sampleRateHz,
+    });
+    const statsRef: StatsRef = { current: statsFromManifest(initialManifest) };
     const cb = makeCallbacks(statsRef);
     // Resume segments-first upload for the restored session (segments roll into
     // the same segments/eeg dir, continuing past existing indices). No-op in the
@@ -360,11 +388,11 @@ export async function resumeSessionAfterRestore(meta: RecordingMeta): Promise<vo
     useSession.getState().setStreaming({
       sessionId,
       startedAtMs,
-      packets: 0,
-      samples: 0,
-      drops: 0,
-      lastSeq: null,
-      generation: 0,
+      packets: statsRef.current.packets,
+      samples: statsRef.current.samples,
+      drops: statsRef.current.drops,
+      lastSeq: statsRef.current.lastSeq,
+      generation: statsRef.current.generation,
       connection: 'connected',
       error: null,
     });
@@ -538,8 +566,9 @@ async function failSession(message: string): Promise<void> {
   }
   active.disconnectSub?.remove();
   active.disconnectSub = null;
-  const stats = await active.handle.stop().catch(() => active?.statsRef.current ?? freshStats());
-  const endMs = endMsFromSamples(active.startedAtMs, stats);
+  const stoppedStats = await active.handle.stop().catch(() => active?.statsRef.current ?? freshStats());
+  const stats = statsFromSession(active.sessionId, stoppedStats);
+  const endMs = endMsFromSession(active.sessionId, active.startedAtMs, stats);
   writeSessionMeta({ ...active.meta, endMs });
   await writeStreamStatsSidecar({
     sessionId: active.sessionId,
@@ -578,8 +607,9 @@ async function endSessionAuto(reason: 'battery' | 'device-lost'): Promise<void> 
   session.batteryUnsub?.();
   clearInterval(session.statsTimer);
   if (session.watchdogTimer) clearInterval(session.watchdogTimer);
-  const stats = await session.handle.stop().catch(() => session.statsRef.current);
-  const endMs = endMsFromSamples(session.startedAtMs, stats);
+  const stoppedStats = await session.handle.stop().catch(() => session.statsRef.current);
+  const stats = statsFromSession(session.sessionId, stoppedStats);
+  const endMs = endMsFromSession(session.sessionId, session.startedAtMs, stats);
   writeSessionMeta({ ...session.meta, endMs });
   // Drain the final + any queued segments before teardown. No-op in the legacy
   // fallback; anything still unconfirmed stays queued for launch-time recovery.
@@ -620,8 +650,9 @@ export async function stopSession(): Promise<StopResult | null> {
   session.batteryUnsub?.();
   clearInterval(session.statsTimer);
   if (session.watchdogTimer) clearInterval(session.watchdogTimer);
-  const stats = await session.handle.stop().catch(() => session.statsRef.current);
-  const endMs = endMsFromSamples(session.startedAtMs, stats);
+  const stoppedStats = await session.handle.stop().catch(() => session.statsRef.current);
+  const stats = statsFromSession(session.sessionId, stoppedStats);
+  const endMs = endMsFromSession(session.sessionId, session.startedAtMs, stats);
   writeSessionMeta({ ...session.meta, endMs });
   // handle.stop() flushed + emitted the final segment; drain it (and anything
   // queued) before we tear down, then stop the driver. No-op in the legacy

@@ -21,6 +21,11 @@ import { Directory, File, Paths } from 'expo-file-system';
 import { getSupabase } from '../auth/supabase';
 import { CHUNK_SECONDS, CHUNKED_UPLOAD_ENABLED } from '../config';
 import { estimateChunkedDurationMs, parseSegName } from '../ble/segRoll';
+import {
+  endMsFromManifest,
+  manifestFile,
+  readRecordingManifest,
+} from '../ble/recordingManifest';
 import { addTask } from './chunkQueue';
 import { drainChunks } from './chunkDriver';
 import { fileQueueStore, readSegBytes, sha256Hex } from './chunkUploadStore';
@@ -64,6 +69,7 @@ function readMeta(dir: Directory): ChunkMeta | null {
 }
 
 type LocalSeg = { index: number; uri: string; bytes: number };
+type RemoteSeg = { index: number; bytes: number | null };
 
 /** The live / mid-iOS-restore session id, which must never be swept. Dynamic
  * import because streamController statically imports the chunk driver, so a
@@ -108,6 +114,49 @@ async function currentUid(): Promise<string | null> {
   }
 }
 
+async function listRemoteSegs(prefix: string): Promise<RemoteSeg[]> {
+  const supabase = getSupabase();
+  if (!supabase) return [];
+  const dir = `${prefix}/segments/eeg`;
+  const out: RemoteSeg[] = [];
+  const pageSize = 100;
+  for (let offset = 0; ; offset += pageSize) {
+    const { data, error } = await supabase.storage
+      .from('recordings')
+      .list(dir, { limit: pageSize, offset, sortBy: { column: 'name', order: 'asc' } });
+    if (error || !data) return [];
+    for (const item of data) {
+      const index = parseSegName(item.name);
+      if (index === null) continue;
+      const metadata = (item as { metadata?: Record<string, unknown>; size?: unknown }).metadata;
+      const size =
+        typeof metadata?.size === 'number'
+          ? metadata.size
+          : typeof (item as { size?: unknown }).size === 'number'
+            ? ((item as unknown as { size: number }).size)
+            : null;
+      out.push({ index, bytes: size });
+    }
+    if (data.length < pageSize) break;
+  }
+  return out.sort((a, b) => a.index - b.index);
+}
+
+function endMsFromSegments(
+  startedAtMs: number,
+  segs: readonly { index: number; bytes: number | null }[],
+): number | null {
+  if (segs.length === 0) return null;
+  const allSizesKnown = segs.every((seg) => typeof seg.bytes === 'number' && seg.bytes > 0);
+  const contiguousFromZero = segs.every((seg, i) => seg.index === i);
+  if (allSizesKnown && contiguousFromZero) {
+    const totalBytes = segs.reduce((sum, seg) => sum + (seg.bytes ?? 0), 0);
+    return startedAtMs + Math.round((totalBytes / (250 * 8)) * 1000);
+  }
+  const maxIndex = segs[segs.length - 1].index;
+  return startedAtMs + estimateChunkedDurationMs(maxIndex, CHUNK_SECONDS);
+}
+
 /**
  * Upload a chunked session's remaining on-disk segments at their real seq, then —
  * only when the tail is fully confirmed in the cloud — finalize the session row
@@ -126,6 +175,7 @@ async function settleChunkedSession(
 ): Promise<string | null> {
   const eegDir = segEegDir(new Directory(sessionsRoot(), sessionId));
   const prefix = `${uid}/${readableLabelStable(sessionId, meta.startedAtMs, meta.serial ?? undefined)}`;
+  const manifest = readRecordingManifest(sessionId);
 
   const before = listLocalSegs(eegDir);
   if (before.length > 0) {
@@ -151,9 +201,19 @@ async function settleChunkedSession(
   // Still segments on disk → not fully confirmed; keep them for the next retry.
   if (listLocalSegs(eegDir).length > 0) return null;
 
-  const maxIndex = before.length > 0 ? before[before.length - 1].index : -1;
-  const endMs =
-    endMsOverride ?? meta.endMs ?? meta.startedAtMs + estimateChunkedDurationMs(maxIndex, CHUNK_SECONDS);
+  const remoteSegs = before.length === 0 ? await listRemoteSegs(prefix) : [];
+  const manifestEndMs =
+    manifest && manifest.samplesWritten > 0 ? endMsFromManifest(manifest) : null;
+  const localEndMs = endMsFromSegments(meta.startedAtMs, before);
+  const remoteEndMs = endMsFromSegments(meta.startedAtMs, remoteSegs);
+  const candidates = [
+    manifestEndMs,
+    endMsOverride && endMsOverride > meta.startedAtMs ? endMsOverride : null,
+    meta.endMs && meta.endMs > meta.startedAtMs ? meta.endMs : null,
+    localEndMs,
+    remoteEndMs,
+  ].filter((v): v is number => typeof v === 'number' && Number.isFinite(v));
+  const endMs = candidates.length > 0 ? Math.max(...candidates) : meta.startedAtMs;
 
   // Upload the diagnostic raw ground truth (single RAW.BIN, written lockstep with
   // the eeg chunks) as a parallel 'raw' segment stream. Best-effort: raw must
@@ -173,6 +233,12 @@ async function settleChunkedSession(
     await uploadSidecarIfPresent(prefix, scaleFile, 'scale.json');
   } catch {
     /* non-fatal — older recordings have no sidecar and fall back to the assumed scale */
+  }
+
+  try {
+    await uploadSidecarIfPresent(prefix, manifestFile(sessionId), 'recording_manifest.json');
+  } catch {
+    /* non-fatal — debugging/recovery sidecar only */
   }
 
   // Ship the BLE/upload stats sidecar before finalize when possible. Recovery can
@@ -252,9 +318,14 @@ export async function recoverChunkedSessions(liveSessionId?: string | null): Pro
     // length; the rare already-uploaded-but-unfinalized dir (no local segs) is
     // finalized idempotently regardless so it doesn't dangle.
     const segs = listLocalSegs(segEegDir(item));
+    const manifest = readRecordingManifest(sessionId);
     if (segs.length > 0) {
       const maxIndex = segs[segs.length - 1].index;
-      if (!isStageableDurationMs(estimateChunkedDurationMs(maxIndex, CHUNK_SECONDS))) continue;
+      const inferredEndMs =
+        manifest && manifest.samplesWritten > 0
+          ? endMsFromManifest(manifest)
+          : meta.startedAtMs + estimateChunkedDurationMs(maxIndex, CHUNK_SECONDS);
+      if (!isStageableDurationMs(inferredEndMs - meta.startedAtMs)) continue;
     }
     try {
       await settleChunkedSession(sessionId, meta, uid);

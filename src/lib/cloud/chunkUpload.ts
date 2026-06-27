@@ -24,6 +24,8 @@ export type ChunkUploader = (task: ChunkTask) => Promise<ServerConfirm>;
 export type QueueStore = {
   load(): ChunkTask[];
   save(queue: ChunkTask[]): void;
+  /** Optional hook after the server confirms the exact bytes/hash. */
+  confirmChunk?(task: ChunkTask): void;
   /** Delete the local chunk file after a confirmed upload. */
   deleteChunk(path: string): void;
 };
@@ -58,6 +60,11 @@ export async function drainQueue(upload: ChunkUploader, store: QueueStore): Prom
     }
 
     if (confirmMatches({ bytes: task.bytes, sha256: task.sha256 }, server)) {
+      try {
+        store.confirmChunk?.(task);
+      } catch {
+        /* manifest bookkeeping is best-effort; the server-confirmed chunk is safe */
+      }
       try {
         store.deleteChunk(task.path);
       } catch {

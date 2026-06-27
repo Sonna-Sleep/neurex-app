@@ -19,6 +19,7 @@ import * as Crypto from 'expo-crypto';
 
 import type { ChunkTask } from './chunkQueue';
 import type { QueueStore } from './chunkUpload';
+import { RecordingManifestTracker, readRecordingManifest } from '../ble/recordingManifest';
 
 // One global queue across all sessions — nextTask() orders by (sessionId, seq),
 // so a single file holds every pending chunk (a night is ~16 of them at 30 min).
@@ -63,6 +64,21 @@ export const fileQueueStore: QueueStore = {
     } catch {
       // Best-effort: a failed persist just means we may re-attempt an already-
       // confirmed chunk next launch (idempotent upsert server-side) — never a loss.
+    }
+  },
+  confirmChunk(task: ChunkTask): void {
+    try {
+      const existing = readRecordingManifest(task.sessionId);
+      if (!existing) return;
+      const tracker = new RecordingManifestTracker({
+        sessionId: task.sessionId,
+        startedAtMs: existing.startedAtMs,
+        sampleRateHz: existing.sampleRateHz,
+        eegRecordBytes: existing.eegRecordBytes,
+      });
+      tracker.markUploadedSegment(task.seq, task.bytes);
+    } catch {
+      /* ignore */
     }
   },
   deleteChunk(path: string): void {

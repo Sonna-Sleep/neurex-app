@@ -223,6 +223,8 @@ export function RecordingCard({ idleFooter }: { idleFooter?: React.ReactNode }) 
   // ── Active recording ─────────────────────────────────────────────────────
   if (streaming) {
     const elapsedSec = Math.max(0, Math.floor((nowMs - streaming.startedAtMs) / 1000));
+    const recordedSec = Math.floor((streaming.samples ?? 0) / EEG_SAMPLE_RATE_HZ);
+    const dataLagging = elapsedSec - recordedSec > 10 * 60;
     const isReconnecting = streaming.connection === 'reconnecting';
     return (
       <View style={styles.controlScreen}>
@@ -246,6 +248,11 @@ export function RecordingCard({ idleFooter }: { idleFooter?: React.ReactNode }) 
         </Pressable>
 
         {streaming.error ? <Text style={styles.error}>{streaming.error}</Text> : null}
+        {dataLagging ? (
+          <Secondary style={styles.subtext}>
+            The headband is not sending enough EEG data. Keep the phone nearby and check the fit.
+          </Secondary>
+        ) : null}
         {error ? <Text style={styles.error}>{error}</Text> : null}
       </View>
     );
