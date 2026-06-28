@@ -68,6 +68,7 @@ function DeviceIdentity({
     <View style={styles.deviceIdentity}>
       <View style={styles.deviceRow}>
         <View style={styles.deviceText}>
+          <Text style={styles.deviceStatus}>Last paired</Text>
           <Text style={styles.deviceName} numberOfLines={1} adjustsFontSizeToFit>
             {serial ?? 'Neurex device'}
           </Text>
@@ -80,7 +81,7 @@ function DeviceIdentity({
           hitSlop={10}
           style={styles.changeButton}
         >
-          <Text style={styles.changeText}>Change</Text>
+          <Text style={styles.changeText}>Switch</Text>
         </Pressable>
       </View>
     </View>
@@ -148,6 +149,14 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     fontWeight: '600',
     textAlign: 'center',
+  },
+  deviceStatus: {
+    color: colors.textTertiary,
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: '600',
+    textAlign: 'center',
+    textTransform: 'uppercase',
   },
   deviceMeta: {
     color: colors.textTertiary,
