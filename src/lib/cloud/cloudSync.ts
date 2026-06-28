@@ -75,51 +75,60 @@ function withUploadLock<T>(fn: () => Promise<T>): Promise<T> {
   });
 }
 
+function datePart(d: Date): string {
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+function timePart(d: Date): string {
+  const hours = d.getHours();
+  const hour12 = hours % 12 || 12;
+  const minutes = String(d.getMinutes()).padStart(2, '0');
+  const ampm = hours < 12 ? 'AM' : 'PM';
+  return `${hour12}-${minutes}${ampm}`;
+}
+
+function shortSessionId(sessionId: string): string {
+  return sessionId.replace(/-/g, '').slice(0, 6) || 'session';
+}
+
+function deviceTag(serial?: string): string {
+  const trimmed = serial?.trim();
+  if (!trimmed) return 'Device';
+  const withoutBrand = trimmed.replace(/^Neurex[\s-]*/i, '').trim();
+  const display = withoutBrand || trimmed;
+  const safe = display.replace(/[^A-Za-z0-9]+/g, '');
+  return safe || 'Device';
+}
+
 /**
  * Human-readable, collision-proof storage folder name for a recording:
- *   2026-06-03_2014_6m1s_3f9ac1   (date _ HHMM _ length _ short-id)
- * The 6-char id (from the session UUID) guarantees uniqueness even for two
- * recordings in the same minute; the rest is for the eye when browsing Storage.
- * Account isolation stays the opaque {user_id} parent folder — no PII in paths.
+ *   2026-06-27_4-27PM_White_d679e2   (date _ local time _ device _ short-id)
+ * The short id from the session UUID guarantees uniqueness even for two
+ * recordings from the same device in the same minute. Account isolation stays
+ * the opaque {user_id} parent folder — no PII in paths.
  */
 export function readableLabel(
   sessionId: string,
   startMs: number,
-  endMs: number,
+  _endMs: number,
   serial?: string,
 ): string {
   const d = new Date(startMs);
-  const p = (n: number) => String(n).padStart(2, '0');
-  const date = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
-  const time = `${p(d.getHours())}${p(d.getMinutes())}`;
-  const sec = Math.max(0, Math.round((endMs - startMs) / 1000));
-  const len = sec >= 60 ? `${Math.floor(sec / 60)}m${sec % 60}s` : `${sec}s`;
-  // Tag the folder with the serial's tail when available; otherwise fall back
-  // to the session short-id.
-  const tag = serial
-    ? serial.replace(/[^A-Za-z0-9]/g, '').slice(-6) || 'rec'
-    : sessionId.replace(/-/g, '').slice(0, 6) || 'nodate';
-  return `${date}_${time}_${len}_${tag}`;
+  return `${datePart(d)}_${timePart(d)}_${deviceTag(serial)}_${shortSessionId(sessionId)}`;
 }
 
 /**
  * Length-free storage label for a recording whose end isn't known yet:
- *   2026-06-03_2014_3f9ac1   (date _ HHMM _ short-id/serial-tail)
+ *   2026-06-27_4-27PM_White_d679e2   (date _ local time _ device _ short-id)
  * Segments-first upload ships chunks DURING the night — before endMs exists —
  * so the prefix must be derivable at session start and stay STABLE for every
- * chunk + the eventual finalize. The recording length (cosmetic, "for the eye")
- * is dropped from the folder name; the DB row still carries start_ms/end_ms. Used
- * by the chunk driver; the legacy post-session EEG.BIN path keeps readableLabel().
+ * chunk + the eventual finalize. The DB row carries start_ms/end_ms; the Storage
+ * folder carries a readable local start time, device tag, and short session id.
  */
 export function readableLabelStable(sessionId: string, startMs: number, serial?: string): string {
   const d = new Date(startMs);
-  const p = (n: number) => String(n).padStart(2, '0');
-  const date = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
-  const time = `${p(d.getHours())}${p(d.getMinutes())}`;
-  const tag = serial
-    ? serial.replace(/[^A-Za-z0-9]/g, '').slice(-6) || 'rec'
-    : sessionId.replace(/-/g, '').slice(0, 6) || 'nodate';
-  return `${date}_${time}_${tag}`;
+  return `${datePart(d)}_${timePart(d)}_${deviceTag(serial)}_${shortSessionId(sessionId)}`;
 }
 
 export class NotAuthedError extends Error {
@@ -379,7 +388,7 @@ export async function transmitSession(input: FinalizeInput): Promise<string> {
   }
 
   // {user_id}/{readable label} — account folder stays the opaque uid; the
-  // session folder is human-readable date_time_length_shortid.
+  // session folder is human-readable date_time_device_shortid.
   const uid = await currentUserId();
   const prefix = `${uid}/${readableLabel(input.sessionId, input.startMs, input.endMs)}`;
 
