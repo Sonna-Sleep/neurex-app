@@ -7,9 +7,8 @@
 //
 // `react-native-ble-plx` is a native module that is unavailable in Expo Go
 // (which doesn't bundle the native code). Construction is wrapped in
-// try/catch so the Expo Go flow degrades to `manager = null` and the
-// rest of the app still loads. EAS development builds get the real
-// BleManager.
+// try/catch so the app can show an honest unsupported-BLE state instead of
+// crashing. EAS development/production builds get the real BleManager.
 
 import { onIosStateRestored } from './wakeHandler';
 import { NEUREX_BLE_RESTORE_IDENTIFIER } from './constants';
@@ -40,7 +39,7 @@ try {
   if (__DEV__) {
     console.warn(
       '[ble/manager] BleManager not constructed — likely Expo Go ' +
-        '(no native module). The app will run in stub mode.',
+        '(no native module). Real BLE is unavailable.',
       e,
     );
   }
@@ -48,8 +47,8 @@ try {
 
 /**
  * Returns the singleton BleManager, or null when running in an environment
- * that doesn't include the native module (Expo Go). Callers MUST handle the
- * null case — typically by falling back to the stub BleClient.
+ * that doesn't include the native module (Expo Go). Callers MUST handle null as
+ * unsupported BLE.
  */
 export function getBleManager(): Manager | null {
   return manager;

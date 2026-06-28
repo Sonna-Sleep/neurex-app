@@ -90,7 +90,7 @@ type ActiveSession = {
   statsTimer: ReturnType<typeof setInterval>;
   // Level-based data-stall watchdog. Forces a reconnect when packets stop
   // arriving while the link still reports connected (firmware hang). Always a
-  // live interval while recording (a no-op tick on the stub/Expo-Go path);
+  // live interval while recording (a no-op tick when native BLE is unavailable);
   // nulled out by failSession after a fatal storage error.
   watchdogTimer: ReturnType<typeof setInterval> | null;
   cb: StreamCallbacks;
@@ -221,7 +221,7 @@ function startWatchdog(): ReturnType<typeof setInterval> {
   return setInterval(() => {
     if (!active || active.userStopped) return;
     const manager = getBleManager();
-    if (!manager) return; // stub / Expo Go — no native link to cancel
+    if (!manager) return; // native BLE unavailable — no native link to cancel
     const tick = stallTick(wd, active.statsRef.current.packets, active.reconnecting);
     wd = tick.state;
     if (!tick.forceReconnect) return;
@@ -435,7 +435,7 @@ export async function resumeSessionAfterRestore(meta: RecordingMeta): Promise<vo
 function registerDisconnectWatch(): void {
   if (!active) return;
   const manager = getBleManager();
-  if (!manager) return; // stub / Expo Go — no native disconnect events
+  if (!manager) return; // native BLE unavailable — no native disconnect events
   const session = active;
   session.disconnectSub?.remove();
   session.disconnectSub = manager.onDeviceDisconnected(session.deviceId, () => {

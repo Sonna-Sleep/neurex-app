@@ -8,12 +8,9 @@
 
 import { getBleManager } from './manager';
 import { realBleClient } from './real';
-import { stubBleClient } from './stub';
-import { ALLOW_DEV_BYPASS } from '../config';
 import type { BleClient } from './types';
 
 export * from './types';
-export { stubBleClient } from './stub';
 export { realBleClient } from './real';
 export { checkBleAvailability, openSettingsForBluetooth } from './permissions';
 export type { BleAvailability } from './permissions';
@@ -29,8 +26,6 @@ const unavailableBleClient: BleClient = {
   },
 };
 
-// Pick real on dev-client / production builds (native module loaded). The stub
-// is allowed only in dev/test-bypass builds; production must fail closed instead
-// of silently generating synthetic EEG if the native BLE module is missing.
-export const isBleStubMode = !manager && ALLOW_DEV_BYPASS;
-export const bleClient = manager ? realBleClient : isBleStubMode ? stubBleClient : unavailableBleClient;
+// Pick the real BLE client only. If the native module is missing, fail closed
+// instead of generating synthetic EEG or showing a fake device.
+export const bleClient = manager ? realBleClient : unavailableBleClient;

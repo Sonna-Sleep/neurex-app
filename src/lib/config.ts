@@ -13,9 +13,6 @@ export const MODAL_ENDPOINT_URL =
   process.env.EXPO_PUBLIC_MODAL_ENDPOINT_URL ||
   'https://goda-smulk--neurex-backend-fastapi-app.modal.run';
 
-export const ALLOW_DEV_BYPASS =
-  (typeof __DEV__ !== 'undefined' && __DEV__) || process.env.EXPO_PUBLIC_DEV_BYPASS === '1';
-
 // Segments-first overnight upload. ON by default: the app writes rolling
 // segNNNN.bin files, uploads each closed segment during the recording, and
 // deletes only after the backend confirms byte+hash match. Set
