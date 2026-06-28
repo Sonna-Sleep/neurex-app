@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Neurex",
-    "slug": "neurex-app",
+    "slug": "neurex",
     "scheme": "neurex",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -95,15 +95,15 @@
     },
     "extra": {
       "eas": {
-        "projectId": "fe1a23fd-e318-40fe-82d4-a1c332761c7d"
+        "projectId": "27005611-7811-4600-bd9b-35c08958b7fd"
       }
     },
-    "owner": "aleksas2006",
+    "owner": "neurexs-organization",
     "runtimeVersion": {
       "policy": "appVersion"
     },
     "updates": {
-      "url": "https://u.expo.dev/fe1a23fd-e318-40fe-82d4-a1c332761c7d"
+      "url": "https://u.expo.dev/27005611-7811-4600-bd9b-35c08958b7fd"
     }
   }
 }
