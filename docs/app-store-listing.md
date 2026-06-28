@@ -87,7 +87,6 @@ The app is a companion to a **hardware EEG sleep mask** the reviewer won't have.
 ---
 
 ## Pre-submit build checklist (in the IPA you upload)
-- [ ] `EXPO_PUBLIC_DEV_BYPASS=0` (hides the "skip login (test)" button in release)
 - [ ] `EXPO_PUBLIC_MODAL_ENDPOINT_URL` set in the build env (immediate-delete needs it)
 - [ ] `EXPO_PUBLIC_SUPABASE_URL` / `EXPO_PUBLIC_SUPABASE_ANON_KEY` set
 - [x] Privacy Policy hosted (`https://aleksaspetro.github.io/neurex-legal/`) + `src/lib/legal.ts` wired — just paste the URL into ASC

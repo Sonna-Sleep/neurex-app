@@ -28,7 +28,8 @@ type DriverCtx = { sessionId: string; startedAtMs: number; serial?: string | nul
 
 let ctx: DriverCtx | null = null;
 let timer: ReturnType<typeof setInterval> | null = null;
-let draining: Promise<void> | null = null;
+let backgroundDraining: Promise<void> | null = null;
+const sessionDrains = new Map<string, Promise<void>>();
 const pendingEnqueues = new Set<Promise<void>>();
 
 // Backstop drain cadence = one chunk interval (>= 30 s). Each closed segment also
@@ -74,32 +75,52 @@ const uploader = makeIngestUploader({
   },
 });
 
-/** Drain the queue once: upload each chunk in order, delete-after-confirm. A
- * session-scoped drain is used at End so an old stuck session cannot block the
- * just-finished recording from uploading/finalizing. */
-export async function drainChunks(sessionId?: string): Promise<void> {
-  if (draining) await draining;
-  draining = (async () => {
-    try {
-      const queue = fileQueueStore.load();
-      const queued = sessionId ? queue.filter((t) => t.sessionId === sessionId).length : queue.length;
-      if (__DEV__) {
-        console.log(`[F2C] drain start session=${sessionId ?? 'all'} queued=${queued}`);
-      }
-      const r = await drainQueue(uploader, fileQueueStore, { sessionId });
-      if (__DEV__) {
-        console.log(
-          `[F2C] drain done session=${sessionId ?? 'all'} uploaded=${r.uploaded} kept=${r.kept} stopped=${r.stopped}`,
-        );
-      }
-    } catch (e) {
-      console.warn('[F2C] drain error:', e);
-    }
-  })();
+async function runDrain(sessionId?: string): Promise<void> {
   try {
-    await draining;
+    const queue = fileQueueStore.load();
+    const queued = sessionId ? queue.filter((t) => t.sessionId === sessionId).length : queue.length;
+    if (__DEV__) {
+      console.log(`[F2C] drain start session=${sessionId ?? 'all'} queued=${queued}`);
+    }
+    const r = await drainQueue(uploader, fileQueueStore, { sessionId });
+    if (__DEV__) {
+      console.log(
+        `[F2C] drain done session=${sessionId ?? 'all'} uploaded=${r.uploaded} kept=${r.kept} stopped=${r.stopped}`,
+      );
+    }
+  } catch (e) {
+    console.warn('[F2C] drain error:', e);
+  }
+}
+
+/** Drain the queue once: upload each chunk in order, delete-after-confirm.
+ * Session-scoped drains are independent from the background drain, so pressing
+ * End never waits behind an old/stuck upload from another session. Drains for
+ * the same session are still serialized to avoid double work on the same tail. */
+export async function drainChunks(sessionId?: string): Promise<void> {
+  if (sessionId) {
+    for (;;) {
+      const existing = sessionDrains.get(sessionId);
+      if (!existing) break;
+      await existing;
+    }
+    const p = runDrain(sessionId);
+    sessionDrains.set(sessionId, p);
+    try {
+      await p;
+    } finally {
+      if (sessionDrains.get(sessionId) === p) sessionDrains.delete(sessionId);
+    }
+    return;
+  }
+
+  while (backgroundDraining) await backgroundDraining;
+  const p = runDrain();
+  backgroundDraining = p;
+  try {
+    await p;
   } finally {
-    draining = null;
+    if (backgroundDraining === p) backgroundDraining = null;
   }
 }
 

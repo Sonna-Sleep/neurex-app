@@ -78,7 +78,6 @@ Set these in `.env`:
 | `EXPO_PUBLIC_SUPABASE_URL` | Supabase project URL |
 | `EXPO_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon/public key |
 | `EXPO_PUBLIC_MODAL_ENDPOINT_URL` | Deployed staging endpoint (neurex-backend) |
-| `EXPO_PUBLIC_DEV_BYPASS` | Optional. `1` shows a "skip login" button (testing only) |
 
 ## Running
 

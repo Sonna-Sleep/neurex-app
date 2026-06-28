@@ -29,6 +29,10 @@ function queueFile(): File {
   return new File(Paths.document, QUEUE_FILE);
 }
 
+function existingTasks(queue: readonly ChunkTask[]): ChunkTask[] {
+  return queue.filter((task) => new File(task.path).exists);
+}
+
 function isChunkTask(t: unknown): t is ChunkTask {
   const o = t as ChunkTask;
   return (
@@ -52,7 +56,7 @@ export const fileQueueStore: QueueStore = {
       if (!f.exists) return [];
       const parsed: unknown = JSON.parse(f.textSync());
       if (!Array.isArray(parsed)) return [];
-      return parsed.filter(isChunkTask).filter((task) => new File(task.path).exists);
+      return existingTasks(parsed.filter(isChunkTask));
     } catch {
       return [];
     }
@@ -61,7 +65,7 @@ export const fileQueueStore: QueueStore = {
     try {
       const f = queueFile();
       if (!f.exists) f.create();
-      f.write(JSON.stringify(queue));
+      f.write(JSON.stringify(existingTasks(queue)));
     } catch {
       // Best-effort: a failed persist just means we may re-attempt an already-
       // confirmed chunk next launch (idempotent upsert server-side) — never a loss.

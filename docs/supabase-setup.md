@@ -23,7 +23,6 @@ Set these in `.env` for local development and in EAS for release builds:
 | `EXPO_PUBLIC_SUPABASE_URL` | Supabase project URL |
 | `EXPO_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon/public key |
 | `EXPO_PUBLIC_MODAL_ENDPOINT_URL` | Deployed `neurex-backend` endpoint |
-| `EXPO_PUBLIC_DEV_BYPASS` | Optional. `1` shows a dev-only skip-login button |
 
 ## Current Data Flow
 
