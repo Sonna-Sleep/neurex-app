@@ -20,6 +20,7 @@ import { startSession, stopSession } from '../../../lib/ble/streamController';
 import { EEG_SAMPLE_RATE_HZ } from '../../../lib/ble/constants';
 import { transmitSession } from '../../../lib/cloud/cloudSync';
 import { MIN_STAGING_MIN, MIN_STAGING_SEC } from '../../../lib/cloud/recoveryMath';
+import { exportRecordingBundle } from '../../../lib/files/recordingBundleExport';
 import { TesterLogSheet } from './TesterLogSheet';
 import { useDiagnostics } from '../../../state/diagnostics';
 import { shouldCaptureRaw } from '../../../lib/ble/diagnosticCapture';
@@ -54,6 +55,7 @@ export function RecordingCard({ idleFooter }: { idleFooter?: React.ReactNode }) 
   // Cloud sync of the just-finished recording. This screen only reflects the
   // phone handoff (upload + sessions row finalize), not backend QC outcome.
   const [sync, setSync] = useState<'idle' | 'uploading' | 'done' | 'error'>('idle');
+  const [exporting, setExporting] = useState(false);
   // Re-render once per second so the elapsed timer ticks even when no
   // packet arrives, while keeping render pure.
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -152,6 +154,28 @@ export function RecordingCard({ idleFooter }: { idleFooter?: React.ReactNode }) 
       setError((e as Error).message);
     }
   }, []);
+
+  const onExportBundle = useCallback(async () => {
+    if (!saved || exporting) return;
+    try {
+      if (!(await Sharing.isAvailableAsync())) {
+        setError('Sharing is not available on this device.');
+        return;
+      }
+      setExporting(true);
+      setError(null);
+      const bundle = await exportRecordingBundle(saved.sessionId);
+      await Sharing.shareAsync(bundle.uri, {
+        mimeType: 'application/zip',
+        UTI: 'com.pkware.zip-archive',
+        dialogTitle: 'Export recording bundle',
+      });
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setExporting(false);
+    }
+  }, [saved, exporting]);
 
   // Ship the just-finished recording to the cloud: upload as segments, finalize
   // the sessions row, and delete the local copy only after cloud confirmation.
@@ -269,6 +293,16 @@ export function RecordingCard({ idleFooter }: { idleFooter?: React.ReactNode }) 
             <Button label="Retry cloud sync" onPress={onSyncToCloud} />
           ) : null}
 
+          {sync !== 'done' && sync !== 'uploading' ? (
+            <Button
+              label={exporting ? 'Preparing export...' : 'Export recording'}
+              variant="ghost"
+              onPress={onExportBundle}
+              disabled={exporting}
+              loading={exporting}
+            />
+          ) : null}
+
           {__DEV__ ? (
             <Button label="Share debug file" variant="ghost" onPress={() => onShare(saved.eegUri)} />
           ) : null}
@@ -279,6 +313,7 @@ export function RecordingCard({ idleFooter }: { idleFooter?: React.ReactNode }) 
               setSaved(null);
               setError(null);
               setSync('idle');
+              setExporting(false);
             }}
           />
         </Card>
