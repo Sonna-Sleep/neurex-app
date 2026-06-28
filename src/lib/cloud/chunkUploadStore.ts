@@ -51,7 +51,8 @@ export const fileQueueStore: QueueStore = {
       const f = queueFile();
       if (!f.exists) return [];
       const parsed: unknown = JSON.parse(f.textSync());
-      return Array.isArray(parsed) ? parsed.filter(isChunkTask) : [];
+      if (!Array.isArray(parsed)) return [];
+      return parsed.filter(isChunkTask).filter((task) => new File(task.path).exists);
     } catch {
       return [];
     }

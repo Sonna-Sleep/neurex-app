@@ -579,7 +579,7 @@ async function failSession(message: string): Promise<void> {
   }).catch(() => undefined);
   // Best-effort: ship whatever segments are already queued (uploading frees the
   // disk that just filled), then stop the driver. No-op in the legacy fallback.
-  void stopChunkDriver();
+  void stopChunkDriver(active.sessionId);
   stopForegroundService();
   useSession.getState().patchStreaming({ connection: 'lost', error: message });
 }
@@ -613,7 +613,7 @@ async function endSessionAuto(reason: 'battery' | 'device-lost'): Promise<void> 
   writeSessionMeta({ ...session.meta, endMs });
   // Drain the final + any queued segments before teardown. No-op in the legacy
   // fallback; anything still unconfirmed stays queued for launch-time recovery.
-  await stopChunkDriver();
+  await stopChunkDriver(session.sessionId);
   await writeStreamStatsSidecar({
     sessionId: session.sessionId,
     startedAtMs: session.startedAtMs,
@@ -657,7 +657,7 @@ export async function stopSession(): Promise<StopResult | null> {
   // handle.stop() flushed + emitted the final segment; drain it (and anything
   // queued) before we tear down, then stop the driver. No-op in the legacy
   // fallback.
-  await stopChunkDriver();
+  await stopChunkDriver(session.sessionId);
   await writeStreamStatsSidecar({
     sessionId: session.sessionId,
     startedAtMs: session.startedAtMs,

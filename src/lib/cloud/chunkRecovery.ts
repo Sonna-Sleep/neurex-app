@@ -195,7 +195,7 @@ async function settleChunkedSession(
       });
     }
     fileQueueStore.save(queue);
-    await drainChunks();
+    await drainChunks(sessionId);
   }
 
   // Still segments on disk → not fully confirmed; keep them for the next retry.

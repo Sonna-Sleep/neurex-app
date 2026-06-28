@@ -38,6 +38,9 @@ q = addTask(q, task('s1', 5));
 q = addTask(q, task('s1', 2));
 assert.equal(nextTask(q)?.sessionId, 's1');
 assert.equal(nextTask(q)?.seq, 2);
+assert.equal(nextTask(q, 's2')?.sessionId, 's2');
+assert.equal(nextTask(q, 's2')?.seq, 0);
+assert.equal(nextTask(q, 'missing'), null);
 assert.equal(nextTask([]), null);
 
 // removeTask

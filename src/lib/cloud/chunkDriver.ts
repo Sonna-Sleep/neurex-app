@@ -28,7 +28,7 @@ type DriverCtx = { sessionId: string; startedAtMs: number; serial?: string | nul
 
 let ctx: DriverCtx | null = null;
 let timer: ReturnType<typeof setInterval> | null = null;
-let draining = false;
+let draining: Promise<void> | null = null;
 const pendingEnqueues = new Set<Promise<void>>();
 
 // Backstop drain cadence = one chunk interval (>= 30 s). Each closed segment also
@@ -74,20 +74,32 @@ const uploader = makeIngestUploader({
   },
 });
 
-/** Drain the queue once: upload each chunk in order, delete-after-confirm. Safe
- * to call concurrently — overlapping calls coalesce via the `draining` guard. */
-export async function drainChunks(): Promise<void> {
-  if (draining) return;
-  draining = true;
+/** Drain the queue once: upload each chunk in order, delete-after-confirm. A
+ * session-scoped drain is used at End so an old stuck session cannot block the
+ * just-finished recording from uploading/finalizing. */
+export async function drainChunks(sessionId?: string): Promise<void> {
+  if (draining) await draining;
+  draining = (async () => {
+    try {
+      const queue = fileQueueStore.load();
+      const queued = sessionId ? queue.filter((t) => t.sessionId === sessionId).length : queue.length;
+      if (__DEV__) {
+        console.log(`[F2C] drain start session=${sessionId ?? 'all'} queued=${queued}`);
+      }
+      const r = await drainQueue(uploader, fileQueueStore, { sessionId });
+      if (__DEV__) {
+        console.log(
+          `[F2C] drain done session=${sessionId ?? 'all'} uploaded=${r.uploaded} kept=${r.kept} stopped=${r.stopped}`,
+        );
+      }
+    } catch (e) {
+      console.warn('[F2C] drain error:', e);
+    }
+  })();
   try {
-    const queued = fileQueueStore.load().length;
-    if (__DEV__) console.log(`[F2C] drain start queued=${queued}`);
-    const r = await drainQueue(uploader, fileQueueStore);
-    if (__DEV__) console.log(`[F2C] drain done uploaded=${r.uploaded} kept=${r.kept} stopped=${r.stopped}`);
-  } catch (e) {
-    console.warn('[F2C] drain error:', e);
+    await draining;
   } finally {
-    draining = false;
+    draining = null;
   }
 }
 
@@ -157,12 +169,12 @@ export function startChunkDriver(c: DriverCtx): void {
 
 /** Stop driving: wait for any in-flight enqueue (so the final segment is queued),
  * then do one last drain. Leaves anything unconfirmed queued for recovery. */
-export async function stopChunkDriver(): Promise<void> {
+export async function stopChunkDriver(sessionId?: string): Promise<void> {
   if (timer) {
     clearInterval(timer);
     timer = null;
   }
   ctx = null;
   if (pendingEnqueues.size > 0) await Promise.allSettled([...pendingEnqueues]);
-  await drainChunks();
+  await drainChunks(sessionId);
 }

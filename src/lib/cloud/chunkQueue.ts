@@ -35,11 +35,13 @@ export function removeTask(queue: readonly ChunkTask[], sessionId: string, seq: 
   return queue.filter((t) => !(t.sessionId === sessionId && t.seq === seq));
 }
 
-/** FIFO next chunk to upload — oldest session, then lowest seq, so a night uploads
- *  in order and the backend reads a contiguous segment run. */
-export function nextTask(queue: readonly ChunkTask[]): ChunkTask | null {
-  if (queue.length === 0) return null;
-  return [...queue].sort((a, b) =>
+/** FIFO next chunk to upload — oldest session, then lowest seq. When a sessionId
+ * is provided (manual final sync), old stuck sessions cannot block the recording
+ * the user just ended. */
+export function nextTask(queue: readonly ChunkTask[], sessionId?: string): ChunkTask | null {
+  const candidates = sessionId ? queue.filter((t) => t.sessionId === sessionId) : [...queue];
+  if (candidates.length === 0) return null;
+  return candidates.sort((a, b) =>
     a.sessionId === b.sessionId ? a.seq - b.seq : a.sessionId < b.sessionId ? -1 : 1,
   )[0];
 }

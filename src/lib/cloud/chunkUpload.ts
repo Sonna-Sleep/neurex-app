@@ -31,6 +31,7 @@ export type QueueStore = {
 };
 
 export type DrainResult = { uploaded: number; kept: number; stopped: 'empty' | 'offline' | 'mismatch' };
+export type DrainOptions = { sessionId?: string };
 
 export function enqueueChunk(store: QueueStore, task: ChunkTask): void {
   store.save(addTask(store.load(), task));
@@ -42,11 +43,15 @@ export function enqueueChunk(store: QueueStore, task: ChunkTask): void {
  * keep it and stop (retry on the next drain). Persists after every chunk so a crash
  * mid-drain resumes cleanly. NEVER deletes a chunk the server didn't confirm.
  */
-export async function drainQueue(upload: ChunkUploader, store: QueueStore): Promise<DrainResult> {
+export async function drainQueue(
+  upload: ChunkUploader,
+  store: QueueStore,
+  opts: DrainOptions = {},
+): Promise<DrainResult> {
   let queue = store.load();
   let uploaded = 0;
   for (;;) {
-    const task = nextTask(queue);
+    const task = nextTask(queue, opts.sessionId);
     if (!task) return { uploaded, kept: 0, stopped: 'empty' };
 
     let server: ServerConfirm;
@@ -56,7 +61,7 @@ export async function drainQueue(upload: ChunkUploader, store: QueueStore): Prom
       // Offline / transient error — keep the chunk, bump its attempt, retry later.
       queue = bumpAttempt(queue, task.sessionId, task.seq);
       store.save(queue);
-      return { uploaded, kept: queue.length, stopped: 'offline' };
+      return { uploaded, kept: keptCount(queue, opts), stopped: 'offline' };
     }
 
     if (confirmMatches({ bytes: task.bytes, sha256: task.sha256 }, server)) {
@@ -78,7 +83,11 @@ export async function drainQueue(upload: ChunkUploader, store: QueueStore): Prom
       // don't spin, and surface it (attempts) rather than silently drop data.
       queue = bumpAttempt(queue, task.sessionId, task.seq);
       store.save(queue);
-      return { uploaded, kept: queue.length, stopped: 'mismatch' };
+      return { uploaded, kept: keptCount(queue, opts), stopped: 'mismatch' };
     }
   }
+}
+
+function keptCount(queue: readonly ChunkTask[], opts: DrainOptions): number {
+  return opts.sessionId ? queue.filter((t) => t.sessionId === opts.sessionId).length : queue.length;
 }

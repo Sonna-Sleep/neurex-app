@@ -67,6 +67,23 @@ const okUpload: ChunkUploader = async () => ({ bytes_received: 1000, sha256: 'aa
     assert.equal(deleted.length, 0, 'NEVER delete before confirm');
   }
 
+  // session-scoped drain: a stale broken session must not block the current one
+  {
+    const stale = { ...task(0), sessionId: 'old', path: '/old0.bin' };
+    const current = { ...task(0), sessionId: 'current', path: '/current0.bin' };
+    const { store, getQ, deleted } = makeStore([stale, current]);
+    const upload: ChunkUploader = async (t) => {
+      if (t.sessionId === 'old') throw new Error('old upload is stuck');
+      return { bytes_received: t.bytes, sha256: t.sha256 };
+    };
+    const r = await drainQueue(upload, store, { sessionId: 'current' });
+    assert.equal(r.uploaded, 1);
+    assert.equal(r.stopped, 'empty');
+    assert.deepEqual(deleted, ['/current0.bin']);
+    assert.equal(getQ().length, 1);
+    assert.equal(getQ()[0].sessionId, 'old');
+  }
+
   // enqueueChunk persists + dedupes
   {
     const { store, getQ } = makeStore();
