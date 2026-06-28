@@ -33,10 +33,11 @@ export const NEUREX_ACK_WRITE_UUID = '6e6b0000-1000-8000-0078-65726e6b0003';
 
 // Scale/DeviceInfo characteristic (READ-only, same 6e6b… family; firmware UUID
 // 6e6b0004). The device serializes its ACTUAL amplitude scale here — µV-per-LSB,
-// PGA gain, VREF, sample rate, channel map, firmware build id — as a 20-byte
-// little-endian struct (see ble/scale.ts for the layout). The app reads it once
-// at connect so the scale is self-describing instead of an assumption that
-// silently breaks when the firmware gain changes. Mirror the layout on nRF5340.
+// PGA gain, VREF, sample rate, channel map, firmware build id — as an append-only
+// little-endian struct. v1 is a 20-byte prefix; current v2 firmware sends 21 bytes
+// with variant_known appended. The app reads it once at connect so the scale is
+// self-describing instead of an assumption that silently breaks when the firmware
+// gain changes. Mirror the layout on nRF5340.
 export const NEUREX_SCALE_INFO_UUID = '6e6b0000-1000-8000-0078-65726e6b0004';
 // Bump in lockstep with NEUREX_SCALE_SCHEMA_VER in firmware neurex_scale.h.
 export const NEUREX_SCALE_INFO_SCHEMA_VER = 2;

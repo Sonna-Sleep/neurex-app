@@ -168,21 +168,81 @@ async function existingSegments(prefix: string, stream: Stream): Promise<Set<str
   return names;
 }
 
-/** Upload one segment with bounded exponential-backoff retry. A transient
- * 4xx/5xx (incl. the token-refresh-race 400) retries that single segment rather
- * than aborting the whole night. Surfaces the HTTP status on final failure. */
-async function uploadChunkWithRetry(path: string, chunk: Uint8Array): Promise<void> {
+function bytesEqual(a: Uint8Array, b: Uint8Array): boolean {
+  if (a.byteLength !== b.byteLength) return false;
+  for (let i = 0; i < a.byteLength; i++) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
+}
+
+async function existingObjectMatches(path: string, chunk: Uint8Array): Promise<boolean | null> {
   const supabase = getSupabase();
   if (!supabase) throw new NotAuthedError();
+  const { data, error } = await supabase.storage.from(RECORDINGS_BUCKET).download(path);
+  if (error || !data) return null;
+  return bytesEqual(new Uint8Array(await data.arrayBuffer()), chunk);
+}
+
+function looksLikeDuplicateObject(error: { status?: number; statusCode?: string | number; message: string }): boolean {
+  const status = Number(error.status ?? error.statusCode);
+  return status === 409 || /already exists|duplicate|conflict/i.test(error.message);
+}
+
+async function uploadObjectNoOverwrite(
+  path: string,
+  chunk: Uint8Array,
+  contentType = 'application/octet-stream',
+): Promise<void> {
+  const supabase = getSupabase();
+  if (!supabase) throw new NotAuthedError();
+
+  const existing = await existingObjectMatches(path, chunk);
+  if (existing === true) return;
+  if (existing === false) throw new Error(`object conflict (${path}): existing bytes differ`);
+
+  const { error } = await supabase.storage
+    .from(RECORDINGS_BUCKET)
+    .upload(path, chunk, { contentType, upsert: false });
+  if (!error) return;
+
+  const e = error as { status?: number; statusCode?: string | number; message: string };
+  if (looksLikeDuplicateObject(e)) {
+    const retryExisting = await existingObjectMatches(path, chunk);
+    if (retryExisting === true) return;
+    if (retryExisting === false) throw new Error(`object conflict (${path}): existing bytes differ`);
+  }
+  throw error;
+}
+
+async function uploadObjectWithOverwrite(
+  path: string,
+  chunk: Uint8Array,
+  contentType = 'application/json',
+): Promise<void> {
+  const supabase = getSupabase();
+  if (!supabase) throw new NotAuthedError();
+  const { error } = await supabase.storage
+    .from(RECORDINGS_BUCKET)
+    .upload(path, chunk, { contentType, upsert: true });
+  if (error) throw error;
+}
+
+/** Upload one numbered segment with bounded exponential-backoff retry. A retry is
+ * idempotent only when the existing object has identical bytes; a different object
+ * at the same segNNNN.bin path is a hard conflict, never overwritten. */
+async function uploadSegmentWithRetry(path: string, chunk: Uint8Array): Promise<void> {
   const MAX = 5;
   let lastMsg = 'unknown error';
   for (let attempt = 0; attempt < MAX; attempt++) {
-    const { error } = await supabase.storage
-      .from(RECORDINGS_BUCKET)
-      .upload(path, chunk, { contentType: 'application/octet-stream', upsert: true });
-    if (!error) return;
-    const e = error as { status?: number; statusCode?: string | number; message: string };
-    lastMsg = `${e.status ?? e.statusCode ?? '?'} ${e.message}`.trim();
+    try {
+      await uploadObjectNoOverwrite(path, chunk);
+      return;
+    } catch (error) {
+      const e = error as { status?: number; statusCode?: string | number; message: string };
+      lastMsg = `${e.status ?? e.statusCode ?? '?'} ${e.message}`.trim();
+      if (/object conflict/i.test(e.message)) break;
+    }
     if (attempt < MAX - 1) await sleep(500 * 2 ** attempt); // 0.5s,1s,2s,4s
   }
   throw new Error(`segment upload failed (${path}) after ${MAX} tries: ${lastMsg}`);
@@ -221,8 +281,14 @@ export async function uploadFileAsSegments(
         const chunk = handle.readBytes(step); // advances offset even when we skip
         if (chunk.length === 0) break; // EOF
         const name = segName(index);
-        if (!already.has(name)) {
-          await uploadChunkWithRetry(`${prefix}/segments/${stream}/${name}`, chunk);
+        const path = `${prefix}/segments/${stream}/${name}`;
+        if (already.has(name)) {
+          const matches = await existingObjectMatches(path, chunk);
+          if (matches !== true) {
+            throw new Error(`segment conflict (${path}): existing bytes differ or cannot be verified`);
+          }
+        } else {
+          await uploadSegmentWithRetry(path, chunk);
           uploaded += 1;
         }
         index += 1;
@@ -248,7 +314,7 @@ export async function uploadSidecarIfPresent(
   const handle = file.open();
   try {
     const bytes = handle.readBytes(1 << 16); // sidecars are < 64 KB
-    await uploadChunkWithRetry(`${prefix}/${name}`, bytes);
+    await uploadObjectWithOverwrite(`${prefix}/${name}`, bytes);
   } finally {
     handle.close();
   }
@@ -402,11 +468,10 @@ export async function transmitSession(input: FinalizeInput): Promise<string> {
   // ({prefix}/segments/raw/segNNNN.bin → backend reads it in order). Present only
   // when raw capture was on. BEST-EFFORT: raw is a debugging bonus and must never
   // block finalizing the night. NOTE: this post-session path (and the eeg upload
-  // above) writes directly to Supabase Storage via uploadChunkWithRetry — there is
-  // NO per-chunk /ingest sha256 verification here; that check exists only for the
-  // live chunked-recording eeg stream (chunkDriver/chunkRecovery → /ingest). The
-  // backend never treats an unverified raw as authoritative (it stages the complete
-  // eeg.bin), so a partial raw can't corrupt the night.
+  // above) writes directly to Supabase Storage with conflict-safe segment paths:
+  // a retry may accept identical existing bytes, but never overwrites different
+  // bytes at the same segNNNN.bin. The live chunked-recording eeg stream still has
+  // the stronger /ingest sha256 confirmation before local delete.
   const rawBin = new File(dir, 'RAW.BIN');
   if (rawBin.exists) {
     try {

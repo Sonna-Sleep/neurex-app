@@ -16,8 +16,8 @@
 //
 // int32 (not packed int24) so the backend decodes it with a plain numpy struct
 // dtype — int24 is exactly representable, so this is lossless. ms mirrors the
-// app's eeg.bin reconstruction (baseMs + sampleIndex), so a backend re-decode of
-// the FP1 channel reproduces eeg.bin byte-for-byte.
+// app's eeg.bin reconstruction (baseMs + sampleIndex * 4 ms), so a backend
+// re-decode of the FP1 channel reproduces eeg.bin byte-for-byte.
 
 import {
   BYTES_PER_FRAME,
