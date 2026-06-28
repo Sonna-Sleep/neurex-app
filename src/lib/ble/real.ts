@@ -24,6 +24,7 @@ import { useSession } from '../../state/session';
 import {
   BATTERY_LEVEL_CHAR_UUID,
   BATTERY_SERVICE_UUID,
+  EEG_PACKET_INTERVAL_MS,
   EEG_SAMPLE_INTERVAL_MS,
   NEUREX_ACK_INTERVAL_MS,
   NEUREX_ACK_WRITE_UUID,
@@ -31,6 +32,7 @@ import {
   NEUREX_SCALE_INFO_UUID,
   NEUREX_SERVICE_UUID,
   SAMPLES_PER_PACKET,
+  TIME_GAP_REPORT_THRESHOLD_MS,
 } from './constants';
 import { shouldCaptureRaw } from './diagnosticCapture';
 import { classifyResume, parsePacket } from './packet';
@@ -764,6 +766,15 @@ export const realBleClient: BleClient = {
           }
 
           // Bytes are on the way to disk — now advance counters + ACK frontier.
+          if (stats.lastBaseMs !== null) {
+            const timeGapMs = pkt.baseMs - (stats.lastBaseMs + EEG_PACKET_INTERVAL_MS);
+            if (timeGapMs >= TIME_GAP_REPORT_THRESHOLD_MS) {
+              stats.timeGapCount++;
+              stats.totalTimeGapMs += timeGapMs;
+              stats.maxTimeGapMs = Math.max(stats.maxTimeGapMs, timeGapMs);
+              manifest.markTimeGap(timeGapMs);
+            }
+          }
           // Detect seq wrap → generation bump.
           if (stats.lastSeq !== null) {
             const gap = (pkt.seq - stats.lastSeq - 1) & 0xff;

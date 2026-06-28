@@ -25,6 +25,9 @@ export type RecordingManifest = {
   drops: number;
   dupSkips: number;
   deviceReboots: number;
+  timeGapCount: number;
+  totalTimeGapMs: number;
+  maxTimeGapMs: number;
   lastSeq: number | null;
   generation: number;
   lastBaseMs: number | null;
@@ -71,6 +74,9 @@ function defaultManifest(input: EnsureManifestInput): RecordingManifest {
     drops: 0,
     dupSkips: 0,
     deviceReboots: 0,
+    timeGapCount: 0,
+    totalTimeGapMs: 0,
+    maxTimeGapMs: 0,
     lastSeq: null,
     generation: 0,
     lastBaseMs: null,
@@ -132,6 +138,9 @@ function normalize(raw: unknown, fallback: EnsureManifestInput): RecordingManife
     drops: num(o.drops),
     dupSkips: num(o.dupSkips),
     deviceReboots: num(o.deviceReboots),
+    timeGapCount: num(o.timeGapCount),
+    totalTimeGapMs: num(o.totalTimeGapMs),
+    maxTimeGapMs: num(o.maxTimeGapMs),
     lastSeq: nullableNum(o.lastSeq),
     generation: num(o.generation),
     lastBaseMs: nullableNum(o.lastBaseMs),
@@ -182,6 +191,9 @@ export function statsFromManifest(manifest: RecordingManifest | null): StreamSta
     lastSeq: manifest?.lastSeq ?? null,
     generation: manifest?.generation ?? 0,
     lastBaseMs: manifest?.lastBaseMs ?? null,
+    timeGapCount: manifest?.timeGapCount ?? 0,
+    totalTimeGapMs: manifest?.totalTimeGapMs ?? 0,
+    maxTimeGapMs: manifest?.maxTimeGapMs ?? 0,
     deviceReboots: manifest?.deviceReboots ?? 0,
   };
 }
@@ -257,6 +269,13 @@ export class RecordingManifestTracker {
   markReboot(): void {
     this.manifest.deviceReboots += 1;
     this.flush();
+  }
+
+  markTimeGap(gapMs: number): void {
+    this.manifest.timeGapCount += 1;
+    this.manifest.totalTimeGapMs += gapMs;
+    this.manifest.maxTimeGapMs = Math.max(this.manifest.maxTimeGapMs, gapMs);
+    this.flushThrottled();
   }
 
   markPacketWritten(input: {

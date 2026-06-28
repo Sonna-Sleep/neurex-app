@@ -13,6 +13,9 @@ const payload = buildStreamStatsPayload({
     drops: 2,
     dupSkips: 1,
     deviceReboots: 0,
+    timeGapCount: 2,
+    totalTimeGapMs: 64_701,
+    maxTimeGapMs: 61_148,
     lastSeq: 42,
     generation: 3,
     lastBaseMs: 60_000,
@@ -35,6 +38,10 @@ assert.equal(payload.samples, 15_000);
 assert.equal(payload.drops, 2);
 assert.equal(payload.dupSkips, 1);
 assert.equal(payload.deviceReboots, 0);
+assert.equal(payload.timeGapCount, 2);
+assert.equal(payload.totalTimeGapMs, 64_701);
+assert.equal(payload.maxTimeGapMs, 61_148);
+assert.equal(payload.timeGapThresholdMs, 1_000);
 assert.equal(payload.lastSeq, 42);
 assert.equal(payload.lastBaseMs, 60_000);
 assert.equal(payload.chunkedUploadEnabled, true);

@@ -1,4 +1,5 @@
 import type { StreamStats } from '../ble/types';
+import { TIME_GAP_REPORT_THRESHOLD_MS } from '../ble/constants';
 
 export type StreamStatsStopReason =
   | 'manual'
@@ -41,6 +42,10 @@ export function buildStreamStatsPayload(input: StreamStatsPayloadInput) {
     drops: num(stats.drops),
     dupSkips: num(stats.dupSkips),
     deviceReboots: num(stats.deviceReboots),
+    timeGapCount: num(stats.timeGapCount),
+    totalTimeGapMs: num(stats.totalTimeGapMs),
+    maxTimeGapMs: num(stats.maxTimeGapMs),
+    timeGapThresholdMs: TIME_GAP_REPORT_THRESHOLD_MS,
     lastSeq: stats.lastSeq == null ? null : num(stats.lastSeq),
     generation: num(stats.generation),
     lastBaseMs: stats.lastBaseMs == null ? null : num(stats.lastBaseMs),

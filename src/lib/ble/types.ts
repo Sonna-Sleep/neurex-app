@@ -46,6 +46,12 @@ export type StreamStats = {
   generation: number;
   /** Highest packet baseMs written so far — used to dedup on resume. null until first write. */
   lastBaseMs: number | null;
+  /** Device-time gaps >= TIME_GAP_REPORT_THRESHOLD_MS between accepted packets. */
+  timeGapCount: number;
+  /** Sum of device-time gaps beyond expected packet cadence, in ms. */
+  totalTimeGapMs: number;
+  /** Largest device-time gap beyond expected packet cadence, in ms. */
+  maxTimeGapMs: number;
   /** Times the firmware clock reset (brownout/watchdog reboot) mid-session; each
    * is a new epoch we detected (baseMs jumped far backward) and kept recording
    * across instead of discarding the rest of the night as duplicates. */

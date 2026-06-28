@@ -87,6 +87,8 @@ export const EEG_SAMPLE_INTERVAL_MS = 4;
 // firmware BLE build's -DSAMPLES_PER_PACKET=8 EXACTLY (it derives
 // PACKET_TOTAL_SIZE the same way).
 export const SAMPLES_PER_PACKET = 8;
+export const EEG_PACKET_INTERVAL_MS = SAMPLES_PER_PACKET * EEG_SAMPLE_INTERVAL_MS;
+export const TIME_GAP_REPORT_THRESHOLD_MS = 1000;
 
 // ── Packet layout (226 bytes per notification) ──────────────────────────────
 //   [0]    0xAB           start hi

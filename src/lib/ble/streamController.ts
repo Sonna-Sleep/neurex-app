@@ -138,6 +138,9 @@ function freshStats(): StreamStats {
     lastSeq: null,
     generation: 0,
     lastBaseMs: null,
+    timeGapCount: 0,
+    totalTimeGapMs: 0,
+    maxTimeGapMs: 0,
     deviceReboots: 0,
   };
 }
