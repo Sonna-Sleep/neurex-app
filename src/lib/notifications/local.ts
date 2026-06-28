@@ -59,10 +59,10 @@ async function fireRecordingAlert(title: string, body: string): Promise<void> {
   });
 }
 
-/** Fired the instant the headband's BLE link drops mid-recording (before the
+/** Fired the instant the device's BLE link drops mid-recording (before the
  * reconnect grace window), so the user knows it dropped. */
 export function notifyDeviceDisconnected(): void {
-  void fireRecordingAlert('Headband disconnected', 'Trying to reconnect…');
+  void fireRecordingAlert('Device disconnected', 'Trying to reconnect…');
 }
 
 /** Fired when a recording is auto-stopped (device didn't reconnect, or battery
@@ -70,7 +70,7 @@ export function notifyDeviceDisconnected(): void {
 export function notifyRecordingStopped(reason: 'device-lost' | 'battery'): void {
   const body =
     reason === 'battery'
-      ? 'Your headband’s battery ran out — recording saved.'
-      : 'Your headband disconnected and didn’t reconnect — recording saved.';
+      ? 'Your device battery ran out — recording saved.'
+      : 'Your device disconnected and didn’t reconnect — recording saved.';
   void fireRecordingAlert('Recording stopped', body);
 }

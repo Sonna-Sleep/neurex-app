@@ -1,4 +1,4 @@
-// Auto-stop rules: end an overnight recording when the headband turns off or its
+// Auto-stop rules: end an overnight recording when the device turns off or its
 // battery dies, instead of reconnecting forever. Pure + unit-testable; the wiring
 // (battery subscription + abandon timer + finalize) lives in streamController.
 //

@@ -112,7 +112,7 @@ export function RecordingCard({ idleFooter }: { idleFooter?: React.ReactNode }) 
       // documentDirectory/sessions/<id>/ and persist across app restarts until
       // transmitSession confirms cloud upload + finalize.
       // Duration/endMs come from RECEIVED SAMPLES, not wall-clock: if the
-      // headband stops sending mid-night (brownout / contact loss) wall-clock
+      // device stops sending mid-night (brownout / contact loss) wall-clock
       // would overstate an 8-h "night" with minutes of real data. endedEarly
       // flags a large wall-clock-vs-data gap so the saved view can tell the user.
       const sampleDurationSec = result.stats.samples / EEG_SAMPLE_RATE_HZ;
@@ -222,17 +222,17 @@ export function RecordingCard({ idleFooter }: { idleFooter?: React.ReactNode }) 
     const dataLagging = elapsedSec - recordedSec > 10 * 60;
     const isReconnecting = streaming.connection === 'reconnecting';
     const isLost = streaming.connection === 'lost';
-    const waitingForHeadband = isReconnecting || isLost;
+    const waitingForDevice = isReconnecting || isLost;
     const statusTitle = isLost
-      ? 'Headband disconnected'
+      ? 'Device disconnected'
       : isReconnecting
         ? 'Trying to reconnect'
-        : 'Headband connected';
+        : 'Device connected';
     const statusBody = isLost
       ? 'The app is still trying. Saved data stays on this phone.'
       : isReconnecting
         ? 'Recording will continue when Bluetooth comes back.'
-        : 'EEG data is saving on this phone.';
+        : 'Recording is active.';
     const bubbleLabel =
       busy === 'stopping'
         ? 'saving'
@@ -255,7 +255,7 @@ export function RecordingCard({ idleFooter }: { idleFooter?: React.ReactNode }) 
           accessibilityRole="button"
           accessibilityLabel="Stop recording"
         >
-          {busy === 'stopping' || waitingForHeadband ? (
+          {busy === 'stopping' || waitingForDevice ? (
             <ActivityIndicator color={colors.textPrimary} />
           ) : null}
           <Text style={styles.elapsedValue}>{formatElapsed(elapsedSec)}</Text>
@@ -268,7 +268,7 @@ export function RecordingCard({ idleFooter }: { idleFooter?: React.ReactNode }) 
             <View
               style={[
                 styles.connectionDot,
-                waitingForHeadband ? styles.connectionDotWarning : styles.connectionDotOk,
+                waitingForDevice ? styles.connectionDotWarning : styles.connectionDotOk,
               ]}
             />
             <Text style={styles.connectionTitle}>{statusTitle}</Text>
@@ -279,7 +279,7 @@ export function RecordingCard({ idleFooter }: { idleFooter?: React.ReactNode }) 
         {streaming.error ? <Text style={styles.error}>{streaming.error}</Text> : null}
         {dataLagging ? (
           <Secondary style={styles.subtext}>
-            The headband is not sending enough EEG data. Keep the phone nearby and check the fit.
+            The device is not sending enough EEG data. Keep the phone nearby and check the fit.
           </Secondary>
         ) : null}
         {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -315,7 +315,7 @@ export function RecordingCard({ idleFooter }: { idleFooter?: React.ReactNode }) 
           <Body style={styles.subtext}>{sub}</Body>
           {saved.endedEarly ? (
             <Secondary style={styles.subtext}>
-              The headband stopped sending data earlier than expected — only the received data was saved.
+              The device stopped sending data earlier than expected — only the received data was saved.
             </Secondary>
           ) : null}
           {error ? <Text style={styles.error}>{error}</Text> : null}

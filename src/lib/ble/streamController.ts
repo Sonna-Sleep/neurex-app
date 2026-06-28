@@ -61,7 +61,7 @@ const CONNECT_TIMEOUT_MS = 20_000;
 // device may return); this just stops pretending a long outage is a brief blip.
 const LOST_AFTER_MS = 90_000;
 
-// Thrown pre-flight (before any data is written) when the connected headband
+// Thrown pre-flight (before any data is written) when the connected device
 // reports variant_known === 0 — the firmware didn't recognize this board and is
 // running default settings whose channel/BIAS may be wrong, so the recording
 // can rail. Caught by the start-session caller (RecordingCard) and shown as a
@@ -69,7 +69,7 @@ const LOST_AFTER_MS = 90_000;
 export class UnconfiguredDeviceError extends Error {
   constructor() {
     super(
-      "This headband isn’t set up for recording yet — it’s running default " +
+      "This device isn’t set up for recording yet — it’s running default " +
         'settings, so the brain signal may be wrong or completely flat (railed). ' +
         'Don’t record tonight: this board needs to be added to the firmware first. ' +
         'Contact Neurex support with your device so we can configure it.',
@@ -438,7 +438,7 @@ function registerDisconnectWatch(): void {
   session.disconnectSub = manager.onDeviceDisconnected(session.deviceId, () => {
     if (!active || active.sessionId !== session.sessionId) return;
     if (active.userStopped || active.reconnecting) return;
-    // Tell the user the headband dropped, the moment it happens — before the
+    // Tell the user the device dropped, the moment it happens — before the
     // reconnect grace window. The `reconnecting` guard above means this fires
     // once per disconnect, not on every retry tick.
     notifyDeviceDisconnected();
@@ -591,7 +591,7 @@ export type StopResult = {
   stats: StreamStats;
 };
 
-// Auto-finalize an overnight recording when the headband is gone (battery dead or
+// Auto-finalize an overnight recording when the device is gone (battery dead or
 // powered off) — instead of reconnecting forever. Tears the session down like
 // stopSession, then sends the same cloud finalize path used by manual sync so a
 // partial night still produces a database row + backend report.
