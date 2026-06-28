@@ -221,6 +221,26 @@ export function RecordingCard({ idleFooter }: { idleFooter?: React.ReactNode }) 
     const recordedSec = Math.floor((streaming.samples ?? 0) / EEG_SAMPLE_RATE_HZ);
     const dataLagging = elapsedSec - recordedSec > 10 * 60;
     const isReconnecting = streaming.connection === 'reconnecting';
+    const isLost = streaming.connection === 'lost';
+    const waitingForHeadband = isReconnecting || isLost;
+    const statusTitle = isLost
+      ? 'Headband disconnected'
+      : isReconnecting
+        ? 'Trying to reconnect'
+        : 'Headband connected';
+    const statusBody = isLost
+      ? 'The app is still trying. Saved data stays on this phone.'
+      : isReconnecting
+        ? 'Recording will continue when Bluetooth comes back.'
+        : 'EEG data is saving on this phone.';
+    const bubbleLabel =
+      busy === 'stopping'
+        ? 'saving'
+        : isLost
+          ? 'disconnected'
+          : isReconnecting
+            ? 'reconnecting'
+            : 'elapsed';
     return (
       <View style={styles.controlScreen}>
         <Pressable
@@ -235,12 +255,26 @@ export function RecordingCard({ idleFooter }: { idleFooter?: React.ReactNode }) 
           accessibilityRole="button"
           accessibilityLabel="Stop recording"
         >
-          {busy === 'stopping' || isReconnecting ? (
+          {busy === 'stopping' || waitingForHeadband ? (
             <ActivityIndicator color={colors.textPrimary} />
           ) : null}
           <Text style={styles.elapsedValue}>{formatElapsed(elapsedSec)}</Text>
-          <Text style={styles.elapsedLabel}>{busy === 'stopping' ? 'saving' : 'elapsed'}</Text>
+          <Text style={styles.elapsedLabel}>{bubbleLabel}</Text>
         </Pressable>
+
+        <View style={styles.recordingStatus}>
+          <Text style={styles.savedValue}>Saved on phone: {formatElapsed(recordedSec)}</Text>
+          <View style={styles.connectionRow}>
+            <View
+              style={[
+                styles.connectionDot,
+                waitingForHeadband ? styles.connectionDotWarning : styles.connectionDotOk,
+              ]}
+            />
+            <Text style={styles.connectionTitle}>{statusTitle}</Text>
+          </View>
+          <Secondary style={styles.connectionBody}>{statusBody}</Secondary>
+        </View>
 
         {streaming.error ? <Text style={styles.error}>{streaming.error}</Text> : null}
         {dataLagging ? (
@@ -431,6 +465,47 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     textTransform: 'uppercase',
     letterSpacing: 1,
+    color: colors.textSecondary,
+  },
+  recordingStatus: {
+    width: '100%',
+    maxWidth: 330,
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  savedValue: {
+    fontSize: 16,
+    lineHeight: 22,
+    fontWeight: '600',
+    textAlign: 'center',
+    color: colors.textPrimary,
+  },
+  connectionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+  },
+  connectionDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  connectionDotOk: {
+    backgroundColor: colors.positive,
+  },
+  connectionDotWarning: {
+    backgroundColor: colors.warning,
+  },
+  connectionTitle: {
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: '600',
+    color: colors.textPrimary,
+  },
+  connectionBody: {
+    maxWidth: 330,
+    textAlign: 'center',
     color: colors.textSecondary,
   },
   error: {
