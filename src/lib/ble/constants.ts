@@ -39,7 +39,9 @@ export const NEUREX_ACK_WRITE_UUID = '6e6b0000-1000-8000-0078-65726e6b0003';
 // silently breaks when the firmware gain changes. Mirror the layout on nRF5340.
 export const NEUREX_SCALE_INFO_UUID = '6e6b0000-1000-8000-0078-65726e6b0004';
 // Bump in lockstep with NEUREX_SCALE_SCHEMA_VER in firmware neurex_scale.h.
-export const NEUREX_SCALE_INFO_SCHEMA_VER = 1;
+export const NEUREX_SCALE_INFO_SCHEMA_VER = 2;
+// Minimum readable v1 prefix. Current v2 firmware sends 21 bytes; scale.ts reads
+// the appended variant_known byte only when present so older v1 devices still work.
 export const NEUREX_SCALE_INFO_BYTES = 20;
 
 // How often the ACK loop writes the contiguous frontier. Firmware just needs

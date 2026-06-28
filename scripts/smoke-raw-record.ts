@@ -83,7 +83,7 @@ assert.equal(recs.length, SAMPLES_PER_PACKET * RAW_RECORD_BYTES);
 const dv = new DataView(recs.buffer, recs.byteOffset, recs.byteLength);
 for (let s = 0; s < SAMPLES_PER_PACKET; s++) {
   const off: number = s * RAW_RECORD_BYTES;
-  assert.equal(dv.getUint32(off, true), (baseMs + s) >>> 0); // ms matches eeg.bin
+  assert.equal(dv.getUint32(off, true), (baseMs + s * 4) >>> 0); // ms matches eeg.bin
   assert.equal(recs[off + 4], seq); // seq
   assert.equal(recs[off + 7], s); // status last byte preserved
   for (let ch = 0; ch < 8; ch++) {

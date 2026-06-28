@@ -21,6 +21,7 @@
 
 import {
   BYTES_PER_FRAME,
+  EEG_SAMPLE_INTERVAL_MS,
   EEG_SAMPLE_RATE_HZ,
   PKT_IDX_DATA,
   SAMPLES_PER_PACKET,
@@ -57,9 +58,9 @@ export function rawHeader(nominalFs: number = EEG_SAMPLE_RATE_HZ): Uint8Array {
 /**
  * Encode one parsed packet's SAMPLES_PER_PACKET frames into raw.bin v1 records
  * (all 8 channels, integer counts). `bytes` is the original 226-byte packet;
- * `baseMs`/`seq` come from the parse. Per sample s: ms = baseMs + s (matching
- * eeg.bin), the packet seq, the 3 status bytes, and the 8 int24 channel counts
- * sign-extended to int32.
+ * `baseMs`/`seq` come from the parse. Per sample s: ms = baseMs + s*4 ms
+ * (matching eeg.bin), the packet seq, the 3 status bytes, and the 8 int24
+ * channel counts sign-extended to int32.
  */
 export function encodeRawPacket(bytes: Uint8Array, baseMs: number, seq: number): Uint8Array {
   const out = new Uint8Array(SAMPLES_PER_PACKET * RAW_RECORD_BYTES);
@@ -67,7 +68,7 @@ export function encodeRawPacket(bytes: Uint8Array, baseMs: number, seq: number):
   for (let s = 0; s < SAMPLES_PER_PACKET; s++) {
     const r = s * RAW_RECORD_BYTES;
     const frame = FRAME_STATUS_OFF + s * BYTES_PER_FRAME;
-    dv.setUint32(r, (baseMs + s) >>> 0, true); // ms
+    dv.setUint32(r, (baseMs + s * EEG_SAMPLE_INTERVAL_MS) >>> 0, true); // ms
     out[r + 4] = seq & 0xff; // seq
     out[r + 5] = bytes[frame];
     out[r + 6] = bytes[frame + 1];

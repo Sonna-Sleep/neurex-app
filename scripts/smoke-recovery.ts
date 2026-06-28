@@ -77,17 +77,17 @@ eq(durationMsFromBytes(7_200_000, 250), 3_600_000, '1h of bytes = 3,600,000ms');
 }
 
 // ── staging-length floor (shared with the live RecordingCard sync gate) ─────
-eq(MIN_STAGING_MIN, 20, 'MIN_STAGING_MIN is 20 minutes');
-eq(MIN_STAGING_SEC, 1200, 'MIN_STAGING_SEC is 20 minutes');
+eq(MIN_STAGING_MIN, 10, 'MIN_STAGING_MIN is 10 minutes');
+eq(MIN_STAGING_SEC, 600, 'MIN_STAGING_SEC is 10 minutes');
 eq(RECOVERY_RESTORE_GRACE_MS, 30_000, 'restore grace is 30s');
-ok(isStageableDurationMs(1_200_000) === true, 'exactly 20 min is stageable');
-ok(isStageableDurationMs(1_199_999) === false, 'just under 20 min is NOT stageable');
+ok(isStageableDurationMs(600_000) === true, 'exactly 10 min is stageable');
+ok(isStageableDurationMs(599_999) === false, 'just under 10 min is NOT stageable');
 ok(isStageableDurationMs(0) === false, 'zero-length is NOT stageable');
 ok(isStageableDurationMs(3_600_000) === true, '1 h is stageable');
 // A 1-second orphan (2000 B @250 Hz) must be skipped by recovery.
 ok(isStageableDurationMs(durationMsFromBytes(2000, 250)) === false, '1 s orphan skipped');
-// A 20-minute recording (250 × 8 × 1200 = 2,400,000 B) is recovered.
-ok(isStageableDurationMs(durationMsFromBytes(2_400_000, 250)) === true, '20 min orphan recovered');
+// A 10-minute recording (250 × 8 × 600 = 1,200,000 B) is recovered.
+ok(isStageableDurationMs(durationMsFromBytes(1_200_000, 250)) === true, '10 min orphan recovered');
 
 if (failures) {
   console.error(`\n${failures} RECOVERY ASSERTION(S) FAILED`);
