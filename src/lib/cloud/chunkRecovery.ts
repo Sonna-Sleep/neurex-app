@@ -31,14 +31,13 @@ import { drainChunks } from './chunkDriver';
 import { fileQueueStore, readSegBytes, sha256Hex } from './chunkUploadStore';
 import {
   deleteLocalSession,
-  ensureMyHandle,
   type FinalizeInput,
   finalizeSession,
+  readableLabelStable,
   uploadFileAsSegments,
   uploadSidecarIfPresent,
 } from './cloudSync';
 import { isStageableDurationMs } from './recoveryMath';
-import { storagePrefix } from './storagePaths';
 import {
   ensureStreamStatsSidecar,
   refreshStreamStatsSidecarUploadCounts,
@@ -171,11 +170,11 @@ function endMsFromSegments(
 async function settleChunkedSession(
   sessionId: string,
   meta: ChunkMeta,
+  uid: string,
   endMsOverride?: number,
 ): Promise<string | null> {
   const eegDir = segEegDir(new Directory(sessionsRoot(), sessionId));
-  const handle = await ensureMyHandle();
-  const prefix = storagePrefix(handle, meta.serial ?? undefined, meta.startedAtMs);
+  const prefix = `${uid}/${readableLabelStable(sessionId, meta.startedAtMs, meta.serial ?? undefined)}`;
   const manifest = readRecordingManifest(sessionId);
 
   const before = listLocalSegs(eegDir);
@@ -275,7 +274,7 @@ export async function transmitChunkedSession(input: FinalizeInput): Promise<stri
   const uid = await currentUid();
   if (!uid) throw new Error('not signed in');
   const meta = readMeta(dir) ?? { sessionId: input.sessionId, startedAtMs: input.startMs };
-  const prefix = await settleChunkedSession(input.sessionId, meta, input.endMs);
+  const prefix = await settleChunkedSession(input.sessionId, meta, uid, input.endMs);
   if (!prefix) throw new Error('upload incomplete — segments kept locally for retry');
   return prefix;
 }
@@ -329,7 +328,7 @@ export async function recoverChunkedSessions(liveSessionId?: string | null): Pro
       if (!isStageableDurationMs(inferredEndMs - meta.startedAtMs)) continue;
     }
     try {
-      await settleChunkedSession(sessionId, meta);
+      await settleChunkedSession(sessionId, meta, uid);
     } catch {
       /* finalize/upload failed — retry next launch (segments are safe in cloud) */
     }

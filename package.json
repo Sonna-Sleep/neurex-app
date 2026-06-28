@@ -35,7 +35,6 @@
     "smoke:chunk-uploader": "ts-node --transpile-only --project scripts/tsconfig.scripts.json scripts/smoke-chunk-uploader.ts",
     "smoke:seg-roll": "ts-node --transpile-only --project scripts/tsconfig.scripts.json scripts/smoke-seg-roll.ts",
     "smoke:session-metadata": "ts-node --transpile-only --project scripts/tsconfig.scripts.json scripts/smoke-session-metadata.ts",
-    "smoke:storage-prefix": "ts-node --transpile-only --project scripts/tsconfig.scripts.json scripts/smoke-storage-prefix.ts",
     "smoke:stream-stats": "ts-node --transpile-only --project scripts/tsconfig.scripts.json scripts/smoke-stream-stats.ts"
   },
   "dependencies": {
