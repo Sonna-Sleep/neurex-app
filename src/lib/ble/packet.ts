@@ -15,6 +15,8 @@ import {
   PKT_IDX_TS,
   SAMPLES_PER_PACKET,
 } from './constants';
+import type { ActiveChannel } from './scale';
+import { FP1_ROLE } from './scale';
 import type { EegSample, ParsedPacket } from './types';
 
 // Re-export so the resume decision + its threshold live behind one import.
@@ -61,11 +63,19 @@ function u32be(bytes: Uint8Array, offset: number): number {
 // uvPerLsb is the device-reported µV-per-LSB (read from the Scale characteristic
 // at connect); it defaults to EEG_UV_PER_LSB so units that predate that
 // characteristic decode byte-identically to before.
+//
+// active is the device's montage (from scale.activeChannels): which physical
+// channel carries which role. When provided, parsePacket decodes EVERY active
+// channel into sample.channels keyed by role ('Fp1'/'Fp2'/'EOG-L'/'EOG-R'), and
+// sets fp1_uV from the Fp1 role for back-compat. When omitted (legacy callers,
+// pre-v3 firmware), it decodes only the single fp1Index channel as 'Fp1' →
+// channels = { 'Fp1': fp1_uV }, byte-identical to the old single-channel path.
 export function parsePacket(
   bytes: Uint8Array,
   generation: number,
   uvPerLsb: number = EEG_UV_PER_LSB,
   fp1Index: number = CH_FP1,
+  active?: ActiveChannel[],
 ): ParseOutcome {
   if (bytes.length !== PACKET_SIZE) return { ok: false, reason: 'size' };
   if (
@@ -87,14 +97,31 @@ export function parsePacket(
   // one app build reads the right channel on every board. Guard to an in-frame
   // channel (0..7); fall back to CH_FP1 if the device reports something invalid.
   const ch = fp1Index >= 0 && fp1Index < 8 ? fp1Index : CH_FP1;
+
+  // Resolve the montage to decode. With an explicit active list (schema-v3
+  // montage) we decode every role into channels{}. Without one (legacy/pre-v3),
+  // fall back to a single Fp1 channel at fp1Index — byte-identical to before.
+  const montage: ActiveChannel[] =
+    active && active.length > 0
+      ? active.filter((c) => c.index >= 0 && c.index < 8)
+      : [{ index: ch, role: FP1_ROLE }];
+
   const samples: EegSample[] = new Array(SAMPLES_PER_PACKET);
   for (let s = 0; s < SAMPLES_PER_PACKET; s++) {
     const o = PKT_IDX_DATA + s * BYTES_PER_FRAME;
     const ms = (baseMs + s * EEG_SAMPLE_INTERVAL_MS) >>> 0;
-    samples[s] = {
-      ms,
-      fp1_uV: i24be(bytes, o + ch * 3) * uvPerLsb,
-    };
+    const channels: Record<string, number> = {};
+    for (const { index, role } of montage) {
+      channels[role] = i24be(bytes, o + index * 3) * uvPerLsb;
+    }
+    // fp1_uV is retained verbatim for existing consumers (recording/upload). It
+    // is the Fp1 role when the montage names one, else the resolved fp1Index
+    // channel — identical to the pre-montage single-channel decode.
+    const fp1_uV =
+      channels[FP1_ROLE] !== undefined
+        ? channels[FP1_ROLE]
+        : i24be(bytes, o + ch * 3) * uvPerLsb;
+    samples[s] = { ms, fp1_uV, channels };
   }
   return { ok: true, packet: { generation, seq, baseMs, samples } };
 }

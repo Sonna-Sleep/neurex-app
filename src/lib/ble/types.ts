@@ -21,7 +21,18 @@ export type FoundDevice = {
 /** One decoded sample (250 Hz). All values in true µV. */
 export type EegSample = {
   ms: number;
+  /**
+   * The Fp1 (Fpz active) channel in µV. RETAINED VERBATIM for existing
+   * consumers (recording/upload write only this). Equals channels['Fp1'].
+   */
   fp1_uV: number;
+  /**
+   * Every active montage channel, keyed by role label, in µV:
+   *   'Fp1' | 'Fp2' | 'EOG-L' | 'EOG-R' for the 4-channel montage (schema v3).
+   * Legacy single-channel devices (v1/v2) carry only { 'Fp1': fp1_uV }. The
+   * EOG pair drives Lull's sleep-onset detection.
+   */
+  channels: Record<string, number>;
 };
 
 /** One decoded 226-byte BLE notification, all 8 samples included. */

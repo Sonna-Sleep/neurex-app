@@ -27,6 +27,7 @@ const scale: DeviceScaleInfo = {
   fp1Index: 4,
   fwBuildId: 0xa1b2c3d4,
   variantKnown: 1,
+  channelRole: null, // v2 firmware (schemaVer 2) has no channel_role[]
 };
 
 const m = buildSessionMetadata({

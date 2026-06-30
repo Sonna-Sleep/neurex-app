@@ -37,8 +37,8 @@ import {
 import { shouldCaptureRaw } from './diagnosticCapture';
 import { classifyResume, parsePacket } from './packet';
 import { encodeRawPacket, rawHeader } from './rawRecord';
-import { FALLBACK_SCALE, parseScaleInfo, scaleProvenance } from './scale';
-import type { DeviceScaleInfo } from './scale';
+import { activeChannels, FALLBACK_SCALE, parseScaleInfo, scaleProvenance } from './scale';
+import type { ActiveChannel, DeviceScaleInfo } from './scale';
 import { segObjectName, segThresholdBytes, shouldRollSeg } from './segRoll';
 import { RecordingManifestTracker, readRecordingManifest } from './recordingManifest';
 import { useDiagnostics } from '../../state/diagnostics';
@@ -514,6 +514,16 @@ export const realBleClient: BleClient = {
       if (__DEV__) console.warn('[ble/real] scale read failed; using fallback:', e);
     }
 
+    // Resolve the device montage once: which physical channel carries which role
+    // (schema v3 channel_role[] → Fp1/Fp2/EOG-L/EOG-R). Passed to parsePacket so
+    // every sample carries the full montage in sample.channels. On pre-v3
+    // firmware this is just the single Fp1 channel at fp1Index (back-compat).
+    const montage: ActiveChannel[] = activeChannels(deviceScale);
+    if (__DEV__)
+      console.log(
+        `[ble/real] montage ${montage.map((c) => `CH${c.index + 1}=${c.role}`).join(' ')}`,
+      );
+
     // Subscribe to the standard Battery Service. Firmware notifies every
     // ~5 s; we mirror straight into the Zustand session store so the
     // StatusPill and RecordingCard tick live without prop drilling. Read
@@ -694,6 +704,7 @@ export const realBleClient: BleClient = {
             stats.generation,
             deviceScale.uvPerLsb,
             deviceScale.fp1Index,
+            montage,
           );
           if (!result.ok) {
             stats.drops++;
