@@ -13,6 +13,14 @@ export const MODAL_ENDPOINT_URL =
   process.env.EXPO_PUBLIC_MODAL_ENDPOINT_URL ||
   'https://goda-smulk--neurex-backend-fastapi-app.modal.run';
 
+// Real-time Lull WebSocket endpoint. A SEPARATE Modal subdomain from
+// MODAL_ENDPOINT_URL (dedicated asgi web function), so it cannot be derived from
+// it. EAS Build injects the prod value; this public fallback keeps OTA bundles
+// from shipping an empty URL.
+export const LULL_WS_URL =
+  process.env.EXPO_PUBLIC_LULL_WS_URL ||
+  'wss://goda-smulk--neurex-backend-lull-realtime-app.modal.run/lull/ws';
+
 // Segments-first overnight upload. ON by default: the app writes rolling
 // segNNNN.bin files, uploads each closed segment during the recording, and
 // deletes only after the backend confirms byte+hash match. Set
