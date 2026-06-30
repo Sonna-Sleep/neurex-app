@@ -7,8 +7,6 @@
 //   - expo-keep-awake: no-op the activate/deactivate calls.
 //   - react-native-safe-area-context: provide a stable inset frame.
 
-/* eslint-disable @typescript-eslint/no-require-imports */
-
 // Reanimated ships an official Jest mock.
 jest.mock('react-native-reanimated', () =>
   require('react-native-reanimated/mock'),

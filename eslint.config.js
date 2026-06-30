@@ -23,4 +23,23 @@ module.exports = defineConfig([
       'react/no-unescaped-entities': 'off',
     },
   },
+  {
+    // Jest setup files run under the Jest + Node runtime, but their names don't
+    // match Expo's test-file glob (no `.test.` segment), so the jest globals
+    // aren't applied to them. Declare them here so `jest.mock(...)` lints clean.
+    files: ['jest.setup*.js'],
+    languageOptions: {
+      globals: {
+        jest: 'readonly',
+        describe: 'readonly',
+        it: 'readonly',
+        test: 'readonly',
+        expect: 'readonly',
+        beforeAll: 'readonly',
+        beforeEach: 'readonly',
+        afterAll: 'readonly',
+        afterEach: 'readonly',
+      },
+    },
+  },
 ]);
