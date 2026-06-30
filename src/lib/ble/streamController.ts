@@ -51,6 +51,7 @@ import {
   readRecordingManifest,
   statsFromManifest,
 } from './recordingManifest';
+import { feedLull } from '../../lull/engine/engineTap';
 
 // User-initiated session start: time-bounded so a device that's off or out of
 // range fails fast with an error instead of an infinite spinner. The background
@@ -163,8 +164,12 @@ function endMsFromSession(sessionId: string, startedAtMs: number, fallback: Stre
 
 function makeCallbacks(statsRef: StatsRef): StreamCallbacks {
   return {
-    onPacket: (_pkt, stats) => {
+    onPacket: (pkt, stats) => {
       statsRef.current = stats;
+      // Live Lull tap: forward decoded samples to the active wind-down engine,
+      // if any. A no-op when Lull is idle — it never touches recording state and
+      // swallows its own errors, so it cannot disturb the night's capture.
+      feedLull(pkt.samples);
     },
     onDrop: (_reason, stats) => {
       statsRef.current = stats;
