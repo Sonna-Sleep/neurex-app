@@ -37,8 +37,7 @@
     "smoke:seg-roll": "ts-node --transpile-only --project scripts/tsconfig.scripts.json scripts/smoke-seg-roll.ts",
     "smoke:session-metadata": "ts-node --transpile-only --project scripts/tsconfig.scripts.json scripts/smoke-session-metadata.ts",
     "smoke:stream-stats": "ts-node --transpile-only --project scripts/tsconfig.scripts.json scripts/smoke-stream-stats.ts",
-    "smoke:recording-export-zip": "ts-node --transpile-only --project scripts/tsconfig.scripts.json scripts/smoke-recording-export-zip.ts",
-    "test:lull-bundled": "ts-node --transpile-only --project scripts/tsconfig.scripts.json src/lull/audio/__tests__/BundledSink.test.ts"
+    "smoke:recording-export-zip": "ts-node --transpile-only --project scripts/tsconfig.scripts.json scripts/smoke-recording-export-zip.ts"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",
@@ -84,6 +83,7 @@
     "zustand": "^5.0.12"
   },
   "devDependencies": {
+    "@testing-library/react-native": "^14.0.1",
     "@types/jest": "^29.5.14",
     "@types/node": "^25.7.0",
     "@types/react": "~19.1.0",
@@ -91,6 +91,9 @@
     "eslint": "^9.39.4",
     "eslint-config-expo": "~10.0.0",
     "jest": "^29.7.0",
+    "jest-expo": "^54.0.17",
+    "react-test-renderer": "^19.1.0",
+    "test-renderer": "^1.2.0",
     "ts-jest": "^29.4.11",
     "ts-node": "^10.9.2",
     "typescript": "~5.9.2"

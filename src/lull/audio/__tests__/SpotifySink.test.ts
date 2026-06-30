@@ -44,8 +44,8 @@ describe('SpotifySink', () => {
 
   beforeEach(() => {
     fetchMock = jest.fn(async () => okResponse(204));
-    // @ts-expect-error - install the fetch mock on the global.
-    global.fetch = fetchMock;
+    // Install the fetch mock on the global (cast: jest.Mock isn't fetch's type).
+    (global as { fetch: unknown }).fetch = fetchMock;
     jest.clearAllMocks();
     (fakeAuth.getAccessToken as jest.Mock).mockResolvedValue('access-token-abc');
     (fakeAuth.refreshAccessToken as jest.Mock).mockResolvedValue({

@@ -25,4 +25,6 @@ export type TabParamList = {
 export type RootStackParamList = {
   Onboarding: NavigatorScreenParams<OnboardingStackParamList>;
   Main: NavigatorScreenParams<TabParamList>;
+  // Full-screen Lull wind-down modal (EEG-driven sleep soundscape fade).
+  Lull: undefined;
 };
