@@ -24,13 +24,29 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react-nativ
 import { WindDownScreen } from '../WindDownScreen';
 import { useLull, type LullPhase } from '../../../lull/state/lullStore';
 
-// The screen constructs a LullEngine + audio sinks on Start; stub them so the
-// render test stays a pure UI test (and never imports expo-av / fetch).
-jest.mock('../../../lull/engine/LullEngine', () => ({
-  LullEngine: jest.fn().mockImplementation(() => ({
+// Mock session store so the test never touches AsyncStorage.
+jest.mock('../../../state/session', () => ({
+  useSession: Object.assign(
+    (selector: (s: { pairedDeviceId: string | null; pairedSerial: string }) => unknown) =>
+      selector({ pairedDeviceId: 'dev-1', pairedSerial: 'SN1' }),
+    {
+      getState: () => ({ streaming: null }),
+    },
+  ),
+}));
+
+// The screen constructs a CloudLullSession + audio sinks on Start; stub them so
+// the render test stays a pure UI test (and never imports expo-av / fetch).
+jest.mock('../../../lull/engine/CloudLullSession', () => ({
+  CloudLullSession: jest.fn().mockImplementation(() => ({
     start: jest.fn(),
     stop: jest.fn(() => Promise.resolve()),
   })),
+}));
+jest.mock('../../../lib/ble/streamController', () => ({
+  startSession: jest.fn(() => Promise.resolve({ sessionId: 's1' })),
+  stopSession: jest.fn(() => Promise.resolve()),
+  isSessionActive: jest.fn(() => false),
 }));
 jest.mock('../../../lull/audio/SpotifySink', () => ({
   SpotifySink: jest.fn().mockImplementation(() => ({})),

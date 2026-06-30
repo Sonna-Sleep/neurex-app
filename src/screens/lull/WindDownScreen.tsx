@@ -6,12 +6,11 @@
 // start the wind-down, watch a calm visualization of how asleep you are, and
 // reach the terminal "asleep — muted" state when sleep onset latches.
 //
-// The screen owns the LullEngine lifecycle: it constructs an engine with the
-// chosen sink on Start, drives `lullStore` from the engine's per-tick callback,
-// and tears the engine down on Stop / unmount. The engine taps the live BLE
-// stream via the engineTap registry — when no recording stream is running it
-// simply never receives samples and W stays at its calibration value, which is
-// surfaced honestly to the user.
+// The screen owns the CloudLullSession lifecycle: it constructs a session with
+// the chosen sink on Start, drives `lullStore` from the session's per-tick
+// callback, and tears the session down on Stop / unmount. The session forwards
+// live BLE samples to the cloud over WebSocket and applies the volume commands
+// the cloud sends back — phone does no DSP.
 //
 // Reanimated drives the breathing visualization: the volume shared value scales
 // and dims a soft halo so the screen visibly "quiets" as the music fades, all on
@@ -34,12 +33,14 @@ import { Button } from '../../components/Button';
 import { SerifHeadline, Body, Secondary, Eyebrow } from '../../theme/typography';
 import { colors, radii, spacing } from '../../theme/tokens';
 import type { RootStackParamList } from '../../navigation/types';
+import { useSession } from '../../state/session';
+import { startSession, stopSession, isSessionActive } from '../../lib/ble/streamController';
 
 import { useLull, type LullSink } from '../../lull/state/lullStore';
-import { LullEngine } from '../../lull/engine/LullEngine';
+import { CloudLullSession } from '../../lull/engine/CloudLullSession';
 import type { LullParams } from '../../lull/core/sleepiness';
 import type { AudioSink } from '../../lull/audio/AudioSink';
-import { SpotifySink } from '../../lull/audio/SpotifySink';
+import { SpotifySink, type SpotifySinkState } from '../../lull/audio/SpotifySink';
 import { BundledSink } from '../../lull/audio/BundledSink';
 import { authorize, isConnected } from '../../lull/audio/spotifyAuth';
 import paramsJson from '../../lull/lull_params.json';
@@ -54,8 +55,22 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Lull'>;
  * is verified before constructing the Spotify sink — the caller gates Start on
  * `spotifyReady` so this only runs once authorized.
  */
-function makeSink(sink: LullSink): AudioSink {
-  return sink === 'spotify' ? new SpotifySink() : new BundledSink();
+function makeSink(
+  sink: LullSink,
+  onSpotifyState?: (s: SpotifySinkState) => void,
+): AudioSink {
+  return sink === 'spotify'
+    ? new SpotifySink({ onStateChange: onSpotifyState })
+    : new BundledSink();
+}
+
+/** Turn a Spotify sink state into a one-line user hint (or null when fine). */
+function spotifyHintFor(s: SpotifySinkState): string | null {
+  if (s.noActiveDevice)
+    return 'No active Spotify device — open Spotify and press play, then it will fade as you drift off.';
+  if (s.volumeDisallowed)
+    return 'Spotify is blocking volume control on this device — Lull will pause the music at sleep onset instead of fading it.';
+  return null;
 }
 
 export function WindDownScreen({ navigation }: Props) {
@@ -70,12 +85,28 @@ export function WindDownScreen({ navigation }: Props) {
   const setSink = useLull((s) => s.setSink);
   const reset = useLull((s) => s.reset);
 
+  // Paired-device identity for starting the live stream Lull reads from.
+  const pairedDeviceId = useSession((s) => s.pairedDeviceId);
+  const pairedSerial = useSession((s) => s.pairedSerial);
+
   const [spotifyReady, setSpotifyReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // True while connecting the headband / starting the session on Start.
+  const [starting, setStarting] = useState(false);
+  // Flips true on the first engine tick — until then we show "waiting for
+  // signal" so a quiet screen never looks frozen again.
+  const [signalLive, setSignalLive] = useState(false);
+  // One-line Spotify status (no active device / volume disallowed), or null.
+  const [spotifyHint, setSpotifyHint] = useState<string | null>(null);
 
   // The live engine for this session. A ref (not state) so reconstructing it
   // never triggers a render and `stop()` on unmount always sees the latest one.
-  const engineRef = useRef<LullEngine | null>(null);
+  const engineRef = useRef<CloudLullSession | null>(null);
+  // Did THIS wind-down start the recording session? Only then may stopping the
+  // wind-down stop the session (a pre-existing recording is left untouched).
+  const ownsSessionRef = useRef(false);
+  // Mirror of signalLive for the engine callback (avoids a stale closure).
+  const signalLiveRef = useRef(false);
 
   const active = phase === 'calibrating' || phase === 'winddown';
 
@@ -117,36 +148,84 @@ export function WindDownScreen({ navigation }: Props) {
   }, [reset]);
 
   // ── Engine control ──────────────────────────────────────────────────────
-  const onStart = useCallback(() => {
-    if (active) return;
+  const onStart = useCallback(async () => {
+    if (active || starting) return;
     setError(null);
-    const audioSink = makeSink(sink);
-    // fs defaults to params.fs_default (250 Hz, the device rate) — the engine
-    // resolves `undefined` to that. The live Scale char isn't surfaced on the
-    // session store today, so we run at the validated default sample rate.
-    const engine = new LullEngine(params, audioSink, undefined, (tick) => {
-      // Drive the store from the engine's per-tick callback. The estimator
-      // returns W=1 during calibration; once it dips below the onset window the
-      // volume ratchet starts fading and we move to wind-down. The first latched
-      // onset is the terminal "asleep" cutoff (the engine mutes + stops).
-      setW(tick.W);
-      setVolume(tick.volume);
-      // The store's setPhase takes a value (no functional form). The asleep
-      // state is terminal; reading the store directly avoids a stale closure.
-      if (tick.onset) {
-        setPhase('asleep');
-      } else if (useLull.getState().phase !== 'asleep') {
-        setPhase(tick.tSec < params.calib_seconds ? 'calibrating' : 'winddown');
+    // Spotify must be connected before we can drive it; the picker should have
+    // gated this, but guard so we never start a session that plays nothing.
+    if (sink === 'spotify' && !spotifyReady) {
+      setError('Connect Spotify first, then start the wind-down.');
+      return;
+    }
+
+    // Lull reads the live EEG/EOG from the recording stream — it has no BLE of
+    // its own. If nothing is streaming, start a session now (connect the
+    // headband + record the night) so the engine actually receives packets;
+    // otherwise it would sit forever with no data (the original "stuck" bug).
+    // If a session is already running, tap into it without starting a second.
+    setStarting(true);
+    let sessionId: string;
+    try {
+      if (!isSessionActive()) {
+        if (!pairedDeviceId) {
+          setError('Pair your Neurex headband first, then start the wind-down.');
+          return;
+        }
+        const started = await startSession(pairedDeviceId, pairedSerial);
+        sessionId = started.sessionId;
+        ownsSessionRef.current = true;
+      } else {
+        sessionId = useSession.getState().streaming?.sessionId ?? 'live';
+        ownsSessionRef.current = false;
       }
-    });
+    } catch (e) {
+      setError((e as Error).message);
+      ownsSessionRef.current = false;
+      return;
+    } finally {
+      setStarting(false);
+    }
+
+    signalLiveRef.current = false;
+    setSignalLive(false);
+
+    const audioSink = makeSink(sink, (s) => setSpotifyHint(spotifyHintFor(s)));
+    const engine = new CloudLullSession(
+      params.fs_default,
+      sessionId,
+      audioSink,
+      (tick) => {
+        if (!signalLiveRef.current) {
+          signalLiveRef.current = true;
+          setSignalLive(true);
+        }
+        setW(tick.W);
+        setVolume(tick.volume);
+        if (tick.onset) {
+          setPhase('asleep');
+        } else if (useLull.getState().phase !== 'asleep') {
+          setPhase(tick.tSec < params.calib_seconds ? 'calibrating' : 'winddown');
+        }
+      },
+      (msg) => setError(msg),
+    );
     engineRef.current = engine;
     engine.start();
     setPhase('calibrating');
-  }, [active, sink, setW, setVolume, setPhase]);
+  }, [active, starting, sink, spotifyReady, pairedDeviceId, pairedSerial, setW, setVolume, setPhase]);
 
-  const onStop = useCallback(() => {
+  const onStop = useCallback(async () => {
     engineRef.current?.stop();
     engineRef.current = null;
+    // If this wind-down started the recording, stopping it cancels the session.
+    // A recording that was already running before Lull is left untouched.
+    if (ownsSessionRef.current) {
+      ownsSessionRef.current = false;
+      await stopSession().catch(() => undefined);
+    }
+    signalLiveRef.current = false;
+    setSignalLive(false);
+    setSpotifyHint(null);
     reset();
   }, [reset]);
 
@@ -262,6 +341,12 @@ export function WindDownScreen({ navigation }: Props) {
           </View>
         ) : null}
 
+        {active && !signalLive ? (
+          <Secondary style={styles.waiting}>
+            Waiting for your headband’s signal… keep the band on and snug.
+          </Secondary>
+        ) : null}
+        {spotifyHint ? <Secondary style={styles.spotifyHint}>{spotifyHint}</Secondary> : null}
         {error ? <Secondary style={styles.error}>{error}</Secondary> : null}
       </View>
 
@@ -287,8 +372,17 @@ export function WindDownScreen({ navigation }: Props) {
               <Button label="Connect Spotify" onPress={onConnectSpotify} variant="ghost" />
             ) : null}
 
-            <Button label="Start wind down" onPress={onStart} />
-            <Secondary style={styles.sinkHint}>Playing through {sinkLabel}.</Secondary>
+            <Button
+              label={starting ? 'Connecting…' : 'Start wind down'}
+              onPress={onStart}
+              disabled={starting}
+              loading={starting}
+            />
+            <Secondary style={styles.sinkHint}>
+              {sink === 'spotify' && spotifyReady
+                ? 'Start playing on Spotify first — Lull fades it as you drift off, and records your night.'
+                : `Playing through ${sinkLabel}. Records your night, too.`}
+            </Secondary>
           </>
         ) : phase === 'asleep' ? (
           <Button label="Done" onPress={onClose} />
@@ -458,5 +552,17 @@ const styles = StyleSheet.create({
   sinkHint: {
     textAlign: 'center',
     color: colors.textTertiary,
+  },
+  waiting: {
+    textAlign: 'center',
+    color: colors.textTertiary,
+    marginTop: spacing.md,
+    maxWidth: 320,
+  },
+  spotifyHint: {
+    textAlign: 'center',
+    color: colors.accent,
+    marginTop: spacing.sm,
+    maxWidth: 320,
   },
 });
