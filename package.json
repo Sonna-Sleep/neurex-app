@@ -8,6 +8,7 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
+    "test": "jest",
     "check:android-push": "node scripts/check-android-push-config.js",
     "smoke:auth": "ts-node --transpile-only scripts/smoke-auth.ts",
     "smoke:backoff": "ts-node --transpile-only --project scripts/tsconfig.scripts.json scripts/smoke-backoff.ts",
@@ -36,7 +37,8 @@
     "smoke:seg-roll": "ts-node --transpile-only --project scripts/tsconfig.scripts.json scripts/smoke-seg-roll.ts",
     "smoke:session-metadata": "ts-node --transpile-only --project scripts/tsconfig.scripts.json scripts/smoke-session-metadata.ts",
     "smoke:stream-stats": "ts-node --transpile-only --project scripts/tsconfig.scripts.json scripts/smoke-stream-stats.ts",
-    "smoke:recording-export-zip": "ts-node --transpile-only --project scripts/tsconfig.scripts.json scripts/smoke-recording-export-zip.ts"
+    "smoke:recording-export-zip": "ts-node --transpile-only --project scripts/tsconfig.scripts.json scripts/smoke-recording-export-zip.ts",
+    "test:lull-bundled": "ts-node --transpile-only --project scripts/tsconfig.scripts.json src/lull/audio/__tests__/BundledSink.test.ts"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",
@@ -82,11 +84,14 @@
     "zustand": "^5.0.12"
   },
   "devDependencies": {
+    "@types/jest": "^29.5.14",
     "@types/node": "^25.7.0",
     "@types/react": "~19.1.0",
     "dotenv": "^17.4.2",
     "eslint": "^9.39.4",
     "eslint-config-expo": "~10.0.0",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.4.11",
     "ts-node": "^10.9.2",
     "typescript": "~5.9.2"
   },
