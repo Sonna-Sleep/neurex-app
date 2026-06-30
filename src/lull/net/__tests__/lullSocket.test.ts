@@ -68,4 +68,68 @@ describe('LullSocket', () => {
     jest.advanceTimersByTime(10 * 60_000);
     expect(muted).toBe(true);
   });
+
+  it('caps reconnect backoff at 15s', async () => {
+    const { sockets, factory } = harness();
+    const s = new LullSocket(
+      'wss://x',
+      async () => ({ token: 't', fs: 250, sessionId: 's1', lastVolume: 1 }),
+      { onReady: () => undefined, onCmd: () => undefined, onMute: () => undefined },
+      { factory },
+    );
+    s.start();
+
+    // attempt 0 → delay 1000ms
+    sockets[0].onclose?.({ code: 1006 });
+    jest.advanceTimersByTime(1000);
+    expect(sockets).toHaveLength(2);
+
+    // attempt 1 → delay 2000ms
+    sockets[1].onclose?.({ code: 1006 });
+    jest.advanceTimersByTime(2000);
+    expect(sockets).toHaveLength(3);
+
+    // attempt 2 → delay 4000ms
+    sockets[2].onclose?.({ code: 1006 });
+    jest.advanceTimersByTime(4000);
+    expect(sockets).toHaveLength(4);
+
+    // attempt 3 → delay 8000ms
+    sockets[3].onclose?.({ code: 1006 });
+    jest.advanceTimersByTime(8000);
+    expect(sockets).toHaveLength(5);
+
+    // attempt 4 → delay min(15000, 1000*2^4=16000) = 15000ms (cap)
+    sockets[4].onclose?.({ code: 1006 });
+    jest.advanceTimersByTime(14999);
+    expect(sockets).toHaveLength(5); // not yet — cap holds
+    jest.advanceTimersByTime(1);     // total = 15000ms
+    expect(sockets).toHaveLength(6); // now reconnected
+  });
+
+  it('a successful reconnect clears the 10-minute cutoff so it never mutes', async () => {
+    const { sockets, factory } = harness();
+    let muted = false;
+    const s = new LullSocket(
+      'wss://x',
+      async () => ({ token: 't', fs: 250, sessionId: 's1', lastVolume: 1 }),
+      { onReady: () => undefined, onCmd: () => undefined, onMute: () => { muted = true; } },
+      { factory },
+    );
+    s.start();
+
+    // Drop the first connection — cutoff timer starts
+    sockets[0].onclose?.({ code: 1006 });
+    jest.advanceTimersByTime(1000); // first backoff = 1s
+    expect(sockets).toHaveLength(2);
+
+    // Successful reconnect: open + hello + ready → clears the cutoff timer
+    sockets[1].onopen?.();
+    await Promise.resolve(); // let getHello() resolve
+    sockets[1].onmessage?.({ data: JSON.stringify({ type: 'ready' }) });
+
+    // Now advance past the 10-minute mark — should NOT mute
+    jest.advanceTimersByTime(10 * 60_000);
+    expect(muted).toBe(false);
+  });
 });
