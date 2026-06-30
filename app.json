@@ -3,7 +3,7 @@
     "name": "Neurex",
     "slug": "neurex",
     "scheme": "neurex",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -23,7 +23,8 @@
         "NSPhotoLibraryUsageDescription": "Neurex uses your photos so you can set a profile picture.",
         "UIBackgroundModes": [
           "bluetooth-central",
-          "fetch"
+          "fetch",
+          "audio"
         ]
       },
       "config": { "usesNonExemptEncryption": false },
@@ -49,7 +50,7 @@
     },
     "android": {
       "package": "tech.neurex.app",
-      "versionCode": 5,
+      "versionCode": 6,
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
@@ -96,7 +97,8 @@
     "extra": {
       "eas": {
         "projectId": "27005611-7811-4600-bd9b-35c08958b7fd"
-      }
+      },
+      "spotifyClientId": "REPLACE_WITH_SPOTIFY_CLIENT_ID"
     },
     "owner": "neurexs-organization",
     "runtimeVersion": {
