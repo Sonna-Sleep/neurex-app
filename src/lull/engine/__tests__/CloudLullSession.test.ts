@@ -28,7 +28,37 @@ const sample = (fp1: number, fp2: number, l: number, r: number): EegSample => ({
 });
 
 describe('CloudLullSession', () => {
-  afterEach(() => { jest.useRealTimers(); });
+  describe('hardMute no-false-onset', () => {
+    beforeEach(() => { jest.useFakeTimers(); });
+    afterEach(() => { jest.useRealTimers(); });
+
+    it('does NOT emit a fake onset tick when the 10-min cutoff fires', async () => {
+      const sockets: FakeSocket[] = [];
+      const sink = fakeSink();
+      const ticks: { onset: boolean }[] = [];
+      const statuses: (string | null)[] = [];
+      const s = new CloudLullSession(
+        250, 's2', sink,
+        (t) => ticks.push({ onset: t.onset }),
+        (msg) => statuses.push(msg),
+        { makeSocket: () => { const x = new FakeSocket(); sockets.push(x); return x; } },
+      );
+      s.start();
+      // Drive handshake to ready
+      sockets[0].onopen?.();
+      await Promise.resolve(); await Promise.resolve(); // getHello + send
+      sockets[0].onmessage?.({ data: JSON.stringify({ type: 'ready' }) });
+
+      // Trigger unexpected disconnect — scheduleReconnect starts cutoff timer
+      sockets[0].onclose?.({ code: 1006 });
+      // Advance 10 minutes to fire the cutoff → onMute → hardMute
+      jest.advanceTimersByTime(10 * 60_000);
+
+      expect(sink.mute).toHaveBeenCalled();
+      expect(statuses).toContain('Lost connection to Lull — music muted.');
+      expect(ticks.every((t) => t.onset !== true)).toBe(true);
+    });
+  });
 
   it('forwards 4-channel samples and applies cmd volume; mutes + closes on onset', async () => {
     const sock: FakeSocket[] = [];

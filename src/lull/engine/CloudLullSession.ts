@@ -47,6 +47,7 @@ export class CloudLullSession {
 
   start(): void {
     if (this.stopped) return;
+    if (this.sock) return;
     const url = this.deps.url ?? LULL_WS_URL;
     this.sock = new LullSocket(
       url,
@@ -101,6 +102,7 @@ export class CloudLullSession {
   }
 
   private onCmd(c: LullCmd): void {
+    if (this.stopped || this.muted) return;
     this.lastVolume = c.volume;
     void Promise.resolve(this.sink.setVolume(c.volume)).catch(() => undefined);
     this.onTick?.({ tSec: c.tSec, W: c.W, volume: c.volume, onset: c.onset });
@@ -118,7 +120,6 @@ export class CloudLullSession {
     this.muted = true;
     this.onStatus?.('Lost connection to Lull — music muted.');
     void Promise.resolve(this.sink.mute()).catch(() => undefined);
-    this.onTick?.({ tSec: 0, W: 0, volume: 0, onset: true });
     void this.stop();
   }
 
