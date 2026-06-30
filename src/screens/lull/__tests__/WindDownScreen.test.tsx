@@ -23,14 +23,21 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react-nativ
 
 import { WindDownScreen } from '../WindDownScreen';
 import { useLull, type LullPhase } from '../../../lull/state/lullStore';
+import * as streamController from '../../../lib/ble/streamController';
 
 // Mock session store so the test never touches AsyncStorage.
+const sessionMockState = {
+  pairedDeviceId: 'dev-1' as string | null,
+  pairedSerial: 'SN1',
+  streaming: null as { sessionId: string } | null,
+};
+
 jest.mock('../../../state/session', () => ({
   useSession: Object.assign(
     (selector: (s: { pairedDeviceId: string | null; pairedSerial: string }) => unknown) =>
-      selector({ pairedDeviceId: 'dev-1', pairedSerial: 'SN1' }),
+      selector(sessionMockState),
     {
-      getState: () => ({ streaming: null }),
+      getState: () => ({ streaming: sessionMockState.streaming }),
     },
   ),
 }));
@@ -85,8 +92,22 @@ async function renderAt(
   await waitFor(() => expect(screen.toJSON()).toBeTruthy());
 }
 
+// Typed helpers for the streamController mock fns (jest-expo TS env lacks jest.Mock).
+const mockIsSessionActive = streamController.isSessionActive as unknown as {
+  mockReturnValue: (v: boolean) => void;
+};
+const mockStartSession = streamController.startSession as unknown as {
+  mockResolvedValue: (v: { sessionId: string }) => void;
+  mock: { calls: unknown[][] };
+};
+
 afterEach(() => {
   useLull.getState().reset();
+  // Reset per-test mock overrides back to defaults.
+  sessionMockState.pairedDeviceId = 'dev-1';
+  sessionMockState.streaming = null;
+  mockIsSessionActive.mockReturnValue(false);
+  mockStartSession.mockResolvedValue({ sessionId: 's1' });
 });
 
 describe('WindDownScreen', () => {
@@ -153,6 +174,30 @@ describe('WindDownScreen', () => {
     );
     await waitFor(() => expect(screen.toJSON()).toBeTruthy());
     await fireEvent.press(screen.getByText('Done'));
-    expect((nav as unknown as { goBack: jest.Mock }).goBack).toHaveBeenCalled();
+    expect((nav as unknown as { goBack: () => void }).goBack).toHaveBeenCalled();
+  });
+
+  it('Start with no paired headband shows an error and starts no session', async () => {
+    sessionMockState.pairedDeviceId = null;
+    mockIsSessionActive.mockReturnValue(false);
+
+    await renderAt('idle');
+    await fireEvent.press(screen.getByText('Start wind down'));
+
+    expect(screen.getByText(/Pair your Neurex headband first/i)).toBeTruthy();
+    expect((mockStartSession as unknown as { mock: { calls: unknown[][] } }).mock.calls).toHaveLength(0);
+    expect(useLull.getState().phase).toBe('idle');
+  });
+
+  it('Start taps an already-active session without starting a second one', async () => {
+    mockIsSessionActive.mockReturnValue(true);
+    sessionMockState.streaming = { sessionId: 's1' };
+
+    await renderAt('idle');
+    await fireEvent.press(screen.getByText('Start wind down'));
+
+    await waitFor(() => { if (useLull.getState().phase !== 'calibrating') throw new Error('not yet'); });
+    expect(useLull.getState().phase).toBe('calibrating');
+    expect((mockStartSession as unknown as { mock: { calls: unknown[][] } }).mock.calls).toHaveLength(0);
   });
 });

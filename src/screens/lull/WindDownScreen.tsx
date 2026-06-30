@@ -143,6 +143,14 @@ export function WindDownScreen({ navigation }: Props) {
     return () => {
       engineRef.current?.stop();
       engineRef.current = null;
+      // If THIS wind-down started the recording and the user left BEFORE sleep
+      // onset, cancel the session. After onset (phase 'asleep') the night must
+      // KEEP recording — never stop it here, or we'd lose the whole night the
+      // moment they fall asleep and tap Done.
+      if (ownsSessionRef.current && useLull.getState().phase !== 'asleep') {
+        ownsSessionRef.current = false;
+        void stopSession().catch(() => undefined);
+      }
       reset();
     };
   }, [reset]);
