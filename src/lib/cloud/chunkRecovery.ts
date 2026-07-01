@@ -215,14 +215,23 @@ async function settleChunkedSession(
   ].filter((v): v is number => typeof v === 'number' && Number.isFinite(v));
   const endMs = candidates.length > 0 ? Math.max(...candidates) : meta.startedAtMs;
 
-  // Upload the diagnostic raw ground truth (single RAW.BIN, written lockstep with
-  // the eeg chunks) as a parallel 'raw' segment stream. Best-effort: raw must
-  // never block finalizing a confirmed eeg night.
+  // Upload the raw ALL-channel ground truth (single RAW.BIN, written lockstep with
+  // the eeg chunks) as a parallel 'raw' segment stream, and capture its whole-file
+  // hash — the client-declared integrity gate that unlocks authoritative
+  // MULTICHANNEL (Fp1/Fp2 + EOG) staging. The hash is only declared once the full
+  // raw is confirmed in Storage (uploadFileAsSegments resolves only after every
+  // segment lands). Best-effort: on ANY failure we finalize WITHOUT the hash, so
+  // the night safely stages from the Fp1 eeg fallback rather than failing the
+  // backend integrity check on a partial upload.
+  let rawSha256: string | null = null;
   try {
     const rawBin = new File(new Directory(sessionsRoot(), sessionId), 'RAW.BIN');
-    if (rawBin.exists) await uploadFileAsSegments(prefix, 'raw', rawBin);
+    if (rawBin.exists) {
+      const res = await uploadFileAsSegments(prefix, 'raw', rawBin);
+      rawSha256 = res.sha256 || null;
+    }
   } catch {
-    /* non-fatal — raw is a debugging bonus */
+    /* non-fatal — finalize without the hash → Fp1 eeg fallback */
   }
 
   // Ship the self-describing µV-scale sidecar (scale.json) so the backend stages
@@ -267,7 +276,16 @@ async function settleChunkedSession(
     /* non-fatal — QC will flag missing stream_stats.json inside the report */
   }
 
-  await finalizeSession({ sessionId, startMs: meta.startedAtMs, endMs }, prefix);
+  await finalizeSession(
+    {
+      sessionId,
+      startMs: meta.startedAtMs,
+      endMs,
+      rawSha256,
+      rawStoragePath: rawSha256 ? `${prefix}/segments/raw` : null,
+    },
+    prefix,
+  );
   deleteLocalSession(sessionId);
   return prefix;
 }

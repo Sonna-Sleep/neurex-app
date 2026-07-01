@@ -20,6 +20,8 @@ import { manifestFile } from '../ble/recordingManifest';
 import { supabaseSessionRepo } from '../repos/supabase';
 import type { Session } from '../repos/types';
 import { buildSessionMetadata } from './sessionMetadata';
+import { sessionRowWithRaw } from './sessionRow';
+import { Sha256Stream } from './sha256Stream';
 import {
   ensureStreamStatsSidecar,
   refreshStreamStatsSidecarUploadCounts,
@@ -146,7 +148,15 @@ async function currentUserId(): Promise<string> {
   return data.user.id;
 }
 
-export type SegmentUploadResult = { stream: Stream; uploaded: number };
+export type SegmentUploadResult = {
+  stream: Stream;
+  uploaded: number;
+  /** Lowercase-hex SHA-256 of the whole file (the ordered concatenation the
+   * backend reassembles), computed as a byproduct of the upload read. '' when the
+   * local file was absent. For the raw stream this is the client-declared
+   * integrity hash that unlocks authoritative multichannel staging. */
+  sha256: string;
+};
 
 /** List segment object names already in Storage under a prefix/stream, so a
  * retry can RESUME instead of re-uploading tens of MB. Paginated because a full
@@ -261,7 +271,7 @@ export async function uploadFileAsSegments(
 ): Promise<SegmentUploadResult> {
   const supabase = getSupabase();
   if (!supabase) throw new NotAuthedError();
-  if (!file.exists) return { stream, uploaded: 0 };
+  if (!file.exists) return { stream, uploaded: 0, sha256: '' };
 
   return withUploadLock(async () => {
     // Resume: don't re-send segments already in Storage (a 9.6h night is ~115
@@ -274,12 +284,17 @@ export async function uploadFileAsSegments(
     // exactly regardless of where chunk boundaries fall.
     const step = segmentBytes(stream);
     const handle = file.open();
+    // Whole-file SHA-256 accumulated over the SAME ordered chunks the backend
+    // concatenates, so it is byte-exact even across a resumed upload (every chunk
+    // is read — and hashed — in order regardless of which segments are skipped).
+    const hash = new Sha256Stream();
     let index = 0;
     let uploaded = 0;
     try {
       for (;;) {
         const chunk = handle.readBytes(step); // advances offset even when we skip
         if (chunk.length === 0) break; // EOF
+        hash.update(chunk);
         const name = segName(index);
         const path = `${prefix}/segments/${stream}/${name}`;
         if (already.has(name)) {
@@ -296,7 +311,7 @@ export async function uploadFileAsSegments(
     } finally {
       handle.close();
     }
-    return { stream, uploaded };
+    return { stream, uploaded, sha256: hash.digestHex() };
   });
 }
 
@@ -324,6 +339,13 @@ export type FinalizeInput = {
   sessionId: string;
   startMs: number;
   endMs: number;
+  /** Whole-stream SHA-256 of the uploaded RAW.BIN (lowercase hex). Set ONLY when
+   * the complete raw is confirmed in Storage — it is the backend's integrity gate
+   * that unlocks authoritative multichannel (Fp1/Fp2 + EOG) staging. Absent →
+   * the night stages from the eeg fallback (Fp1-only). */
+  rawSha256?: string | null;
+  /** Storage prefix of the raw stream (provenance only). */
+  rawStoragePath?: string | null;
 };
 
 function recordingLabel(startMs: number): string {
@@ -407,7 +429,13 @@ export async function finalizeSession(input: FinalizeInput, prefix: string): Pro
   const readable = {
     recording_label: recordingLabel(input.startMs),
   };
-  const full = { ...core, ...readable, ...readFinalizeMetadata(input.sessionId) };
+  // raw_sha256/raw_storage_path ride the full insert (like the 0015 metadata
+  // columns); the additive-fallback below drops them if the live DB lacks the
+  // columns, so a night is never lost to a not-yet-applied migration.
+  const full = sessionRowWithRaw(
+    { ...core, ...readable, ...readFinalizeMetadata(input.sessionId) },
+    { rawSha256: input.rawSha256, rawStoragePath: input.rawStoragePath },
+  );
   let { error } = await supabase.from('sessions').insert(full);
   if (error && isMissingColumnError(error)) {
     if (__DEV__)
@@ -472,10 +500,15 @@ export async function transmitSession(input: FinalizeInput): Promise<string> {
   // a retry may accept identical existing bytes, but never overwrites different
   // bytes at the same segNNNN.bin. The live chunked-recording eeg stream still has
   // the stronger /ingest sha256 confirmation before local delete.
+  // Capture the raw whole-file hash so finalize can declare it — the integrity
+  // gate that unlocks authoritative multichannel staging. Best-effort: on failure
+  // we finalize without it and the night stages from the Fp1 eeg fallback.
+  let rawSha256: string | null = null;
   const rawBin = new File(dir, 'RAW.BIN');
   if (rawBin.exists) {
     try {
-      await uploadFileAsSegments(prefix, 'raw', rawBin);
+      const res = await uploadFileAsSegments(prefix, 'raw', rawBin);
+      rawSha256 = res.sha256 || null;
     } catch (e) {
       if (__DEV__) console.warn('[cloudSync] raw upload failed (non-fatal):', e);
     }
@@ -509,7 +542,10 @@ export async function transmitSession(input: FinalizeInput): Promise<string> {
   } catch (e) {
     if (__DEV__) console.warn('[cloudSync] stream_stats.json upload failed (non-fatal):', e);
   }
-  await finalizeSession(input, prefix);
+  await finalizeSession(
+    { ...input, rawSha256, rawStoragePath: rawSha256 ? `${prefix}/segments/raw` : null },
+    prefix,
+  );
   deleteLocalSession(input.sessionId); // nothing stays on the phone
   return prefix;
 }
