@@ -197,4 +197,62 @@ const approx = (a: number, b: number, eps = 1e-9) =>
   console.log('PASS legacy: single-channel → channels={Fp1}, fp1_uV unchanged');
 }
 
+// ── 18-sample (496 B) firmware build parses via length-derivation ────────────
+// The app used to hard-reject any length != 226 → an 18-sample build recorded
+// NOTHING. Samples/packet is now derived from the notification length.
+{
+  const makeN = (
+    chCodes: Partial<Record<number, number>>,
+    n: number,
+    seq = 1,
+  ): Uint8Array => {
+    const size = PKT_IDX_DATA + n * BYTES_PER_FRAME; // 10 + N×27
+    const pkt = new Uint8Array(size);
+    pkt[0] = PACKET_START_HI;
+    pkt[1] = PACKET_START_LO;
+    pkt[PKT_IDX_SEQ] = seq;
+    for (let s = 0; s < n; s++) {
+      const o = PKT_IDX_DATA + s * BYTES_PER_FRAME;
+      for (let ch = 0; ch < 8; ch++) writeI24be(pkt, o + ch * 3, chCodes[ch] ?? 0);
+    }
+    const csum = size - 3;
+    let sum = 0;
+    for (let i = PKT_IDX_SEQ; i < csum; i++) sum = (sum + pkt[i]) & 0xff;
+    pkt[csum] = sum;
+    pkt[csum + 1] = PACKET_END_HI;
+    pkt[csum + 2] = PACKET_END_LO;
+    return pkt;
+  };
+
+  const uvPerLsb = 0.5364;
+  const pkt = makeN({ 0: 100_000, 1: 200_000, 2: -50_000, 3: 75_000 }, 18);
+  assert.equal(pkt.length, 496, '18-sample packet is 496 B');
+  const v3: DeviceScaleInfo = {
+    ...FALLBACK_SCALE,
+    schemaVer: 3,
+    uvPerLsb,
+    nChannels: 4,
+    fp1Index: 0,
+    variantKnown: 1,
+    channelRole: [1, 2, 3, 4, 0, 0, 0, 0],
+  };
+  const out = parsePacket(pkt, 0, uvPerLsb, 0, activeChannels(v3));
+  assert.equal(out.ok, true, '18-sample packet must parse, not be rejected as size');
+  if (!out.ok) throw new Error('unreachable');
+  assert.equal(out.packet.samples.length, 18, '18-sample build → 18 samples');
+  approx(out.packet.samples[0].channels['Fp1'], 100_000 * uvPerLsb);
+  approx(out.packet.samples[17].channels['EOG-L'], -50_000 * uvPerLsb);
+
+  // A length that isn't 10 + N×27 is still rejected as 'size'.
+  const bad = new Uint8Array(100);
+  bad[0] = PACKET_START_HI;
+  bad[1] = PACKET_START_LO;
+  const badOut = parsePacket(bad, 0);
+  assert.equal(badOut.ok, false);
+  if (badOut.ok) throw new Error('unreachable');
+  assert.equal(badOut.reason, 'size');
+
+  console.log('PASS 18-sample: 496 B decodes 18 samples; mis-framed length → size');
+}
+
 console.log('ALL MONTAGE DECODE ASSERTIONS PASSED');

@@ -6,14 +6,13 @@ import {
   EEG_UV_PER_LSB,
   PACKET_END_HI,
   PACKET_END_LO,
-  PACKET_SIZE,
   PACKET_START_HI,
   PACKET_START_LO,
-  PKT_IDX_CHECKSUM,
   PKT_IDX_DATA,
   PKT_IDX_SEQ,
   PKT_IDX_TS,
-  SAMPLES_PER_PACKET,
+  PKT_TRAILER_BYTES,
+  samplesPerPacket,
 } from './constants';
 import type { ActiveChannel } from './scale';
 import { FP1_ROLE } from './scale';
@@ -77,18 +76,23 @@ export function parsePacket(
   fp1Index: number = CH_FP1,
   active?: ActiveChannel[],
 ): ParseOutcome {
-  if (bytes.length !== PACKET_SIZE) return { ok: false, reason: 'size' };
+  // Derive samples-per-packet from the notification length — an 8-sample (226 B)
+  // OR 18-sample (496 B) firmware build both parse. Reject a length that isn't a
+  // valid packet framing. The checksum byte sits just before the 2 end markers.
+  const nSamples = samplesPerPacket(bytes.length);
+  if (nSamples <= 0) return { ok: false, reason: 'size' };
+  const checksumIdx = bytes.length - PKT_TRAILER_BYTES;
   if (
     bytes[0] !== PACKET_START_HI ||
     bytes[1] !== PACKET_START_LO ||
-    bytes[PKT_IDX_CHECKSUM + 1] !== PACKET_END_HI ||
-    bytes[PKT_IDX_CHECKSUM + 2] !== PACKET_END_LO
+    bytes[checksumIdx + 1] !== PACKET_END_HI ||
+    bytes[checksumIdx + 2] !== PACKET_END_LO
   ) {
     return { ok: false, reason: 'markers' };
   }
   let sum = 0;
-  for (let i = PKT_IDX_SEQ; i < PKT_IDX_CHECKSUM; i++) sum = (sum + bytes[i]) & 0xff;
-  if (sum !== bytes[PKT_IDX_CHECKSUM]) return { ok: false, reason: 'checksum' };
+  for (let i = PKT_IDX_SEQ; i < checksumIdx; i++) sum = (sum + bytes[i]) & 0xff;
+  if (sum !== bytes[checksumIdx]) return { ok: false, reason: 'checksum' };
 
   const seq = bytes[PKT_IDX_SEQ];
   const baseMs = u32be(bytes, PKT_IDX_TS);
@@ -106,8 +110,8 @@ export function parsePacket(
       ? active.filter((c) => c.index >= 0 && c.index < 8)
       : [{ index: ch, role: FP1_ROLE }];
 
-  const samples: EegSample[] = new Array(SAMPLES_PER_PACKET);
-  for (let s = 0; s < SAMPLES_PER_PACKET; s++) {
+  const samples: EegSample[] = new Array(nSamples);
+  for (let s = 0; s < nSamples; s++) {
     const o = PKT_IDX_DATA + s * BYTES_PER_FRAME;
     const ms = (baseMs + s * EEG_SAMPLE_INTERVAL_MS) >>> 0;
     const channels: Record<string, number> = {};

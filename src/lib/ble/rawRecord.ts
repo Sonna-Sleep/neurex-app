@@ -24,7 +24,7 @@ import {
   EEG_SAMPLE_INTERVAL_MS,
   EEG_SAMPLE_RATE_HZ,
   PKT_IDX_DATA,
-  SAMPLES_PER_PACKET,
+  samplesPerPacket,
 } from './constants';
 
 export const RAW_SCHEMA_VER = 1;
@@ -63,9 +63,10 @@ export function rawHeader(nominalFs: number = EEG_SAMPLE_RATE_HZ): Uint8Array {
  * channel counts sign-extended to int32.
  */
 export function encodeRawPacket(bytes: Uint8Array, baseMs: number, seq: number): Uint8Array {
-  const out = new Uint8Array(SAMPLES_PER_PACKET * RAW_RECORD_BYTES);
+  const n = samplesPerPacket(bytes.length); // 8 (226 B) or 18 (496 B) — from length
+  const out = new Uint8Array(n * RAW_RECORD_BYTES);
   const dv = new DataView(out.buffer);
-  for (let s = 0; s < SAMPLES_PER_PACKET; s++) {
+  for (let s = 0; s < n; s++) {
     const r = s * RAW_RECORD_BYTES;
     const frame = FRAME_STATUS_OFF + s * BYTES_PER_FRAME;
     dv.setUint32(r, (baseMs + s * EEG_SAMPLE_INTERVAL_MS) >>> 0, true); // ms

@@ -1,6 +1,6 @@
 import { Directory, File, Paths } from 'expo-file-system';
 
-import { EEG_SAMPLE_RATE_HZ, SAMPLES_PER_PACKET } from './constants';
+import { EEG_SAMPLE_RATE_HZ } from './constants';
 import type { StreamStats } from './types';
 
 export const RECORDING_MANIFEST_NAME = 'recording_manifest.json';
@@ -282,10 +282,11 @@ export class RecordingManifestTracker {
     seq: number;
     generation: number;
     lastBaseMs: number;
+    samples: number;
     bytesWritten: number;
   }): void {
     this.manifest.packetsWritten += 1;
-    this.manifest.samplesWritten += SAMPLES_PER_PACKET;
+    this.manifest.samplesWritten += input.samples;
     this.manifest.lastSeq = input.seq;
     this.manifest.generation = input.generation;
     this.manifest.lastBaseMs = input.lastBaseMs;

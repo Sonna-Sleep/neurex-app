@@ -112,7 +112,20 @@ export const PKT_IDX_TS = 3;
 // First sample's channel data starts after start[2] + seq[1] + ts[4] + status[3] = byte 10.
 export const PKT_IDX_DATA = 10;
 export const BYTES_PER_FRAME = 27;
-export const PKT_IDX_CHECKSUM = 223; // 7 (header) + 8 × 27 (samples)
+export const PKT_IDX_CHECKSUM = 223; // nominal 8-sample build: 7 (header) + 8 × 27
+
+// Samples-per-packet is DERIVED from the BLE notification length, never hardcoded:
+// a packet is a 7-byte header (start[2] + seq[1] + ts[4]) + N × 27-byte frames +
+// a 3-byte trailer (checksum[1] + end[2]), so N = (len - 10) / 27. Firmware BLE
+// builds ship 8-sample (226 B) OR 18-sample (496 B) notifications; deriving N lets
+// one app record BOTH. Returns 0 when len is not a valid packet framing.
+export const PKT_HEADER_BYTES = 7;
+export const PKT_TRAILER_BYTES = 3;
+export function samplesPerPacket(len: number): number {
+  const framesBytes = len - PKT_HEADER_BYTES - PKT_TRAILER_BYTES;
+  if (framesBytes <= 0 || framesBytes % BYTES_PER_FRAME !== 0) return 0;
+  return framesBytes / BYTES_PER_FRAME;
+}
 
 // Fallback FP1 (Fpz) channel index, used ONLY when the device doesn't report one
 // over the Scale characteristic. The device is authoritative via fp1Index:

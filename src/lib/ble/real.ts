@@ -24,14 +24,12 @@ import { useSession } from '../../state/session';
 import {
   BATTERY_LEVEL_CHAR_UUID,
   BATTERY_SERVICE_UUID,
-  EEG_PACKET_INTERVAL_MS,
   EEG_SAMPLE_INTERVAL_MS,
   NEUREX_ACK_INTERVAL_MS,
   NEUREX_ACK_WRITE_UUID,
   NEUREX_EEG_NOTIFY_UUID,
   NEUREX_SCALE_INFO_UUID,
   NEUREX_SERVICE_UUID,
-  SAMPLES_PER_PACKET,
   TIME_GAP_REPORT_THRESHOLD_MS,
 } from './constants';
 import { shouldCaptureRaw } from './diagnosticCapture';
@@ -183,9 +181,10 @@ class ContigTracker {
 const EEG_RECORD_BYTES = 8; // uint32 ms + float32 fp1_uV
 
 function encodePacketEeg(packet: ParsedPacket): Uint8Array {
-  const buf = new ArrayBuffer(SAMPLES_PER_PACKET * EEG_RECORD_BYTES);
+  const n = packet.samples.length; // 8 or 18 — derived per packet, never hardcoded
+  const buf = new ArrayBuffer(n * EEG_RECORD_BYTES);
   const view = new DataView(buf);
-  for (let i = 0; i < SAMPLES_PER_PACKET; i++) {
+  for (let i = 0; i < n; i++) {
     const s = packet.samples[i];
     view.setUint32(i * EEG_RECORD_BYTES + 0, s.ms, true);
     view.setFloat32(i * EEG_RECORD_BYTES + 4, s.fp1_uV, true);
@@ -778,7 +777,11 @@ export const realBleClient: BleClient = {
 
           // Bytes are on the way to disk — now advance counters + ACK frontier.
           if (stats.lastBaseMs !== null) {
-            const timeGapMs = pkt.baseMs - (stats.lastBaseMs + EEG_PACKET_INTERVAL_MS);
+            // Expected next baseMs = last + (this packet's sample count)×interval.
+            // Packet size is constant within a firmware build (all 8- or all
+            // 18-sample), so this packet's length is the right per-packet stride.
+            const timeGapMs =
+              pkt.baseMs - (stats.lastBaseMs + pkt.samples.length * EEG_SAMPLE_INTERVAL_MS);
             if (timeGapMs >= TIME_GAP_REPORT_THRESHOLD_MS) {
               stats.timeGapCount++;
               stats.totalTimeGapMs += timeGapMs;
@@ -801,13 +804,14 @@ export const realBleClient: BleClient = {
           }
           stats.lastSeq = pkt.seq;
           stats.packets++;
-          stats.samples += SAMPLES_PER_PACKET;
+          stats.samples += pkt.samples.length;
           stats.lastBaseMs = pkt.baseMs;
           manifest.markPacketWritten({
             seq: pkt.seq,
             generation: stats.generation,
             lastBaseMs: pkt.baseMs,
-            bytesWritten: SAMPLES_PER_PACKET * EEG_RECORD_BYTES,
+            samples: pkt.samples.length,
+            bytesWritten: pkt.samples.length * EEG_RECORD_BYTES,
           });
 
           // Advance the ACK frontier only over in-order packets. The tracker
