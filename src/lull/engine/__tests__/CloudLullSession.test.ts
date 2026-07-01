@@ -60,6 +60,36 @@ describe('CloudLullSession', () => {
     });
   });
 
+  describe('25-minute hard cap', () => {
+    beforeEach(() => { jest.useFakeTimers(); });
+    afterEach(() => { jest.useRealTimers(); });
+
+    it('mutes and stops the session after 25 minutes', async () => {
+      const sockets: FakeSocket[] = [];
+      const sink = fakeSink();
+      const statuses: (string | null)[] = [];
+      const s = new CloudLullSession(
+        250, 's3', sink, undefined,
+        (msg) => statuses.push(msg),
+        { makeSocket: () => { const x = new FakeSocket(); sockets.push(x); return x; } },
+      );
+      s.start();
+      sockets[0].onopen?.();
+      await Promise.resolve(); await Promise.resolve();
+      sockets[0].onmessage?.({ data: JSON.stringify({ type: 'ready' }) });
+
+      // Before 25 min: still playing.
+      jest.advanceTimersByTime(24 * 60_000);
+      expect(sink.mute).not.toHaveBeenCalled();
+
+      // Cross 25 min: sound stops, session ends.
+      jest.advanceTimersByTime(1 * 60_000);
+      expect(sink.mute).toHaveBeenCalled();
+      expect(sink.stop).toHaveBeenCalled();
+      expect(statuses).toContain('25-minute limit reached — music stopped.');
+    });
+  });
+
   it('forwards 4-channel samples and applies cmd volume; mutes + closes on onset', async () => {
     const sock: FakeSocket[] = [];
     const sink = fakeSink();

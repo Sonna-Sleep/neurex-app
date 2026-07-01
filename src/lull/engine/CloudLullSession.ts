@@ -15,6 +15,10 @@ import { LullSocket, type LullCmd, type WebSocketLike } from '../net/lullSocket'
 import { LULL_WS_URL } from '../../lib/config';
 import { getSupabase } from '../../lib/auth/supabase';
 
+// Hard wind-down cap: after this long the music stops no matter what — so it can
+// never keep playing all night if sleep onset is never detected. Hardcoded.
+const MAX_SESSION_MS = 25 * 60_000; // 25 minutes
+
 export interface CloudTick {
   tSec: number;
   W: number;
@@ -32,6 +36,7 @@ export class CloudLullSession {
   private lastVolume = 1.0;
   private stopped = false;
   private muted = false;
+  private capTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly boundFeed: (s: EegSample[]) => void;
 
   constructor(
@@ -66,6 +71,17 @@ export class CloudLullSession {
     );
     this.sock.start();
     setLullFeed(this.boundFeed);
+    // Hard 25-minute cap — stop the sound even if onset never latches.
+    this.capTimer = setTimeout(() => this.timeCap(), MAX_SESSION_MS);
+  }
+
+  private timeCap(): void {
+    // 25-minute hard limit reached: stop the sound regardless of sleep state.
+    if (this.muted || this.stopped) return;
+    this.muted = true;
+    this.onStatus?.('25-minute limit reached — music stopped.');
+    void Promise.resolve(this.sink.mute()).catch(() => undefined);
+    void this.stop();
   }
 
   private async token(): Promise<string> {
@@ -126,6 +142,10 @@ export class CloudLullSession {
   stop(): Promise<void> {
     if (this.stopped) return Promise.resolve();
     this.stopped = true;
+    if (this.capTimer) {
+      clearTimeout(this.capTimer);
+      this.capTimer = null;
+    }
     clearLullFeed(this.boundFeed);
     this.sock?.stop();
     this.sock = null;
