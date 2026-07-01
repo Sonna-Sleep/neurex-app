@@ -32,7 +32,6 @@ import {
   NEUREX_SERVICE_UUID,
   TIME_GAP_REPORT_THRESHOLD_MS,
 } from './constants';
-import { shouldCaptureRaw } from './diagnosticCapture';
 import { classifyResume, parsePacket } from './packet';
 import { encodeRawPacket, rawHeader } from './rawRecord';
 import { activeChannels, FALLBACK_SCALE, parseScaleInfo, scaleProvenance } from './scale';
@@ -480,9 +479,12 @@ export const realBleClient: BleClient = {
     const device = await withTimeout(connecting, opts?.timeoutMs ?? 0, () => {
       manager.cancelDeviceConnection(deviceId).catch(() => undefined);
     });
-    // Larger MTU fits a 226-byte packet in one PDU instead of fragmenting it.
-    await device.requestMTU(247).catch((e) => {
-      if (__DEV__) console.warn('[ble/real] requestMTU(247) failed:', e);
+    // Request the max ATT MTU (512) so BOTH the 8-sample (226 B) and 18-sample
+    // (496 B) firmware packets fit one notify PDU instead of fragmenting /
+    // truncating. The peer negotiates down if it can't do 512 (an 8-sample
+    // stream still fits at any MTU >= 229). Matches the firmware's preferred MTU.
+    await device.requestMTU(512).catch((e) => {
+      if (__DEV__) console.warn('[ble/real] requestMTU(512) failed:', e);
     });
     await device.discoverAllServicesAndCharacteristics();
 
@@ -625,15 +627,16 @@ export const realBleClient: BleClient = {
           if (__DEV__) console.warn('[ble/real] scale.json write failed (non-fatal):', e);
         }
 
-        // Diagnostic raw-bit capture: the immutable ALL-channel integer ground
-        // truth (RAW.BIN), written lockstep with accepted EEG samples so a backend
-        // re-decode of the FP1 channel reproduces the EEG stream. Always a single
-        // file (uploaded as a 'raw' segment stream post-session), independent of
-        // the eeg segment/fallback mode. Gated by the capture setting (fleet on /
-        // prod opt-in). BEST-EFFORT:
-        // a raw write failure NEVER fails the eeg night (it disables raw + keeps
-        // recording). The 16-byte v1 header is written once on a fresh start.
-        const captureRaw = shouldCaptureRaw(useDiagnostics.getState().diagnosticCapture);
+        // RAW.BIN — the immutable ALL-channel integer ground truth, written
+        // lockstep with accepted EEG samples. This is now the PRIMARY multichannel
+        // source the backend stages from: when its whole-file hash is declared at
+        // finalize, the cloud decodes every channel and feeds Fp2/EOG into YASA.
+        // Captured for EVERY night (not just fleet/diagnostic builds) — an explicit
+        // diagnosticCapture='off' is the only opt-out. BEST-EFFORT: a raw write
+        // failure NEVER fails the eeg night (it disables raw + keeps recording,
+        // degrading that night to the Fp1 eeg stream). The 16-byte v1 header is
+        // written once on a fresh start.
+        const captureRaw = useDiagnostics.getState().diagnosticCapture !== 'off';
         const rawBinFile = new File(sessionDir, 'RAW.BIN');
         const rawFresh = !rawBinFile.exists || (rawBinFile.size ?? 0) === 0;
         let raw: SampleSink | null = null;
