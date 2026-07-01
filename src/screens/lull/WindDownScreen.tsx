@@ -38,6 +38,7 @@ import { startSession, stopSession, isSessionActive } from '../../lib/ble/stream
 
 import { useLull, type LullSink } from '../../lull/state/lullStore';
 import { CloudLullSession } from '../../lull/engine/CloudLullSession';
+import { readableLabelStable } from '../../lib/cloud/cloudSync';
 import type { LullParams } from '../../lull/core/sleepiness';
 import type { AudioSink } from '../../lull/audio/AudioSink';
 import { SpotifySink, type SpotifySinkState } from '../../lull/audio/SpotifySink';
@@ -198,6 +199,13 @@ export function WindDownScreen({ navigation }: Props) {
     setSignalLive(false);
 
     const audioSink = makeSink(sink, (s) => setSpotifyHint(spotifyHintFor(s)));
+    // Storage label so the cloud co-locates its authoritative lull_server.json with
+    // this night's recording. Matches readableLabelStable() used by the upload path.
+    const startedAtMs = useSession.getState().streaming?.startedAtMs;
+    const storageLabel =
+      startedAtMs && sessionId !== 'live'
+        ? readableLabelStable(sessionId, startedAtMs, pairedSerial ?? undefined)
+        : undefined;
     const engine = new CloudLullSession(
       params.fs_default,
       sessionId,
@@ -216,6 +224,8 @@ export function WindDownScreen({ navigation }: Props) {
         }
       },
       (msg) => setError(msg),
+      {},
+      storageLabel,
     );
     engineRef.current = engine;
     engine.start();

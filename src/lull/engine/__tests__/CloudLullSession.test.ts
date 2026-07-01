@@ -130,4 +130,80 @@ describe('CloudLullSession', () => {
     expect(sink.mute).toHaveBeenCalled();
     expect(ticks[ticks.length - 1].onset).toBe(true);
   });
+
+  describe('only-down volume ratchet + session log', () => {
+    async function startReady(
+      sink: ReturnType<typeof fakeSink>,
+      extraDeps: Record<string, unknown> = {},
+      storageLabel?: string,
+    ) {
+      const sockets: FakeSocket[] = [];
+      const s = new CloudLullSession(
+        250,
+        'sess-1',
+        sink,
+        undefined,
+        undefined,
+        { makeSocket: () => { const x = new FakeSocket(); sockets.push(x); return x; }, ...extraDeps },
+        storageLabel,
+      );
+      s.start();
+      sockets[0].onopen?.();
+      await Promise.resolve(); await Promise.resolve(); // getHello + send
+      sockets[0].onmessage?.({ data: JSON.stringify({ type: 'ready' }) });
+      return { s, sockets };
+    }
+
+    it('never raises the volume: a higher cmd after a lower one is clamped down', async () => {
+      const sink = fakeSink();
+      const { s, sockets } = await startReady(sink);
+      sockets[0].onmessage?.({ data: JSON.stringify({ type: 'cmd', tSec: 1, W: 0.5, volume: 0.3, phase: 'winddown', onset: false }) });
+      expect(sink.setVolume).toHaveBeenLastCalledWith(0.3);
+      // The cloud (or a reconnect) asks for LOUDER — the ratchet must refuse.
+      sockets[0].onmessage?.({ data: JSON.stringify({ type: 'cmd', tSec: 2, W: 0.9, volume: 0.8, phase: 'winddown', onset: false }) });
+      expect(sink.setVolume).toHaveBeenLastCalledWith(0.3); // still 0.3, never 0.8
+      const raised = sink.setVolume.mock.calls.some(([v]) => (v as number) > 0.3 + 1e-9);
+      expect(raised).toBe(false);
+      await s.stop();
+    });
+
+    it('writes the wind-down log (ticks + reason) on stop', async () => {
+      const sink = fakeSink();
+      const logs: { sessionId: string; log: any }[] = [];
+      const { s, sockets } = await startReady(sink, {
+        persistLog: (sessionId: string, log: unknown) => logs.push({ sessionId, log }),
+      });
+      sockets[0].onmessage?.({ data: JSON.stringify({ type: 'cmd', tSec: 1, W: 0.5, volume: 0.6, phase: 'winddown', onset: false }) });
+      await s.stop();
+      expect(logs).toHaveLength(1);
+      expect(logs[0].sessionId).toBe('sess-1');
+      expect(logs[0].log.reason).toBe('stopped');
+      expect(logs[0].log.ticks.length).toBeGreaterThan(0);
+      const last = logs[0].log.ticks[logs[0].log.ticks.length - 1];
+      expect(last.volume).toBe(0.6);
+      expect(last.brainVolume).toBe(0.6);
+    });
+
+    it('records reason "onset" + onsetTMs when sleep onset latches', async () => {
+      const sink = fakeSink();
+      const logs: any[] = [];
+      const { sockets } = await startReady(sink, {
+        persistLog: (_id: string, log: unknown) => logs.push(log),
+      });
+      sockets[0].onmessage?.({ data: JSON.stringify({ type: 'cmd', tSec: 3, W: 0.1, volume: 0, phase: 'asleep', onset: true }) });
+      expect(logs).toHaveLength(1); // onset → stop() → persistLog runs synchronously
+      expect(logs[0].reason).toBe('onset');
+      expect(logs[0].onsetTMs).not.toBeNull();
+    });
+
+    it('sends the storage label + current volume in the hello frame', async () => {
+      const sink = fakeSink();
+      const { s, sockets } = await startReady(sink, {}, '2026-06-30_10-00PM_White_abc123');
+      const hello = JSON.parse(sockets[0].sent.find((m) => m.includes('hello'))!);
+      expect(hello.type).toBe('hello');
+      expect(hello.label).toBe('2026-06-30_10-00PM_White_abc123');
+      expect(hello.lastVolume).toBe(1.0); // ratchet floor at start
+      await s.stop();
+    });
+  });
 });

@@ -22,6 +22,9 @@ export interface LullHello {
   fs: number;
   sessionId: string;
   lastVolume: number;
+  /** {uid}/{label} storage prefix's LABEL part, so the cloud can co-locate its
+   *  authoritative lull_server.json with this night. Optional (older builds omit it). */
+  label?: string;
 }
 
 export interface LullSocketHandlers {

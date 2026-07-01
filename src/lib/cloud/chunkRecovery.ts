@@ -241,6 +241,16 @@ async function settleChunkedSession(
     /* non-fatal — debugging/recovery sidecar only */
   }
 
+  // Ship the wind-down log (lull.json) written by CloudLullSession at Lull close,
+  // so tomorrow the 25-min fade (W, played volume, onset) sits next to the EEG.
+  // Best-effort: absent on nights that never ran Lull, and never blocks finalize.
+  try {
+    const lullFile = new File(new Directory(sessionsRoot(), sessionId), 'lull.json');
+    await uploadSidecarIfPresent(prefix, lullFile, 'lull.json');
+  } catch {
+    /* non-fatal — the wind-down log is a bonus artifact */
+  }
+
   // Ship the BLE/upload stats sidecar before finalize when possible. Recovery can
   // synthesize one from meta/endMs if the live stop path never got to write it.
   try {
