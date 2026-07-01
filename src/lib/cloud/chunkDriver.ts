@@ -23,6 +23,7 @@ import { drainQueue } from './chunkUpload';
 import { fileQueueStore, readSegBytes, sha256Hex } from './chunkUploadStore';
 import { makeIngestUploader } from './chunkUploader';
 import { readableLabelStable } from './cloudSync';
+import { ensureEarlyManifestUploaded } from './earlyManifest';
 
 type DriverCtx = { sessionId: string; startedAtMs: number; serial?: string | null };
 
@@ -164,6 +165,12 @@ export async function enqueueSegment(seg: SegmentClosed): Promise<void> {
         }),
       );
       if (__DEV__) console.log(`[F2C] enqueued seq=${seg.index} bytes=${bytes.length} prefix=${prefix}`);
+      // Persist the session's identity (recording_manifest.json) to Storage as
+      // soon as the first chunk is queued, so a night whose app is killed before
+      // finalize is still recoverable by the backend (it learns the real session
+      // id + start from the manifest). Fire-and-forget: never delays or blocks
+      // the EEG upload; retries on the next chunk until it lands.
+      void ensureEarlyManifestUploaded(session.sessionId, prefix);
     } catch (e) {
       console.warn('[F2C] enqueue failed (kept on disk):', (e as Error)?.message ?? e);
     }
