@@ -20,7 +20,7 @@ class FakeSocket implements WebSocketLike {
 }
 
 function fakeSink() {
-  return { setVolume: jest.fn(async () => undefined), mute: jest.fn(async () => undefined), stop: jest.fn(async () => undefined) };
+  return { setVolume: jest.fn(async (_v: number) => undefined), mute: jest.fn(async () => undefined), stop: jest.fn(async () => undefined) };
 }
 
 const sample = (fp1: number, fp2: number, l: number, r: number): EegSample => ({
@@ -60,14 +60,12 @@ describe('CloudLullSession', () => {
     });
   });
 
-  describe('25-minute hard cap', () => {
+  describe('25-minute time fade', () => {
     beforeEach(() => { jest.useFakeTimers(); });
     afterEach(() => { jest.useRealTimers(); });
 
-    it('mutes and stops the session after 25 minutes', async () => {
+    async function startReady(sink: ReturnType<typeof fakeSink>, statuses: (string | null)[] = []) {
       const sockets: FakeSocket[] = [];
-      const sink = fakeSink();
-      const statuses: (string | null)[] = [];
       const s = new CloudLullSession(
         250, 's3', sink, undefined,
         (msg) => statuses.push(msg),
@@ -77,16 +75,34 @@ describe('CloudLullSession', () => {
       sockets[0].onopen?.();
       await Promise.resolve(); await Promise.resolve();
       sockets[0].onmessage?.({ data: JSON.stringify({ type: 'ready' }) });
+      return { s, sockets };
+    }
 
-      // Before 25 min: still playing.
-      jest.advanceTimersByTime(24 * 60_000);
+    it('gradually fades ~50% at 12.5 min, then 0% + stop at 25 min', async () => {
+      const sink = fakeSink();
+      const statuses: (string | null)[] = [];
+      await startReady(sink, statuses);
+
+      jest.advanceTimersByTime(12.5 * 60_000);
+      const mid = sink.setVolume.mock.calls.at(-1)?.[0] as number;
+      expect(mid).toBeGreaterThan(0.45);
+      expect(mid).toBeLessThan(0.55);
       expect(sink.mute).not.toHaveBeenCalled();
 
-      // Cross 25 min: sound stops, session ends.
-      jest.advanceTimersByTime(1 * 60_000);
+      jest.advanceTimersByTime(12.5 * 60_000);
       expect(sink.mute).toHaveBeenCalled();
       expect(sink.stop).toHaveBeenCalled();
-      expect(statuses).toContain('25-minute limit reached — music stopped.');
+      expect(statuses).toContain('25-minute limit reached — music muted.');
+    });
+
+    it('applies the LOWER of brain volume and time fade (brain can go faster)', async () => {
+      const sink = fakeSink();
+      const { sockets } = await startReady(sink);
+      jest.advanceTimersByTime(60_000); // time fade ~0.96
+      sockets[0].onmessage?.({
+        data: JSON.stringify({ type: 'cmd', tSec: 60, W: 0.3, volume: 0.2, phase: 'winddown', onset: false }),
+      });
+      expect(sink.setVolume).toHaveBeenLastCalledWith(0.2);
     });
   });
 

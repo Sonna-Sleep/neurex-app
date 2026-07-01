@@ -15,9 +15,11 @@ import { LullSocket, type LullCmd, type WebSocketLike } from '../net/lullSocket'
 import { LULL_WS_URL } from '../../lib/config';
 import { getSupabase } from '../../lib/auth/supabase';
 
-// Hard wind-down cap: after this long the music stops no matter what — so it can
-// never keep playing all night if sleep onset is never detected. Hardcoded.
-const MAX_SESSION_MS = 25 * 60_000; // 25 minutes
+// Time fade: the volume ramps linearly to 0% over 25 minutes regardless of the
+// brain signal, so the sound always winds down to silence by minute 25 even if
+// sleep onset is never detected. Hardcoded.
+const MAX_SESSION_MS = 25 * 60_000; // reach 0% volume at 25 minutes
+const RAMP_INTERVAL_MS = 1000; // recompute the fade every second (smooth)
 
 export interface CloudTick {
   tSec: number;
@@ -36,7 +38,10 @@ export class CloudLullSession {
   private lastVolume = 1.0;
   private stopped = false;
   private muted = false;
-  private capTimer: ReturnType<typeof setTimeout> | null = null;
+  private elapsedMs = 0;
+  private timeFloor = 1.0; // linear time fade, 1 → 0 over MAX_SESSION_MS
+  private lastCmd: LullCmd | null = null;
+  private rampTimer: ReturnType<typeof setInterval> | null = null;
   private readonly boundFeed: (s: EegSample[]) => void;
 
   constructor(
@@ -71,17 +76,35 @@ export class CloudLullSession {
     );
     this.sock.start();
     setLullFeed(this.boundFeed);
-    // Hard 25-minute cap — stop the sound even if onset never latches.
-    this.capTimer = setTimeout(() => this.timeCap(), MAX_SESSION_MS);
+    // Start the time fade — volume ramps to 0% by 25 minutes.
+    this.rampTimer = setInterval(() => this.rampTick(), RAMP_INTERVAL_MS);
   }
 
-  private timeCap(): void {
-    // 25-minute hard limit reached: stop the sound regardless of sleep state.
-    if (this.muted || this.stopped) return;
-    this.muted = true;
-    this.onStatus?.('25-minute limit reached — music stopped.');
-    void Promise.resolve(this.sink.mute()).catch(() => undefined);
-    void this.stop();
+  private rampTick(): void {
+    if (this.stopped || this.muted) return;
+    this.elapsedMs += RAMP_INTERVAL_MS;
+    this.timeFloor = Math.max(0, 1 - this.elapsedMs / MAX_SESSION_MS);
+    this.applyVolume();
+    if (this.elapsedMs >= MAX_SESSION_MS) {
+      // Reached 0% at 25 minutes — silence and end the session.
+      this.muted = true;
+      this.onStatus?.('25-minute limit reached — music muted.');
+      void Promise.resolve(this.sink.mute()).catch(() => undefined);
+      void this.stop();
+    }
+  }
+
+  /** Drive the sink to the LOWER of the brain-driven volume and the time fade. */
+  private applyVolume(): void {
+    const v = Math.min(this.lastVolume, this.timeFloor);
+    void Promise.resolve(this.sink.setVolume(v)).catch(() => undefined);
+    const c = this.lastCmd;
+    this.onTick?.({
+      tSec: c ? c.tSec : this.elapsedMs / 1000,
+      W: c ? c.W : 1,
+      volume: v,
+      onset: c ? c.onset : false,
+    });
   }
 
   private async token(): Promise<string> {
@@ -119,9 +142,9 @@ export class CloudLullSession {
 
   private onCmd(c: LullCmd): void {
     if (this.stopped || this.muted) return;
-    this.lastVolume = c.volume;
-    void Promise.resolve(this.sink.setVolume(c.volume)).catch(() => undefined);
-    this.onTick?.({ tSec: c.tSec, W: c.W, volume: c.volume, onset: c.onset });
+    this.lastCmd = c;
+    this.lastVolume = c.volume; // brain-driven target; the time fade caps it further
+    this.applyVolume();
     if (c.onset && !this.muted) {
       this.muted = true;
       void Promise.resolve(this.sink.mute()).catch(() => undefined);
@@ -142,9 +165,9 @@ export class CloudLullSession {
   stop(): Promise<void> {
     if (this.stopped) return Promise.resolve();
     this.stopped = true;
-    if (this.capTimer) {
-      clearTimeout(this.capTimer);
-      this.capTimer = null;
+    if (this.rampTimer) {
+      clearInterval(this.rampTimer);
+      this.rampTimer = null;
     }
     clearLullFeed(this.boundFeed);
     this.sock?.stop();
