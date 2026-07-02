@@ -26,20 +26,20 @@ Set these in `.env` for local development and in EAS for release builds:
 
 ## Current Data Flow
 
-1. The phone streams one EEG channel from the sleep mask and writes rolling
-   `documentDirectory/sessions/<sessionId>/segments/eeg/segNNNN.bin` files.
-2. Closed segments upload during the recording through the backend `/ingest`
-   endpoint and are deleted locally only after byte/hash confirmation.
-3. On stop, auto-stop, or crash recovery, the app uploads `scale.json` and
-   `stream_stats.json`, then inserts a `sessions` row with `status='uploaded'`.
-4. The backend webhook/reconcile job reads the segment stream in order, writes
-   one `signal_quality_report`, preserves beta sleep staging, and updates the
+1. The phone streams schema-v3 four-channel EEG+EOG packets from the mask and
+   writes exactly one local sample file:
+   `documentDirectory/sessions/<sessionId>/RAW.BIN`.
+2. On stop, auto-stop, or crash recovery, the app uploads `RAW.BIN` as ordered
+   `{prefix}/segments/raw/segNNNN.bin` chunks and computes the whole-file
+   SHA-256.
+3. The app uploads `scale.json`, `recording_manifest.json`, and
+   `stream_stats.json`, then finalizes the `sessions` row with `raw_sha256` and
+   `raw_storage_path`.
+4. The backend verifies the assembled `segments/raw` bytes against
+   `raw_sha256`, stages the authoritative multichannel signal, and updates the
    row to `status='ready'` or `status='failed'`.
-5. The app listens to the session row over Realtime and renders ready nights in
-   Journal.
-
-The app uploads one required EEG stream. `RAW.BIN` is optional diagnostic
-capture and must not block session finalization.
+5. The app deletes the local session only after finalize succeeds, then listens
+   to the session row over Realtime and renders ready nights in Journal.
 
 ## Dashboard Settings
 

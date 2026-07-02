@@ -1,9 +1,7 @@
 import {
   BYTES_PER_FRAME,
-  CH_FP1,
   DEVICE_REBOOT_GAP_MS,
   EEG_SAMPLE_INTERVAL_MS,
-  EEG_UV_PER_LSB,
   PACKET_END_HI,
   PACKET_END_LO,
   PACKET_START_HI,
@@ -59,21 +57,15 @@ function u32be(bytes: Uint8Array, offset: number): number {
   );
 }
 
-// uvPerLsb is the device-reported µV-per-LSB (read from the Scale characteristic
-// at connect); it defaults to EEG_UV_PER_LSB so units that predate that
-// characteristic decode byte-identically to before.
-//
-// active is the device's montage (from scale.activeChannels): which physical
-// channel carries which role. When provided, parsePacket decodes every active
-// channel into sample.channels keyed by role ('Fp1'/'Fp2'/'EOG-L'/'EOG-R'), and
-// sets fp1_uV from the Fp1 role for live consumers. When omitted, it decodes the
-// single fp1Index channel as 'Fp1'.
+// uvPerLsb and active come from the device's schema-v3 Scale characteristic.
+// active describes which physical channel carries which role. parsePacket decodes
+// every active channel into sample.channels keyed by role
+// ('Fp1'/'Fp2'/'EOG-L'/'EOG-R') and sets fp1_uV from the Fp1 role for live consumers.
 export function parsePacket(
   bytes: Uint8Array,
   generation: number,
-  uvPerLsb: number = EEG_UV_PER_LSB,
-  fp1Index: number = CH_FP1,
-  active?: ActiveChannel[],
+  uvPerLsb: number,
+  active: ActiveChannel[],
 ): ParseOutcome {
   // Derive samples-per-packet from the notification length — an 8-sample (226 B)
   // OR 18-sample (496 B) firmware build both parse. Reject a length that isn't a
@@ -95,19 +87,8 @@ export function parsePacket(
 
   const seq = bytes[PKT_IDX_SEQ];
   const baseMs = u32be(bytes, PKT_IDX_TS);
-  // The device reports which channel carries FP1 (Fpz) over the Scale
-  // characteristic: 0=CH1 (YELLOW/GREEN/BLUE/WHITE/LT), 4=CH5 (RED). Honor it so
-  // one app build reads the right channel on every board. Guard to an in-frame
-  // channel (0..7); fall back to CH_FP1 if the device reports something invalid.
-  const ch = fp1Index >= 0 && fp1Index < 8 ? fp1Index : CH_FP1;
 
-  // Resolve the montage to decode. With an explicit active list we decode every
-  // role into channels{}. Without one, fall back to a single Fp1 channel at
-  // fp1Index.
-  const montage: ActiveChannel[] =
-    active && active.length > 0
-      ? active.filter((c) => c.index >= 0 && c.index < 8)
-      : [{ index: ch, role: FP1_ROLE }];
+  const montage = active.filter((c) => c.index >= 0 && c.index < 8);
 
   const samples: EegSample[] = new Array(nSamples);
   for (let s = 0; s < nSamples; s++) {
@@ -117,12 +98,9 @@ export function parsePacket(
     for (const { index, role } of montage) {
       channels[role] = i24be(bytes, o + index * 3) * uvPerLsb;
     }
-    // fp1_uV is a live-consumer convenience: the Fp1 role when the montage names
-    // one, else the resolved fp1Index channel.
-    const fp1_uV =
-      channels[FP1_ROLE] !== undefined
-        ? channels[FP1_ROLE]
-        : i24be(bytes, o + ch * 3) * uvPerLsb;
+    // fp1_uV is a live-consumer convenience. The connection path has already
+    // verified the current firmware exposes Fp1 in the schema-v3 montage.
+    const fp1_uV = channels[FP1_ROLE] ?? 0;
     samples[s] = { ms, fp1_uV, channels };
   }
   return { ok: true, packet: { generation, seq, baseMs, samples } };

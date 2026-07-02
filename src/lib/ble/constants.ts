@@ -7,8 +7,8 @@
 //   - EEG notify: 6e6b0000-1000-8000-0078-65726e6b0002
 // (Derived from NimBLE's little-endian BLE_UUID128_INIT byte order.)
 //
-// Each device advertises a per-color local name ("Neurex Yellow"/"Neurex Red"/
-// "Neurex Blue"/"Neurex Green"); older units use "Neurex-EEG-XXXX". The scanner
+// Each device advertises a per-color local name ("Neurex Yellow",
+// "Neurex Blue", "Neurex Green", "Neurex White", or "Neurex LT"). The scanner
 // matches the shared "Neurex" prefix client-side (see ble/real.ts).
 //
 // Treat NEUREX_BLE_RESTORE_IDENTIFIER as immutable across app versions.
@@ -34,18 +34,15 @@ export const NEUREX_ACK_WRITE_UUID = '6e6b0000-1000-8000-0078-65726e6b0003';
 // Scale/DeviceInfo characteristic (READ-only, same 6e6b… family; firmware UUID
 // 6e6b0004). The device serializes its ACTUAL amplitude scale here — µV-per-LSB,
 // PGA gain, VREF, sample rate, channel map, firmware build id — as an append-only
-// little-endian struct. v1 is a 20-byte prefix; current v2 firmware sends 21 bytes
-// with variant_known appended. The app reads it once at connect so the scale is
-// self-describing instead of an assumption that silently breaks when the firmware
-// gain changes. Mirror the layout on nRF5340.
+// little-endian struct. The current firmware sends schema v3: 29 bytes, including
+// variant_known and channel_role[8]. The app reads it once at connect so the
+// scale and montage are self-describing instead of assumptions that silently
+// break when the firmware changes. Mirror the layout on nRF5340.
 export const NEUREX_SCALE_INFO_UUID = '6e6b0000-1000-8000-0078-65726e6b0004';
 // Bump in lockstep with NEUREX_SCALE_SCHEMA_VER in firmware neurex_scale.h.
-// v3 = channel_role[8] montage tail (Fp1/Fp2/EOG-L/EOG-R). Informational only —
-// parseScaleInfo() reads the device's advertised schemaVer, not this constant.
+// v3 = channel_role[8] montage tail (Fp1/Fp2/EOG-L/EOG-R).
 export const NEUREX_SCALE_INFO_SCHEMA_VER = 3;
-// Minimum readable v1 prefix. Current v2 firmware sends 21 bytes; scale.ts reads
-// the appended variant_known byte only when present so older v1 devices still work.
-export const NEUREX_SCALE_INFO_BYTES = 20;
+export const NEUREX_SCALE_INFO_BYTES = 29;
 
 // How often the ACK loop writes the contiguous frontier. Firmware just needs
 // SOMETHING periodic to drain the ring, not a per-packet ACK. Matches
@@ -69,16 +66,7 @@ export const BATTERY_LEVEL_CHAR_UUID = '00002a19-0000-1000-8000-00805f9b34fb';
 export const NEUREX_BLE_RESTORE_IDENTIFIER = 'neurex-ble-bg' as const;
 
 // ── EEG signal scale ────────────────────────────────────────────────────────
-// FALLBACK ONLY. The device now reports its real µV-per-LSB over the Scale
-// characteristic (NEUREX_SCALE_INFO_UUID), which the app reads at connect and
-// uses for the code→µV conversion. This constant is used ONLY for units that
-// predate that characteristic (older firmware that doesn't expose it) — keeping
-// the old behavior byte-identical for them.
-//
 // ADS1299, gain 1, ±4.5 V reference: 4.5 / 2^23 / 1 * 1e6 ≈ 0.5364 µV/LSB.
-// Matches the firmware default (CHnSET ×1) and ble_stream_recv.py. 2026-06-13:
-// dropped ×24 → ×1 — dry forehead electrodes returned large DC offsets that
-// clipped CH1 at the ±187.5 mV gain-24 PGA rail.
 export const EEG_UV_PER_LSB = (4.5 / Math.pow(2, 23) / 1) * 1e6;
 
 // Nominal sample rate from the firmware ADS1299 driver (4 ms per sample).
@@ -128,11 +116,6 @@ export function samplesPerPacket(len: number): number {
   if (framesBytes <= 0 || framesBytes % BYTES_PER_FRAME !== 0) return 0;
   return framesBytes / BYTES_PER_FRAME;
 }
-
-// Fallback FP1 (Fpz) channel index, used ONLY when the device doesn't report one
-// over the Scale characteristic. The device is authoritative via fp1Index:
-// 0=CH1 (YELLOW/GREEN/BLUE/WHITE/LT), 4=CH5 (RED). See parsePacket + ble/scale.ts.
-export const CH_FP1 = 0;
 
 // A backward jump in baseMs (firmware ms-since-boot) larger than this means the
 // device rebooted (brownout/watchdog) and its clock reset — a NEW epoch, not a

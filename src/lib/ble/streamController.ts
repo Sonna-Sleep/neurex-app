@@ -270,8 +270,6 @@ export async function startSession(
   // fallback defaults (CH1/0xFC) — the channel/BIAS may be wrong, so the night
   // can come back fully railed (a real 4-h night was lost exactly this way and
   // looked valid because nothing surfaced it). Block BEFORE any data is written.
-  // variantKnown === null (older v1 firmware) is "unknown but don't block" —
-  // back-compat: those units predate the byte and recorded fine for months.
   if (device.scale.variantKnown === 0) {
     await device.disconnect().catch(() => undefined);
     throw new UnconfiguredDeviceError();

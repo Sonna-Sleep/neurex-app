@@ -105,13 +105,7 @@ export type StreamResumeOpts = {
 
 export type ConnectedDevice = {
   deviceId: string;
-  /**
-   * The device's self-describing amplitude scale, read once at connect (µV/LSB,
-   * gain, firmware build, and — schema v2+ — variantKnown). FALLBACK_SCALE when
-   * the unit predates the Scale characteristic or the read failed. Exposed so a
-   * caller can refuse to record on an unconfigured board (variantKnown === 0)
-   * before any data is written.
-   */
+  /** The device's schema-v3 scale/montage, read once at connect. */
   scale: DeviceScaleInfo;
   /** Subscribe to the notify characteristic and start writing samples to disk. */
   startStream(

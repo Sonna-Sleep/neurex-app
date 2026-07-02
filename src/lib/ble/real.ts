@@ -30,7 +30,7 @@ import {
 } from './constants';
 import { classifyResume, parsePacket } from './packet';
 import { encodeRawPacket, rawHeader, RAW_RECORD_BYTES } from './rawRecord';
-import { activeChannels, FALLBACK_SCALE, parseScaleInfo, scaleProvenance } from './scale';
+import { activeChannels, parseScaleInfo, scaleProvenance } from './scale';
 import type { ActiveChannel, DeviceScaleInfo } from './scale';
 import { RecordingManifestTracker, readRecordingManifest } from './recordingManifest';
 import type {
@@ -333,12 +333,10 @@ export const realBleClient: BleClient = {
     await device.discoverAllServicesAndCharacteristics();
 
     // Read the device's self-describing amplitude scale ONCE (µV-per-LSB, gain,
-    // VREF, firmware build id). The app converts raw ADS codes → µV with THIS
-    // value instead of a hardcoded constant, so a future PGA-gain change can't
-    // silently mis-scale recordings. Units that predate the Scale characteristic
-    // (older firmware), or a read failure, fall back to the gain-1 scale —
-    // byte-identical to the previous behavior.
-    let deviceScale: DeviceScaleInfo = FALLBACK_SCALE;
+    // VREF, firmware build id, and schema-v3 montage). The app converts raw ADS
+    // codes -> µV with THIS value and requires the four-channel montage before
+    // recording.
+    let deviceScale: DeviceScaleInfo | null = null;
     try {
       const sc = await device.readCharacteristicForService(
         NEUREX_SERVICE_UUID,
@@ -352,17 +350,30 @@ export const realBleClient: BleClient = {
             `[ble/real] device scale ${parsed.uvPerLsb.toFixed(4)} µV/LSB ` +
               `(gain ${parsed.pgaGain}, schema ${parsed.schemaVer}, fw ${parsed.fwBuildId.toString(16)})`,
           );
-      } else if (__DEV__) {
-        console.log('[ble/real] no/invalid Scale characteristic — fallback gain-1 scale');
       }
     } catch (e) {
-      if (__DEV__) console.warn('[ble/real] scale read failed; using fallback:', e);
+      if (__DEV__) console.warn('[ble/real] scale read failed:', e);
     }
+    if (!deviceScale) {
+      throw new Error('Neurex firmware must expose schema-v3 scale/montage before recording.');
+    }
+    const scale = deviceScale;
 
     // Resolve the device montage once: which physical channel carries which role
     // (schema v3 channel_role[] → Fp1/Fp2/EOG-L/EOG-R). Passed to parsePacket so
     // every sample carries the full montage in sample.channels.
-    const montage: ActiveChannel[] = activeChannels(deviceScale);
+    const montage: ActiveChannel[] = activeChannels(scale);
+    const roles = new Set(montage.map((c) => c.role));
+    const hasFourChannelMontage =
+      scale.nChannels === 4 &&
+      montage.length === 4 &&
+      roles.has('Fp1') &&
+      roles.has('Fp2') &&
+      roles.has('EOG-L') &&
+      roles.has('EOG-R');
+    if (!hasFourChannelMontage) {
+      throw new Error('Neurex firmware must expose Fp1/Fp2/EOG-L/EOG-R as a four-channel montage.');
+    }
     if (__DEV__)
       console.log(
         `[ble/real] montage ${montage.map((c) => `CH${c.index + 1}=${c.role}`).join(' ')}`,
@@ -405,7 +416,7 @@ export const realBleClient: BleClient = {
       deviceId,
       // Expose the scale read above so the session controller can refuse to
       // record on an unconfigured board (deviceScale.variantKnown === 0).
-      scale: deviceScale,
+      scale,
 
       async startStream(
         sessionId: string,
@@ -421,11 +432,11 @@ export const realBleClient: BleClient = {
         const manifest = new RecordingManifestTracker({
           sessionId,
           startedAtMs: manifestStartedAtMs,
-          sampleRateHz: deviceScale.sampleRateHz,
+          sampleRateHz: scale.sampleRateHz,
           rawRecordBytes: RAW_RECORD_BYTES,
         });
 
-        if (__DEV__) console.log(`[ble/real] writer=RAW.BIN sr=${deviceScale.sampleRateHz}`);
+        if (__DEV__) console.log(`[ble/real] writer=RAW.BIN sr=${scale.sampleRateHz}`);
 
         // Self-describing SCALE sidecar — scale.json, DELIBERATELY distinct from
         // recovery.ts's meta.json (which owns startedAtMs/serial for crash
@@ -437,10 +448,10 @@ export const realBleClient: BleClient = {
           const scaleMeta = {
             schemaVer: 1,
             sessionId,
-            sampleRateHz: deviceScale.sampleRateHz,
+            sampleRateHz: scale.sampleRateHz,
             sampleIntervalMs: EEG_SAMPLE_INTERVAL_MS,
             rawRecordBytes: RAW_RECORD_BYTES,
-            scale: scaleProvenance(deviceScale),
+            scale: scaleProvenance(scale),
           };
           const scaleFile = new File(sessionDir, 'scale.json');
           if (scaleFile.exists) scaleFile.delete();
@@ -467,7 +478,7 @@ export const realBleClient: BleClient = {
         try {
           raw = AppendingFile.open(sessionDir, 'RAW.BIN');
           if (rawFresh) {
-            const header = rawHeader(deviceScale.sampleRateHz);
+            const header = rawHeader(scale.sampleRateHz);
             raw.appendChunk(header);
             stats.rawBytesWritten += header.length;
           } else {
@@ -532,8 +543,7 @@ export const realBleClient: BleClient = {
           const result = parsePacket(
             bytes,
             stats.generation,
-            deviceScale.uvPerLsb,
-            deviceScale.fp1Index,
+            scale.uvPerLsb,
             montage,
           );
           if (!result.ok) {

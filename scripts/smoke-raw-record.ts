@@ -22,9 +22,16 @@ import {
   RAW_RECORD_BYTES,
   rawHeader,
 } from '../src/lib/ble/rawRecord';
+import type { ActiveChannel } from '../src/lib/ble/scale';
 
 // Frame status starts 3 bytes before the first channel sample (PKT_IDX_DATA).
 const STATUS_OFF = PKT_IDX_DATA - 3;
+const MONTAGE: ActiveChannel[] = [
+  { index: 0, role: 'Fp1' },
+  { index: 1, role: 'Fp2' },
+  { index: 2, role: 'EOG-L' },
+  { index: 3, role: 'EOG-R' },
+];
 
 function setChecksum(pkt: Uint8Array): void {
   let sum = 0;
@@ -91,11 +98,10 @@ for (let s = 0; s < SAMPLES_PER_PACKET; s++) {
   }
 }
 
-// ── Cross-check vs parsePacket: the fp1 channel in raw × uvPerLsb == fp1_uV ──
-// (this is what makes raw_to_eeg_bin reproduce the app's eeg.bin)
-const parsed = parsePacket(pkt, 0, 1.0, 4); // fp1Index = 4 (RED)
+// ── Cross-check vs parsePacket: raw CH1 × uvPerLsb == live Fp1 convenience ──
+const parsed = parsePacket(pkt, 0, 1.0, MONTAGE);
 if (!parsed.ok) throw new Error('parse failed');
-assert.equal(dv.getInt32(0 + 8 + 4 * 4, true) * 1.0, parsed.packet.samples[0].fp1_uV);
+assert.equal(dv.getInt32(0 + 8 + 0 * 4, true) * 1.0, parsed.packet.samples[0].fp1_uV);
 
 // ── Negative int24 sign-extends to int32 ──
 const neg = makePacket(0, 0);

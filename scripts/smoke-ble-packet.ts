@@ -15,6 +15,14 @@ import {
   SAMPLES_PER_PACKET,
 } from '../src/lib/ble/constants';
 import { parsePacket } from '../src/lib/ble/packet';
+import type { ActiveChannel } from '../src/lib/ble/scale';
+
+const MONTAGE: ActiveChannel[] = [
+  { index: 0, role: 'Fp1' },
+  { index: 1, role: 'Fp2' },
+  { index: 2, role: 'EOG-L' },
+  { index: 3, role: 'EOG-R' },
+];
 
 function makePacket(seq = 7, baseMs = 1234): Uint8Array {
   const pkt = new Uint8Array(PACKET_SIZE);
@@ -38,7 +46,7 @@ function makePacket(seq = 7, baseMs = 1234): Uint8Array {
   return pkt;
 }
 
-const parsed = parsePacket(makePacket(), 3);
+const parsed = parsePacket(makePacket(), 3, 1, MONTAGE);
 
 assert.equal(SAMPLES_PER_PACKET, 8);
 assert.equal(PACKET_SIZE, 226);
@@ -55,12 +63,9 @@ assert.equal(parsed.packet.samples[7].ms, 1234 + 7 * EEG_SAMPLE_INTERVAL_MS);
 
 const badChecksum = makePacket();
 badChecksum[PKT_IDX_CHECKSUM] ^= 0xff;
-assert.deepEqual(parsePacket(badChecksum, 0), { ok: false, reason: 'checksum' });
+assert.deepEqual(parsePacket(badChecksum, 0, 1, MONTAGE), { ok: false, reason: 'checksum' });
 
-// fp1Index channel selection: the device reports which channel carries FP1 (Fpz)
-// over the Scale characteristic — 0=CH1 (YELLOW/GREEN/BLUE/WHITE/LT), 4=CH5 (RED).
-// Build a packet where each channel holds a distinct value and prove parsePacket
-// reads the channel the device reports, not a hardcoded CH1.
+// Four-channel montage: every active role comes from the schema-v3 scale metadata.
 function makeMultiChannelPacket(): Uint8Array {
   const pkt = new Uint8Array(PACKET_SIZE);
   pkt[0] = PACKET_START_HI;
@@ -85,22 +90,12 @@ function makeMultiChannelPacket(): Uint8Array {
 }
 
 const multi = makeMultiChannelPacket();
-// uvPerLsb = 1 so fp1_uV equals the raw int24 code, making the channel obvious.
-// Default fp1Index → CH1 (code 256).
-const asCh1 = parsePacket(multi, 0, 1);
-assert.equal(asCh1.ok, true);
-if (!asCh1.ok) throw new Error('unreachable');
-assert.equal(asCh1.packet.samples[0].fp1_uV, 256);
-// RED reports fp1Index = 4 → CH5 (code 1280), on every sample in the packet.
-const asCh5 = parsePacket(multi, 0, 1, 4);
-assert.equal(asCh5.ok, true);
-if (!asCh5.ok) throw new Error('unreachable');
-assert.equal(asCh5.packet.samples[0].fp1_uV, 1280);
-assert.equal(asCh5.packet.samples[SAMPLES_PER_PACKET - 1].fp1_uV, 1280);
-// Out-of-range fp1Index falls back to CH1 (never reads out of the frame).
-const asBad = parsePacket(multi, 0, 1, 99);
-assert.equal(asBad.ok, true);
-if (!asBad.ok) throw new Error('unreachable');
-assert.equal(asBad.packet.samples[0].fp1_uV, 256);
+const asMontage = parsePacket(multi, 0, 1, MONTAGE);
+assert.equal(asMontage.ok, true);
+if (!asMontage.ok) throw new Error('unreachable');
+assert.equal(asMontage.packet.samples[0].fp1_uV, 256);
+assert.equal(asMontage.packet.samples[0].channels['Fp2'], 512);
+assert.equal(asMontage.packet.samples[0].channels['EOG-L'], 768);
+assert.equal(asMontage.packet.samples[0].channels['EOG-R'], 1024);
 
 console.log('ALL BLE PACKET ASSERTIONS PASSED');

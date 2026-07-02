@@ -5,7 +5,7 @@
 import appConfig from '../../../app.json';
 import type { DeviceScaleInfo } from '../ble/scale';
 
-const KNOWN_COLORS = ['YELLOW', 'RED', 'BLUE', 'GREEN', 'WHITE', 'LT'] as const;
+const KNOWN_COLORS = ['YELLOW', 'BLUE', 'GREEN', 'WHITE', 'LT'] as const;
 
 /** Map a BLE advertised name to a fleet color: "Neurex Yellow" -> "YELLOW".
  *  Unrecognized names (e.g. the "Neurex-EEG-XXXX" fallback) -> "UNKNOWN". */
@@ -87,12 +87,8 @@ export function buildSessionMetadata(opts: {
     app_build: appBuild !== undefined ? appBuild : (appConfig.expo.android?.versionCode ?? null),
   };
   if (scale) {
-    // fwBuildId is a uint32 device-ELF-sha256 prefix → lowercase hex. Emit it for any
-    // DEVICE-reported scale (schemaVer >= 1) even when the value is 0, so a genuine
-    // 0x00000000 prefix isn't mistaken for 'firmware did not report a build id'.
-    // FALLBACK_SCALE (schemaVer 0, pre-Scale-char firmware) stays null.
-    out.firmware_build_id =
-      scale.schemaVer >= 1 ? (scale.fwBuildId >>> 0).toString(16) : null;
+    // fwBuildId is a uint32 device-ELF-sha256 prefix -> lowercase hex.
+    out.firmware_build_id = (scale.fwBuildId >>> 0).toString(16);
     out.uv_per_lsb = scale.uvPerLsb;
     out.pga_gain = scale.pgaGain;
     out.vref_v = scale.vrefV;
@@ -100,8 +96,7 @@ export function buildSessionMetadata(opts: {
     out.sample_rate_hz = scale.sampleRateHz;
     out.channel_count = scale.nChannels;
     out.fp1_index = scale.fp1Index;
-    // boolean column: null on pre-v2 firmware (variantKnown not reported)
-    out.variant_known = scale.variantKnown == null ? null : scale.variantKnown === 1;
+    out.variant_known = scale.variantKnown === 1;
   }
   if (testerLog) {
     const map: [keyof TesterLog, string][] = [

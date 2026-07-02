@@ -19,7 +19,7 @@ Grounded in platform research (June 2026, Expo SDK 54 / RN 0.81 / Hermes). Force
 ## Feature 2 — 30-min chunked upload during recording
 - **Rolling local chunks:** BLE callback appends to a rolling on-disk chunk; at ≥30 min → finalize + enqueue. Lossless (byte-offset boundaries; ordered concat reproduces the night). Recording never pauses (append-to-disk independent of upload). App-side only; no device/SD changes.
 - **Driver:** Android native loop in the FGS (`react-native-background-actions` or native alarm + Headless JS); iOS BLE-packet-driven trigger (+ `BGProcessingTask` catch-up).
-- **Confirm-then-delete:** new Modal endpoint `POST /ingest` returns `{bytes_received, sha256}` in the upload's own HTTP response; app deletes the local chunk ONLY when both match the file. Idempotent keys `sessionId/seq`. Reuses the existing `{prefix}/segments/eeg/segNNNN.bin` layout + backend assembly.
+- **Confirm-then-delete:** upload/finalize verifies the assembled RAW.BIN stream by byte count and SHA-256 before local delete. Storage uses `{prefix}/segments/raw/segNNNN.bin`; there is no EEG fallback stream.
 - **Offline:** persistent on-disk queue; iOS background `URLSession` + Android queue/WorkManager auto-retry on reconnect. Never delete local before server confirm.
 - **Backend:** the ingest endpoint persists each chunk to Storage at the session prefix (so the existing reconcile/assemble/stage path produces the night). Returns the byte count.
 

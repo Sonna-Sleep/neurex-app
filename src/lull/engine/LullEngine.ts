@@ -14,8 +14,6 @@
  * Per-channel math (montage roles from the Scale char `channel_role[]`):
  *   fp   = mean(Fp1, Fp2)        — the frontal EEG the W estimator runs on
  *   heog = EOG-L − EOG-R         — the horizontal-EOG that drives onset
- * Legacy single-channel devices carry only `Fp1`; then `fp = Fp1` and
- * `heog = 0` (no EOG corroboration, but W still computes).
  *
  * PURE-ish: this class itself has no wall-clock and no BLE/audio imports — the
  * audio side is the injected {@link AudioSink}, and time advances by the fixed
@@ -45,8 +43,8 @@ export type LullTickHandler = (tick: LullTick) => void;
 
 /**
  * Resolve `fp` / `heog` from one decoded sample's role-keyed channel map.
- *   fp   = mean(Fp1, Fp2)   (falls back to Fp1 alone, then fp1_uV)
- *   heog = EOG-L − EOG-R     (0 when the EOG pair is absent — legacy devices)
+ *   fp   = mean(Fp1, Fp2)
+ *   heog = EOG-L - EOG-R
  */
 function deriveFpHeog(s: EegSample): { fp: number; heog: number } {
   const ch = s.channels ?? {};
