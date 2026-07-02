@@ -469,14 +469,45 @@ function isMissingColumnError(error: { code?: string; message?: string }): boole
   );
 }
 
+const OPTIONAL_FINALIZE_COLUMNS = new Set([
+  'device_id',
+  'device_label',
+  'firmware_build_id',
+  'uv_per_lsb',
+  'pga_gain',
+  'vref_v',
+  'adc_bits',
+  'sample_rate_hz',
+  'channel_count',
+  'fp1_index',
+  'variant_known',
+  'app_version',
+  'app_build',
+  'electrode_type',
+  'electrode_batch',
+  'montage',
+  'reference_site',
+  'bias_site',
+  'tester',
+  'notes',
+]);
+
+function missingColumnName(error: { message?: string }): string | null {
+  const msg = error.message ?? '';
+  return (
+    msg.match(/'([a-zA-Z0-9_]+)' column/i)?.[1] ??
+    msg.match(/column "?([a-zA-Z0-9_]+)"? (?:of relation "[^"]+" )?does not exist/i)?.[1] ??
+    null
+  );
+}
+
 /**
  * Insert the sessions row (status='uploaded'). On the cloud this fires the DB
  * webhook → Modal reads the segment stream → QC/YASA → writes results back.
  *
- * Deploy-safe: the device/scale/tester metadata columns (migration 0015) ride the
- * insert, but if 0015 hasn't landed on the live DB yet the insert is retried with
- * the CORE columns only (mirrors the backend's additive fallback) so a night is
- * never lost to a not-yet-applied migration.
+ * Deploy-safe: optional device/scale/tester/app metadata rides the insert, but if
+ * production is missing one optional column, retry without only that column.
+ * Required storage, recording label, and raw provenance must stay present.
  */
 export async function finalizeSession(input: FinalizeInput, prefix: string): Promise<void> {
   const supabase = getSupabase();
@@ -503,20 +534,24 @@ export async function finalizeSession(input: FinalizeInput, prefix: string): Pro
     { ...core, ...readable, ...readFinalizeMetadata(input.sessionId) },
     { rawSha256: input.rawSha256, rawStoragePath: input.rawStoragePath },
   );
-  let { error } = await supabase.from('sessions').insert(full);
-  if (error && isMissingColumnError(error)) {
+  let row = full;
+  let { error } = await supabase.from('sessions').insert(row);
+  const droppedColumns: string[] = [];
+  while (error && isMissingColumnError(error)) {
+    const col = missingColumnName(error);
+    if (!col || !OPTIONAL_FINALIZE_COLUMNS.has(col) || !(col in row)) break;
+    droppedColumns.push(col);
+    const { [col]: _dropped, ...next } = row;
+    row = next;
     if (__DEV__)
       console.warn(
-        `[cloudSync] sessions metadata columns missing (migration 0015 not applied?) — ` +
-          `retrying with core/raw columns only: ${error.message}`,
+        `[cloudSync] optional sessions column missing (${col}) — retrying without it: ` +
+          error.message,
       );
-    const fallback = input.rawSha256
-      ? sessionRowWithRaw(core, {
-          rawSha256: input.rawSha256,
-          rawStoragePath: input.rawStoragePath,
-        })
-      : core;
-    ({ error } = await supabase.from('sessions').insert(fallback));
+    ({ error } = await supabase.from('sessions').insert(row));
+  }
+  if (!error && droppedColumns.length > 0 && __DEV__) {
+    console.warn(`[cloudSync] finalized after dropping optional columns: ${droppedColumns.join(', ')}`);
   }
   // Idempotent: a retry with the same session id re-runs finalize after the row
   // already exists. A unique-violation (23505) just means "already finalized" —
