@@ -23,8 +23,7 @@
         "NSPhotoLibraryUsageDescription": "Neurex uses your photos so you can set a profile picture.",
         "UIBackgroundModes": [
           "bluetooth-central",
-          "fetch",
-          "audio"
+          "fetch"
         ]
       },
       "config": { "usesNonExemptEncryption": false },
@@ -96,8 +95,7 @@
     "extra": {
       "eas": {
         "projectId": "27005611-7811-4600-bd9b-35c08958b7fd"
-      },
-      "spotifyClientId": "e3440ef832234223af34f60e74033153"
+      }
     },
     "owner": "neurexs-organization",
     "runtimeVersion": {

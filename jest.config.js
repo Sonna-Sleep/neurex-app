@@ -3,8 +3,7 @@
  * coexist without one's runtime contaminating the other:
  *
  *   - `node`: ts-jest (CommonJS), `node` env. Pure TypeScript unit tests that do
- *     NOT need the React Native / Expo runtime — the Lull core/engine and the
- *     audio sinks (native modules mocked, `fetch` stubbed). Matches `*.test.ts`.
+ *     NOT need the React Native / Expo runtime. Matches `*.test.ts`.
  *   - `rn`: the `jest-expo` preset. RN-component render tests that mount real
  *     components with React Native + reanimated. Matches `*.test.tsx`.
  *
