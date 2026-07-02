@@ -1,24 +1,27 @@
 # Neurex
 
-Mobile companion app for the Neurex EEG sleep mask. It connects to the
-sleep mask over Bluetooth Low Energy, records EEG through the night, uploads the
-recording to the cloud, and shows the finished session once backend QC/sleep
-analysis has completed.
+Mobile companion app for the Neurex EEG/EOG sleep mask. It connects to the
+sleep mask over Bluetooth Low Energy, records the raw EEG/EOG biosignal stream
+through the night, uploads the recording to the cloud, and shows the finished
+session once backend QC/sleep analysis has completed.
 
 Built with React Native + Expo (SDK 54, new architecture). iOS and Android.
 
 ## Features
 
-- **BLE streaming** — pairs and streams from one sleep mask (`src/lib/ble/`),
+- **BLE streaming** — pairs and streams the device-described EEG/EOG raw signal
+  from one sleep mask (`src/lib/ble/`),
   with auto-reconnect/backoff and an Android foreground service
   (`modules/neurex-foreground-service/`) so recording survives the screen
   turning off.
-- **Cloud sync** — recordings upload to Supabase Storage in resumable segments,
-  with retry and a stable per-recording prefix so interrupted uploads resume
-  instead of starting over (`src/lib/cloud/cloudSync.ts`).
+- **Cloud sync** — each night is written as `RAW.BIN`, uploaded to Supabase
+  Storage under `segments/raw`, and finalized with SHA-256 provenance,
+  `scale.json`, `stream_stats.json`, and a stable per-recording prefix
+  (`src/lib/cloud/cloudSync.ts`).
 - **Automated analysis** — a serverless backend ([neurex-backend](https://github.com/aleksaspetro/neurex-backend))
-  reads the uploaded EEG segments, writes one unified QC report to Supabase, and
-  keeps beta sleep staging available for users who already rely on it.
+  reads the uploaded EEG/EOG raw stream, writes one unified QC report to
+  Supabase, and keeps beta sleep staging available for users who already rely on
+  it.
 - **Journal** — past nights with a detail view per session.
 - **Email auth** — passwordless magic-link login via Supabase Auth.
 
@@ -112,14 +115,12 @@ Install with `adb install -r <apk>` (in-place `-r` preserves app data).
 | `npm run smoke:ble-packet` | BLE packet decoder smoke test |
 | `npm run smoke:backoff` | BLE reconnect/backoff smoke test |
 | `npm run smoke:connect-timeout` | BLE connection timeout smoke test |
+| `npm run smoke:ble-reboot` | BLE reboot/resume handling smoke test |
+| `npm run smoke:ble-watchdog` | BLE watchdog/drop accounting smoke test |
 | `npm run smoke:ble-scale` | BLE scale sidecar parsing smoke test |
-| `npm run smoke:raw-record` | Raw diagnostic capture smoke test |
+| `npm run smoke:raw-record` | EEG/EOG RAW.BIN writer smoke test |
 | `npm run smoke:disk-space` | Overnight storage preflight smoke test |
 | `npm run smoke:auto-stop` | Battery/device-lost auto-stop smoke test |
-| `npm run smoke:seg-roll` | Segment rolling boundary smoke test |
-| `npm run smoke:chunk-queue` | Segment upload queue smoke test |
-| `npm run smoke:chunk-upload` | Segment upload worker smoke test |
-| `npm run smoke:chunk-uploader` | `/ingest` uploader contract smoke test |
 | `npm run smoke:stream-stats` | `stream_stats.json` sidecar smoke test |
 | `npm run smoke:recovery` | Local recording recovery smoke test |
 | `npm run smoke:account-deletion` | Account deletion API smoke test |
@@ -128,22 +129,30 @@ Install with `adb install -r <apk>` (in-place `-r` preserves app data).
 | `npm run smoke:hypnogram` | Hypnogram rendering math smoke test |
 | `npm run smoke:push` | Push token ownership/cleanup smoke test |
 | `npm run smoke:support` | Support message smoke test |
-| `npm run smoke:diagnostic-capture` | Raw diagnostic capture setting smoke test |
 | `npm run smoke:session-metadata` | Session metadata/provenance smoke test |
 | `npm run smoke:upload-lock` | Upload lock timeout smoke test |
+| `npm run smoke:recording-export-zip` | Recording export ZIP smoke test |
+| `npm run check:android-push` | Android Firebase push config check |
 
 ## How a night flows
 
-1. Phone connects to one sleep mask over BLE and streams EEG, buffered to disk by
-   a foreground service.
-2. During the recording, the app writes `segments/eeg/segNNNN.bin`, uploads each
-   closed segment, and deletes local chunks only after server byte/hash
-   confirmation.
-3. On stop, auto-stop, or recovery, the app uploads `scale.json` and
+1. Phone connects to one sleep mask over BLE and reads the required Scale
+   descriptor: sample rate, µV-per-LSB, firmware build, montage roles, and stream
+   channel count.
+2. The app records the EEG/EOG biosignal stream to one local `RAW.BIN` under the
+   session directory. Current firmware writes compact 4-channel EEG/EOG records;
+   legacy v3 full-8 recordings remain decodeable by metadata.
+3. On stop, auto-stop, or recovery, the app uploads `RAW.BIN` to Supabase
+   Storage as ordered `segments/raw/segNNNN.bin` chunks, computes the whole-file
+   SHA-256, uploads `scale.json`, `recording_manifest.json`, and
    `stream_stats.json`, then inserts one `public.sessions` row.
-4. The Modal backend reads the segments, writes `signal_quality_report`, and
-   preserves beta sleep staging.
+4. The Modal backend reads the raw segments, verifies integrity, writes
+   `signal_quality_report`, and preserves beta sleep staging.
 5. The app reads the finished row and renders it in Journal.
+
+IMU is intentionally separate from this EEG/EOG raw path. When firmware exposes
+an IMU stream, it should be recorded/uploaded as its own declared stream rather
+than mixed into `RAW.BIN`.
 
 ## Android push setup
 
