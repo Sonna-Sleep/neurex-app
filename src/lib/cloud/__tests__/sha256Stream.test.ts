@@ -58,7 +58,7 @@ describe('Sha256Stream — incremental SHA-256 (matches hashlib/Node)', () => {
 
   test('matches a large multi-megabyte stream fed in small packets', () => {
     // Simulates a night: many small raw packets accumulated incrementally.
-    const packet = new Uint8Array(randomBytes(720)); // ~one 18-sample raw packet
+    const packet = new Uint8Array(randomBytes(720)); // representative raw chunk
     const ref = createHash('sha256');
     const s = new Sha256Stream();
     for (let i = 0; i < 5000; i++) {

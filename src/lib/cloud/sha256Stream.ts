@@ -1,8 +1,8 @@
 // Streaming SHA-256 — the one capability expo-crypto lacks.
 //
 // expo-crypto's Crypto.digest is one-shot: it needs the whole message in memory.
-// A full night's RAW.BIN is ~290 MB (250 SPS × 40 B/record × 8 h), which cannot
-// be buffered on a phone to hash at finalize. This computes the digest
+// A full night's RAW.BIN is too large to buffer on a phone at finalize. This
+// computes the digest
 // INCREMENTALLY — fed each raw packet as it is written — so the whole-stream hash
 // is ready at finalize with O(1) memory. The output is byte-for-byte identical to
 // Python's hashlib.sha256(...).hexdigest() and Node's crypto, which is what the

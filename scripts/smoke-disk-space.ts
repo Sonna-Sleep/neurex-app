@@ -36,7 +36,7 @@ function ok(cond: boolean, label: string) {
 const MB = 1024 * 1024;
 
 // ── byte math (derived from the real on-disk format) ───────────────────────
-// RAW.BIN records are 40 B/sample at 250 Hz.
+// Pre-connect guard uses the worst-case legacy RAW.BIN size: 40 B/sample at 250 Hz.
 // 250 × 40 × 3600 = 36,000,000 B/h.
 eq(bytesPerHour(), 36_000_000, '1 recorded hour = 36,000,000 B');
 eq(NIGHT_HOURS, 8, 'night sizing uses 8 hours');

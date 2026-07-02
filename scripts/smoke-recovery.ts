@@ -29,21 +29,24 @@ function ok(cond: boolean, label: string) {
 }
 
 ok(RAW_HEADER_BYTES === 16, 'RAW_HEADER_BYTES is 16');
-ok(RAW_BYTES_PER_SAMPLE === 40, 'RAW_BYTES_PER_SAMPLE is 40');
+ok(RAW_BYTES_PER_SAMPLE === 40, 'legacy RAW_BYTES_PER_SAMPLE is 40');
 
-// 16-byte header + 250 samples × 40 bytes = 1 s at 250 Hz.
+// Legacy: 16-byte header + 250 samples × 40 bytes = 1 s at 250 Hz.
 eq(durationMsFromBytes(10_016, 250), 1000, '10016B @250Hz = 1000ms');
 eq(durationMsFromBytes(0, 250), 0, '0 bytes = 0ms');
 eq(durationMsFromBytes(10_016, 0), 0, '0 Hz guarded = 0ms');
 eq(durationMsFromBytes(-5, 250), 0, 'negative bytes guarded = 0ms');
 // One real hour: 16-byte header + 250 Hz × 3600 s × 40 B.
 eq(durationMsFromBytes(36_000_016, 250), 3_600_000, '1h of bytes = 3,600,000ms');
+// Compact 4-channel RAW records are 24 bytes/sample.
+eq(durationMsFromBytes(6_016, 250, 24), 1000, '6016B compact @250Hz = 1000ms');
 
 // meta.json start present → start is authoritative, end = start + duration.
 {
   const { startedAtMs, endMs } = reconstructTiming({
     sizeBytes: 10_016,
     sampleRateHz: 250,
+    rawBytesPerSample: 40,
     modificationTimeMs: 9_999_999,
     metaStartedAtMs: 1000,
     nowMs: 5_000_000,
@@ -57,6 +60,7 @@ eq(durationMsFromBytes(36_000_016, 250), 3_600_000, '1h of bytes = 3,600,000ms')
   const { startedAtMs, endMs } = reconstructTiming({
     sizeBytes: 10_016,
     sampleRateHz: 250,
+    rawBytesPerSample: 40,
     modificationTimeMs: 50_000,
     metaStartedAtMs: null,
     nowMs: 0,
@@ -70,6 +74,7 @@ eq(durationMsFromBytes(36_000_016, 250), 3_600_000, '1h of bytes = 3,600,000ms')
   const { startedAtMs, endMs } = reconstructTiming({
     sizeBytes: 10_016,
     sampleRateHz: 250,
+    rawBytesPerSample: 40,
     modificationTimeMs: null,
     metaStartedAtMs: null,
     nowMs: 80_000,
@@ -90,6 +95,10 @@ ok(isStageableDurationMs(3_600_000) === true, '1 h is stageable');
 ok(isStageableDurationMs(durationMsFromBytes(10_016, 250)) === false, '1 s orphan skipped');
 // A 10-minute recording is recovered.
 ok(isStageableDurationMs(durationMsFromBytes(6_000_016, 250)) === true, '10 min orphan recovered');
+ok(
+  isStageableDurationMs(durationMsFromBytes(3_600_016, 250, 24)) === true,
+  '10 min compact orphan recovered',
+);
 
 if (failures) {
   console.error(`\n${failures} RECOVERY ASSERTION(S) FAILED`);

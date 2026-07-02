@@ -15,7 +15,6 @@ import { AppState, Platform } from 'react-native';
 import appConfig from '../../../app.json';
 
 import { getSupabase } from '../auth/supabase';
-import { RAW_RECORD_BYTES } from '../ble/rawRecord';
 import type { DeviceScaleInfo } from '../ble/scale';
 import { manifestFile } from '../ble/recordingManifest';
 import { supabaseSessionRepo } from '../repos/supabase';
@@ -37,18 +36,14 @@ export { uploadLockStats } from './uploadLock';
 
 export const RECORDINGS_BUCKET = 'recordings';
 
-// On-disk bytes per sample (must match rawRecord.ts + backend decoders).
-const SAMPLE_BYTES = { raw: RAW_RECORD_BYTES } as const;
-export type Stream = keyof typeof SAMPLE_BYTES;
+export type Stream = 'raw';
 
-// ~5 minutes per segment at 250 Hz — fine-grained crash protection without
-// flooding Storage with tiny objects. Cut on whole-sample boundaries so the
-// backend's ordered concatenation is byte-identical to the original.
-const SEGMENT_SECONDS = 5 * 60;
-const SAMPLE_RATE_HZ = 250;
+// Fixed chunk size keeps upload memory bounded without knowing whether this
+// recording used legacy 8-channel EEG records or compact active-channel records.
+const SEGMENT_BYTES = 3_000_000;
 
-function segmentBytes(stream: Stream): number {
-  return SEGMENT_SECONDS * SAMPLE_RATE_HZ * SAMPLE_BYTES[stream];
+function segmentBytes(_stream: Stream): number {
+  return SEGMENT_BYTES;
 }
 
 function segName(index: number): string {

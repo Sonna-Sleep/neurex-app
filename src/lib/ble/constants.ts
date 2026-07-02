@@ -34,19 +34,20 @@ export const NEUREX_ACK_WRITE_UUID = '6e6b0000-1000-8000-0078-65726e6b0003';
 // Scale/DeviceInfo characteristic (READ-only, same 6e6b… family; firmware UUID
 // 6e6b0004). The device serializes its ACTUAL amplitude scale here — µV-per-LSB,
 // PGA gain, VREF, sample rate, channel map, firmware build id — as an append-only
-// little-endian struct. The current firmware sends schema v3: 29 bytes, including
-// variant_known and channel_role[8]. The app reads it once at connect so the
+// little-endian struct. Schema v3 is 29 bytes with variant_known and
+// channel_role[8]. Schema v4 appends streamChannelCount so compact BLE packets
+// can carry only active channels. The app reads it once at connect so the
 // scale and montage are self-describing instead of assumptions that silently
 // break when the firmware changes. Mirror the layout on nRF5340.
 export const NEUREX_SCALE_INFO_UUID = '6e6b0000-1000-8000-0078-65726e6b0004';
-// Bump in lockstep with NEUREX_SCALE_SCHEMA_VER in firmware neurex_scale.h.
-// v3 = channel_role[8] montage tail (Fp1/Fp2/EOG-L/EOG-R).
+// Minimum accepted schema. v3 means legacy 8-physical-channel BLE frames.
+// v4 appends streamChannelCount for compact active-channel frames.
 export const NEUREX_SCALE_INFO_SCHEMA_VER = 3;
-export const NEUREX_SCALE_INFO_BYTES = 29;
+export const NEUREX_SCALE_INFO_BYTES_V3 = 29;
+export const NEUREX_SCALE_INFO_BYTES_V4 = 30;
 
 // How often the ACK loop writes the contiguous frontier. Firmware just needs
-// SOMETHING periodic to drain the ring, not a per-packet ACK. Matches
-// ACK_INTERVAL_S in tools/capture/ble_stream_recv.py.
+// SOMETHING periodic to drain the ring, not a per-packet ACK.
 export const NEUREX_ACK_INTERVAL_MS = 250;
 
 // Standard Bluetooth SIG-assigned UUIDs for the Battery Service. The
@@ -74,24 +75,23 @@ export const EEG_SAMPLE_RATE_HZ = 250;
 export const EEG_SAMPLE_INTERVAL_MS = 4;
 // 2026-06-03: 8 samples/packet (was 4). Full 250 SPS, but HALF the notification
 // rate (~31/s vs 62.5/s) — far less native→JS bridge load. Must match the
-// firmware BLE build's -DSAMPLES_PER_PACKET=8 EXACTLY (it derives
-// PACKET_TOTAL_SIZE the same way).
+// firmware BLE build's -DSAMPLES_PER_PACKET=8 EXACTLY.
 export const SAMPLES_PER_PACKET = 8;
 export const EEG_PACKET_INTERVAL_MS = SAMPLES_PER_PACKET * EEG_SAMPLE_INTERVAL_MS;
 export const TIME_GAP_REPORT_THRESHOLD_MS = 1000;
 
-// ── Packet layout (226 bytes per notification) ──────────────────────────────
+// ── Packet layout ───────────────────────────────────────────────────────────
 //   [0]    0xAB           start hi
 //   [1]    0xCD           start lo
 //   [2]    seq            uint8, wraps every 256 (~8.2 s at 31 packets/s)
 //   [3..6] timestamp_ms   uint32 big-endian, ms since boot of first sample
-//   [7..222]              8 × 27-byte frames:
+//   [7..]                 N compact frames:
 //                           3 bytes status
-//                           8 channels × 3 bytes int24 big-endian
-//   [223]  checksum       sum(bytes[2..222]) & 0xFF
-//   [224]  0xDC           end hi
-//   [225]  0xBA           end lo
-//   size = 10 (header+checksum+end) + 8 × 27 = 226.
+//                           stream channels × 3 bytes int24 big-endian
+//   next   checksum       sum(bytes[2..last payload]) & 0xFF
+//   final  0xDC 0xBA      end marker
+// Legacy v3 firmware used stream channels = 8, so packet size was 226 B.
+// v4 compact 4-channel firmware uses packet size 130 B.
 export const PACKET_SIZE = 226;
 export const PACKET_START_HI = 0xab;
 export const PACKET_START_LO = 0xcd;
@@ -101,20 +101,33 @@ export const PKT_IDX_SEQ = 2;
 export const PKT_IDX_TS = 3;
 // First sample's channel data starts after start[2] + seq[1] + ts[4] + status[3] = byte 10.
 export const PKT_IDX_DATA = 10;
-export const BYTES_PER_FRAME = 27;
+export const RAW_STATUS_BYTES = 3;
+export const LEGACY_RAW_CHANNELS = 8;
+export const BYTES_PER_FRAME = RAW_STATUS_BYTES + LEGACY_RAW_CHANNELS * 3;
 export const PKT_IDX_CHECKSUM = 223; // nominal 8-sample build: 7 (header) + 8 × 27
 
 // Samples-per-packet is DERIVED from the BLE notification length, never hardcoded:
-// a packet is a 7-byte header (start[2] + seq[1] + ts[4]) + N × 27-byte frames +
-// a 3-byte trailer (checksum[1] + end[2]), so N = (len - 10) / 27. Firmware BLE
-// builds ship 8-sample (226 B) OR 18-sample (496 B) notifications; deriving N lets
-// one app record BOTH. Returns 0 when len is not a valid packet framing.
+// a packet is a 7-byte header (start[2] + seq[1] + ts[4]) + N frames +
+// a 3-byte trailer (checksum[1] + end[2]). The frame width comes from the
+// device Scale descriptor. Returns 0 when len is not valid packet framing.
 export const PKT_HEADER_BYTES = 7;
 export const PKT_TRAILER_BYTES = 3;
-export function samplesPerPacket(len: number): number {
+export function bytesPerFrame(streamChannelCount: number = LEGACY_RAW_CHANNELS): number {
+  if (!Number.isInteger(streamChannelCount) || streamChannelCount < 1 || streamChannelCount > 8) {
+    return 0;
+  }
+  return RAW_STATUS_BYTES + streamChannelCount * 3;
+}
+
+export function samplesPerPacket(
+  len: number,
+  streamChannelCount: number = LEGACY_RAW_CHANNELS,
+): number {
+  const frameBytes = bytesPerFrame(streamChannelCount);
+  if (frameBytes <= 0) return 0;
   const framesBytes = len - PKT_HEADER_BYTES - PKT_TRAILER_BYTES;
-  if (framesBytes <= 0 || framesBytes % BYTES_PER_FRAME !== 0) return 0;
-  return framesBytes / BYTES_PER_FRAME;
+  if (framesBytes <= 0 || framesBytes % frameBytes !== 0) return 0;
+  return framesBytes / frameBytes;
 }
 
 // A backward jump in baseMs (firmware ms-since-boot) larger than this means the

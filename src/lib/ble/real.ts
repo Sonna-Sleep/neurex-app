@@ -2,9 +2,9 @@
 //
 // Flow:
 //   1. scan(): scoped by NEUREX_SERVICE_UUID (Apple-compliant for background BLE).
-//   2. connect(deviceId, { autoConnect: true }): MTU bump to fit a 226 B packet.
+//   2. connect(deviceId, { autoConnect: true }): MTU bump to fit one full packet.
 //   3. startStream(sessionId, cb): subscribe to the notify characteristic and
-//      append the all-channel raw integer stream to RAW.BIN under
+//      append the device-described raw integer stream to RAW.BIN under
 //      FileSystem.documentDirectory/sessions/<sessionId>/.
 //
 // Best-effort, lossy by design: BLE drops are unavoidable. Drops surface as
@@ -29,7 +29,7 @@ import {
   TIME_GAP_REPORT_THRESHOLD_MS,
 } from './constants';
 import { classifyResume, parsePacket } from './packet';
-import { encodeRawPacket, rawHeader, RAW_RECORD_BYTES } from './rawRecord';
+import { encodeRawPacket, rawHeader, rawRecordBytes } from './rawRecord';
 import { activeChannels, parseScaleInfo, scaleProvenance } from './scale';
 import type { ActiveChannel, DeviceScaleInfo } from './scale';
 import { RecordingManifestTracker, readRecordingManifest } from './recordingManifest';
@@ -102,9 +102,8 @@ function manualBtoa(bytes: Uint8Array): string {
 
 // ── ACK contiguous-frontier tracker (Plan 02) ───────────────────────────────
 //
-// Mirrors the Recorder contig logic in tools/capture/ble_stream_recv.py. ACKs
-// report the last contiguous (gen, seq) the app received, giving firmware a
-// conservative frontier for stream accounting. ACKing past a gap would make
+// ACKs report the last contiguous (gen, seq) the app received, giving firmware
+// a conservative frontier for stream accounting. ACKing past a gap would make
 // device-side health/backpressure telemetry lie about what reached the phone.
 //
 // gen is the receiver's observed generation: bumped on every 0xFF→0x00 seq
@@ -323,19 +322,17 @@ export const realBleClient: BleClient = {
     const device = await withTimeout(connecting, opts?.timeoutMs ?? 0, () => {
       manager.cancelDeviceConnection(deviceId).catch(() => undefined);
     });
-    // Request the max ATT MTU (512) so BOTH the 8-sample (226 B) and 18-sample
-    // (496 B) firmware packets fit one notify PDU instead of fragmenting /
-    // truncating. The peer negotiates down if it can't do 512 (an 8-sample
-    // stream still fits at any MTU >= 229). Matches the firmware's preferred MTU.
+    // Request the max ATT MTU (512) so legacy and compact packets fit one notify
+    // PDU instead of fragmenting/truncating. The peer negotiates down if needed.
     await device.requestMTU(512).catch((e) => {
       if (__DEV__) console.warn('[ble/real] requestMTU(512) failed:', e);
     });
     await device.discoverAllServicesAndCharacteristics();
 
-    // Read the device's self-describing amplitude scale ONCE (µV-per-LSB, gain,
-    // VREF, firmware build id, and schema-v3 montage). The app converts raw ADS
-    // codes -> µV with THIS value and requires the four-channel montage before
-    // recording.
+    // Read the device's self-describing amplitude scale ONCE: µV-per-LSB, gain,
+    // VREF, firmware build id, montage, and stream channel count. The app
+    // converts raw ADS codes -> µV with THIS value and requires the
+    // four-channel montage before recording.
     let deviceScale: DeviceScaleInfo | null = null;
     try {
       const sc = await device.readCharacteristicForService(
@@ -376,7 +373,9 @@ export const realBleClient: BleClient = {
     }
     if (__DEV__)
       console.log(
-        `[ble/real] montage ${montage.map((c) => `CH${c.index + 1}=${c.role}`).join(' ')}`,
+        `[ble/real] montage ${montage
+          .map((c) => `S${(c.streamIndex ?? c.index) + 1}/CH${c.index + 1}=${c.role}`)
+          .join(' ')} streamChannels=${scale.streamChannelCount}`,
       );
 
     // Subscribe to the standard Battery Service. Firmware notifies every
@@ -429,14 +428,19 @@ export const realBleClient: BleClient = {
         const sessionDir = new Directory(sessionsDir, sessionId);
         if (!sessionDir.exists) sessionDir.create();
         const manifestStartedAtMs = readRecordingManifest(sessionId)?.startedAtMs || Date.now();
+        const recordBytes = rawRecordBytes(scale.streamChannelCount);
         const manifest = new RecordingManifestTracker({
           sessionId,
           startedAtMs: manifestStartedAtMs,
           sampleRateHz: scale.sampleRateHz,
-          rawRecordBytes: RAW_RECORD_BYTES,
+          rawRecordBytes: recordBytes,
         });
 
-        if (__DEV__) console.log(`[ble/real] writer=RAW.BIN sr=${scale.sampleRateHz}`);
+        if (__DEV__)
+          console.log(
+            `[ble/real] writer=RAW.BIN sr=${scale.sampleRateHz} ` +
+              `streamChannels=${scale.streamChannelCount} recordBytes=${recordBytes}`,
+          );
 
         // Self-describing SCALE sidecar — scale.json, DELIBERATELY distinct from
         // recovery.ts's meta.json (which owns startedAtMs/serial for crash
@@ -450,7 +454,7 @@ export const realBleClient: BleClient = {
             sessionId,
             sampleRateHz: scale.sampleRateHz,
             sampleIntervalMs: EEG_SAMPLE_INTERVAL_MS,
-            rawRecordBytes: RAW_RECORD_BYTES,
+            rawRecordBytes: recordBytes,
             scale: scaleProvenance(scale),
           };
           const scaleFile = new File(sessionDir, 'scale.json');
@@ -461,7 +465,7 @@ export const realBleClient: BleClient = {
           if (__DEV__) console.warn('[ble/real] scale.json write failed (non-fatal):', e);
         }
 
-        // RAW.BIN — the immutable all-channel integer stream, written lockstep
+        // RAW.BIN — the immutable raw integer stream, written lockstep
         // with accepted packets. Raw open/write failure is fatal because every
         // successful recording must contain recoverable Fp1/Fp2/EOG-L/EOG-R data.
         const rawBinFile = new File(sessionDir, 'RAW.BIN');
@@ -478,7 +482,7 @@ export const realBleClient: BleClient = {
         try {
           raw = AppendingFile.open(sessionDir, 'RAW.BIN');
           if (rawFresh) {
-            const header = rawHeader(scale.sampleRateHz);
+            const header = rawHeader(scale.sampleRateHz, scale.streamChannelCount);
             raw.appendChunk(header);
             stats.rawBytesWritten += header.length;
           } else {
@@ -545,6 +549,7 @@ export const realBleClient: BleClient = {
             stats.generation,
             scale.uvPerLsb,
             montage,
+            scale.streamChannelCount,
           );
           if (!result.ok) {
             stats.drops++;
@@ -583,11 +588,16 @@ export const realBleClient: BleClient = {
             return;
           }
 
-          // Persist FIRST. Only count a sample once the all-channel raw bytes are
+          // Persist FIRST. Only count a sample once the raw stream bytes are
           // handed to the file buffer. Raw is required: a failed append stops the
           // stream instead of silently degrading the night.
           try {
-            const rawChunk = encodeRawPacket(bytes, pkt.baseMs, pkt.seq);
+            const rawChunk = encodeRawPacket(
+              bytes,
+              pkt.baseMs,
+              pkt.seq,
+              scale.streamChannelCount,
+            );
             raw.appendChunk(rawChunk);
             stats.rawBytesWritten += rawChunk.length;
           } catch (e) {
@@ -601,8 +611,8 @@ export const realBleClient: BleClient = {
           // Bytes are on the way to disk — now advance counters + ACK frontier.
           if (stats.lastBaseMs !== null) {
             // Expected next baseMs = last + (this packet's sample count)×interval.
-            // Packet size is constant within a firmware build (all 8- or all
-            // 18-sample), so this packet's length is the right per-packet stride.
+            // The parsed packet length is the right stride for both legacy and
+            // compact firmware.
             const timeGapMs =
               pkt.baseMs - (stats.lastBaseMs + pkt.samples.length * EEG_SAMPLE_INTERVAL_MS);
             if (timeGapMs >= TIME_GAP_REPORT_THRESHOLD_MS) {
@@ -634,7 +644,7 @@ export const realBleClient: BleClient = {
             generation: stats.generation,
             lastBaseMs: pkt.baseMs,
             samples: pkt.samples.length,
-            bytesWritten: pkt.samples.length * RAW_RECORD_BYTES,
+            bytesWritten: pkt.samples.length * recordBytes,
           });
 
           // Advance the ACK frontier only over in-order packets. The tracker

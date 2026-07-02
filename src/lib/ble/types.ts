@@ -1,9 +1,9 @@
 // Public contract for talking to the Neurex device over BLE.
 //
 // Live-stream model: scan → connect → startStream(sessionId, callbacks).
-// The firmware notifies raw ADS1299 frames (8 or 18 samples/packet @ 250 Hz).
-// RAW.BIN is the persisted sleep biosignal stream: all 8 integer channels,
-// later decoded by backend metadata into Fp1/Fp2/EOG-L/EOG-R.
+// The firmware notifies raw ADS1299 frames batched at 250 Hz. RAW.BIN persists
+// the device-described stream, later decoded by backend metadata into
+// Fp1/Fp2/EOG-L/EOG-R.
 
 import type { DeviceScaleInfo } from './scale';
 
@@ -32,7 +32,7 @@ export type EegSample = {
   channels: Record<string, number>;
 };
 
-/** One decoded 226-byte BLE notification, all 8 samples included. */
+/** One decoded BLE notification, with all samples from that packet included. */
 export type ParsedPacket = {
   /** Monotonic counter that increments on every seq wrap (0xFF → 0x00). */
   generation: number;

@@ -27,6 +27,7 @@ const scale: DeviceScaleInfo = {
   fwBuildId: 0xa1b2c3d4,
   variantKnown: 1,
   channelRole: [1, 2, 3, 4, 0, 0, 0, 0],
+  streamChannelCount: 4,
 };
 
 const m = buildSessionMetadata({

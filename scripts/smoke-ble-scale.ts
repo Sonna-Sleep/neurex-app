@@ -1,18 +1,17 @@
 import assert from 'node:assert/strict';
 
 import {
-  BYTES_PER_FRAME,
   EEG_UV_PER_LSB,
-  NEUREX_SCALE_INFO_BYTES,
+  NEUREX_SCALE_INFO_BYTES_V3,
+  NEUREX_SCALE_INFO_BYTES_V4,
   PACKET_END_HI,
   PACKET_END_LO,
-  PACKET_SIZE,
   PACKET_START_HI,
   PACKET_START_LO,
-  PKT_IDX_CHECKSUM,
   PKT_IDX_DATA,
   PKT_IDX_SEQ,
   SAMPLES_PER_PACKET,
+  bytesPerFrame,
 } from '../src/lib/ble/constants';
 import { parsePacket } from '../src/lib/ble/packet';
 import { activeChannels, parseScaleInfo, scaleProvenance } from '../src/lib/ble/scale';
@@ -30,11 +29,13 @@ function makeScaleBytes(
     fwBuildId: number;
     variantKnown: number;
     channelRole: number[];
+    streamChannelCount: number;
   }> = {},
 ): Uint8Array {
-  const buf = new ArrayBuffer(NEUREX_SCALE_INFO_BYTES);
+  const schemaVer = over.schemaVer ?? 3;
+  const buf = new ArrayBuffer(schemaVer >= 4 ? NEUREX_SCALE_INFO_BYTES_V4 : NEUREX_SCALE_INFO_BYTES_V3);
   const dv = new DataView(buf);
-  dv.setUint16(0, over.schemaVer ?? 3, true);
+  dv.setUint16(0, schemaVer, true);
   dv.setUint8(2, over.pgaGain ?? 1);
   dv.setUint8(3, over.adcBits ?? 24);
   dv.setFloat32(4, over.vrefV ?? 4.5, true);
@@ -46,26 +47,29 @@ function makeScaleBytes(
   dv.setUint8(20, over.variantKnown ?? 1);
   const roles = over.channelRole ?? [1, 2, 3, 4, 0, 0, 0, 0];
   for (let i = 0; i < 8; i++) dv.setUint8(21 + i, roles[i] ?? 0);
+  if (schemaVer >= 4) dv.setUint8(29, over.streamChannelCount ?? over.nChannels ?? 4);
   return new Uint8Array(buf);
 }
 
-function makePacketWithFp1(code: number): Uint8Array {
-  const pkt = new Uint8Array(PACKET_SIZE);
+function makePacketWithFp1(code: number, streamChannelCount = 8): Uint8Array {
+  const frameBytes = bytesPerFrame(streamChannelCount);
+  const checksumIdx = 7 + SAMPLES_PER_PACKET * frameBytes;
+  const pkt = new Uint8Array(checksumIdx + 3);
   pkt[0] = PACKET_START_HI;
   pkt[1] = PACKET_START_LO;
   pkt[PKT_IDX_SEQ] = 1;
   const u = code & 0xffffff;
   for (let s = 0; s < SAMPLES_PER_PACKET; s++) {
-    const o = PKT_IDX_DATA + s * BYTES_PER_FRAME;
+    const o = PKT_IDX_DATA + s * frameBytes;
     pkt[o] = (u >>> 16) & 0xff;
     pkt[o + 1] = (u >>> 8) & 0xff;
     pkt[o + 2] = u & 0xff;
   }
   let sum = 0;
-  for (let i = PKT_IDX_SEQ; i < PKT_IDX_CHECKSUM; i++) sum = (sum + pkt[i]) & 0xff;
-  pkt[PKT_IDX_CHECKSUM] = sum;
-  pkt[PKT_IDX_CHECKSUM + 1] = PACKET_END_HI;
-  pkt[PKT_IDX_CHECKSUM + 2] = PACKET_END_LO;
+  for (let i = PKT_IDX_SEQ; i < checksumIdx; i++) sum = (sum + pkt[i]) & 0xff;
+  pkt[checksumIdx] = sum;
+  pkt[checksumIdx + 1] = PACKET_END_HI;
+  pkt[checksumIdx + 2] = PACKET_END_LO;
   return pkt;
 }
 
@@ -80,14 +84,25 @@ assert.equal(g1!.nChannels, 4);
 assert.equal(g1!.fp1Index, 0);
 assert.equal(g1!.variantKnown, 1);
 assert.equal(g1!.fwBuildId, 0xdeadbeef);
+assert.equal(g1!.streamChannelCount, 8);
 assert.deepEqual(g1!.channelRole, [1, 2, 3, 4, 0, 0, 0, 0]);
 assert.ok(Math.abs(g1!.uvPerLsb - EEG_UV_PER_LSB) < 1e-3, 'gain-1 uV/LSB matches firmware formula');
 
 assert.deepEqual(activeChannels(g1!), [
-  { index: 0, role: 'Fp1' },
-  { index: 1, role: 'Fp2' },
-  { index: 2, role: 'EOG-L' },
-  { index: 3, role: 'EOG-R' },
+  { index: 0, streamIndex: 0, role: 'Fp1', roleValue: 1 },
+  { index: 1, streamIndex: 1, role: 'Fp2', roleValue: 2 },
+  { index: 2, streamIndex: 2, role: 'EOG-L', roleValue: 3 },
+  { index: 3, streamIndex: 3, role: 'EOG-R', roleValue: 4 },
+]);
+
+const v4 = parseScaleInfo(makeScaleBytes({ schemaVer: 4, streamChannelCount: 4 }));
+assert.ok(v4, 'schema-v4 compact scale should parse');
+assert.equal(v4!.streamChannelCount, 4);
+assert.deepEqual(activeChannels(v4!), [
+  { index: 0, streamIndex: 0, role: 'Fp1', roleValue: 1 },
+  { index: 1, streamIndex: 1, role: 'Fp2', roleValue: 2 },
+  { index: 2, streamIndex: 2, role: 'EOG-L', roleValue: 3 },
+  { index: 3, streamIndex: 3, role: 'EOG-R', roleValue: 4 },
 ]);
 
 assert.equal(parseScaleInfo(null), null, 'null scale rejected');
@@ -118,5 +133,14 @@ const uvG24 = atG24.packet.samples[0].fp1_uV;
 assert.ok(Math.abs(uvG1 - CODE * g1!.uvPerLsb) < 1e-6, 'gain-1 uV = code x uvPerLsb');
 assert.ok(Math.abs(uvG24 - CODE * gain24!.uvPerLsb) < 1e-6, 'gain-24 uV = code x uvPerLsb');
 assert.ok(Math.abs(uvG1 / uvG24 - 24) < 1e-3, 'gain-1 reads 24x the uV of gain-24 for one code');
+
+const compactPkt = makePacketWithFp1(CODE, v4!.streamChannelCount);
+const compact = parsePacket(compactPkt, 0, v4!.uvPerLsb, activeChannels(v4!), v4!.streamChannelCount);
+assert.ok(compact.ok, 'schema-v4 compact packet parses');
+if (!compact.ok) throw new Error('unreachable');
+assert.ok(
+  Math.abs(compact.packet.samples[0].fp1_uV - CODE * v4!.uvPerLsb) < 1e-6,
+  'compact packet uses stream channel order',
+);
 
 console.log('ALL BLE SCALE ASSERTIONS PASSED');

@@ -26,6 +26,7 @@ import {
   RECOVERY_RESTORE_GRACE_MS,
 } from './recoveryMath';
 import { EEG_SAMPLE_RATE_HZ } from '../ble/constants';
+import { readRecordingManifest } from '../ble/recordingManifest';
 
 const ACTIVE_KEY = 'neurex-active-recording';
 const META_NAME = 'meta.json';
@@ -150,16 +151,22 @@ export function scanRecoverable(activeSessionId?: string | null): RecoverableRec
       continue;
     }
     const sizeBytes = raw.size;
+    const meta = readMeta(item);
+    const manifest = readRecordingManifest(sessionId);
+    const sampleRateHz = manifest?.sampleRateHz ?? EEG_SAMPLE_RATE_HZ;
+    const rawBytesPerSample = manifest?.rawRecordBytes ?? null;
     // Apply the same minimum-length floor as the live sync path. Short setup or
     // debug captures are not useful for cloud staging, so don't ship them — they
     // stay on disk like a short recording kept in the app.
-    if (!isStageableDurationMs(durationMsFromBytes(sizeBytes, EEG_SAMPLE_RATE_HZ))) continue;
-    const meta = readMeta(item);
+    if (!isStageableDurationMs(durationMsFromBytes(sizeBytes, sampleRateHz, rawBytesPerSample ?? undefined))) {
+      continue;
+    }
     const { startedAtMs, endMs } = reconstructTiming({
       sizeBytes,
-      sampleRateHz: EEG_SAMPLE_RATE_HZ,
+      sampleRateHz,
+      rawBytesPerSample,
       modificationTimeMs: raw.modificationTime,
-      metaStartedAtMs: meta?.startedAtMs ?? null,
+      metaStartedAtMs: meta?.startedAtMs ?? (manifest?.startedAtMs || null),
       nowMs: Date.now(),
     });
     out.push({ sessionId, startedAtMs, endMs, sizeBytes, serial: meta?.serial ?? null });

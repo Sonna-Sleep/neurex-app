@@ -3,7 +3,7 @@
 // this with the filesystem scan.
 
 export const RAW_HEADER_BYTES = 16;
-export const RAW_BYTES_PER_SAMPLE = 40; // ms + seq + status + 8 int32 channel counts
+export const RAW_BYTES_PER_SAMPLE = 40; // legacy 8-channel fallback record size
 
 // Minimum recorded length worth uploading: short setup/debug captures are kept
 // local instead of being sent to cloud analysis. Shared with the live
@@ -23,15 +23,21 @@ export function isStageableDurationMs(durationMs: number): boolean {
 }
 
 /** Recorded duration (ms) implied by a RAW.BIN byte count. */
-export function durationMsFromBytes(sizeBytes: number, sampleRateHz: number): number {
-  if (sizeBytes <= 0 || sampleRateHz <= 0) return 0;
+export function durationMsFromBytes(
+  sizeBytes: number,
+  sampleRateHz: number,
+  rawBytesPerSample: number = RAW_BYTES_PER_SAMPLE,
+): number {
+  if (sizeBytes <= 0 || sampleRateHz <= 0 || rawBytesPerSample <= 0) return 0;
   const payloadBytes = Math.max(0, sizeBytes - RAW_HEADER_BYTES);
-  return (payloadBytes / RAW_BYTES_PER_SAMPLE / sampleRateHz) * 1000;
+  return (payloadBytes / rawBytesPerSample / sampleRateHz) * 1000;
 }
 
 export type ReconstructInput = {
   sizeBytes: number;
   sampleRateHz: number;
+  /** RAW.BIN record size from the manifest/header; defaults to legacy 8-channel. */
+  rawBytesPerSample?: number | null;
   /** File modification time (ms epoch) — approximates when streaming stopped. */
   modificationTimeMs: number | null;
   /** Start time from meta.json when present (authoritative). */
@@ -51,7 +57,11 @@ export function reconstructTiming(input: ReconstructInput): {
   startedAtMs: number;
   endMs: number;
 } {
-  const durationMs = durationMsFromBytes(input.sizeBytes, input.sampleRateHz);
+  const durationMs = durationMsFromBytes(
+    input.sizeBytes,
+    input.sampleRateHz,
+    input.rawBytesPerSample ?? RAW_BYTES_PER_SAMPLE,
+  );
   const endRef = input.modificationTimeMs ?? input.nowMs;
   const startedAtMs =
     input.metaStartedAtMs != null ? input.metaStartedAtMs : Math.round(endRef - durationMs);

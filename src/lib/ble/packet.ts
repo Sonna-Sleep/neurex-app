@@ -1,5 +1,4 @@
 import {
-  BYTES_PER_FRAME,
   DEVICE_REBOOT_GAP_MS,
   EEG_SAMPLE_INTERVAL_MS,
   PACKET_END_HI,
@@ -10,6 +9,7 @@ import {
   PKT_IDX_SEQ,
   PKT_IDX_TS,
   PKT_TRAILER_BYTES,
+  bytesPerFrame,
   samplesPerPacket,
 } from './constants';
 import type { ActiveChannel } from './scale';
@@ -66,12 +66,13 @@ export function parsePacket(
   generation: number,
   uvPerLsb: number,
   active: ActiveChannel[],
+  streamChannelCount = 8,
 ): ParseOutcome {
-  // Derive samples-per-packet from the notification length — an 8-sample (226 B)
-  // OR 18-sample (496 B) firmware build both parse. Reject a length that isn't a
-  // valid packet framing. The checksum byte sits just before the 2 end markers.
-  const nSamples = samplesPerPacket(bytes.length);
+  // Derive samples-per-packet from notification length and the device-declared
+  // stream channel count. The checksum byte sits just before the 2 end markers.
+  const nSamples = samplesPerPacket(bytes.length, streamChannelCount);
   if (nSamples <= 0) return { ok: false, reason: 'size' };
+  const frameBytes = bytesPerFrame(streamChannelCount);
   const checksumIdx = bytes.length - PKT_TRAILER_BYTES;
   if (
     bytes[0] !== PACKET_START_HI ||
@@ -88,15 +89,17 @@ export function parsePacket(
   const seq = bytes[PKT_IDX_SEQ];
   const baseMs = u32be(bytes, PKT_IDX_TS);
 
-  const montage = active.filter((c) => c.index >= 0 && c.index < 8);
+  const montage = active.filter(
+    (c) => (c.streamIndex ?? c.index) >= 0 && (c.streamIndex ?? c.index) < streamChannelCount,
+  );
 
   const samples: EegSample[] = new Array(nSamples);
   for (let s = 0; s < nSamples; s++) {
-    const o = PKT_IDX_DATA + s * BYTES_PER_FRAME;
+    const o = PKT_IDX_DATA + s * frameBytes;
     const ms = (baseMs + s * EEG_SAMPLE_INTERVAL_MS) >>> 0;
     const channels: Record<string, number> = {};
-    for (const { index, role } of montage) {
-      channels[role] = i24be(bytes, o + index * 3) * uvPerLsb;
+    for (const { index, streamIndex, role } of montage) {
+      channels[role] = i24be(bytes, o + (streamIndex ?? index) * 3) * uvPerLsb;
     }
     // fp1_uV is a live-consumer convenience. The connection path has already
     // verified the current firmware exposes Fp1 in the schema-v3 montage.

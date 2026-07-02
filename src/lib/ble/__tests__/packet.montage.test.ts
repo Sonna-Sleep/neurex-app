@@ -81,6 +81,7 @@ const baseScale: DeviceScaleInfo = {
   fwBuildId: 0x12345678,
   variantKnown: 1,
   channelRole: [1, 2, 3, 4, 0, 0, 0, 0],
+  streamChannelCount: 8,
 };
 
 // ── Test 1: v3 montage — all four role channels decode ───────────────────────
@@ -110,10 +111,10 @@ const baseScale: DeviceScaleInfo = {
 
   const active = activeChannels(v3Scale);
   assert.deepEqual(active, [
-    { index: 0, role: 'Fp1' },
-    { index: 1, role: 'Fp2' },
-    { index: 2, role: 'EOG-L' },
-    { index: 3, role: 'EOG-R' },
+    { index: 0, streamIndex: 0, role: 'Fp1', roleValue: 1 },
+    { index: 1, streamIndex: 1, role: 'Fp2', roleValue: 2 },
+    { index: 2, streamIndex: 2, role: 'EOG-L', roleValue: 3 },
+    { index: 3, streamIndex: 3, role: 'EOG-R', roleValue: 4 },
   ]);
 
   const out = parsePacket(pkt, 0, uvPerLsb, active);
