@@ -1,5 +1,4 @@
-// Sleep tab — the start/stop recording control, and nothing else. Hosts the
-// existing recording lifecycle: pair → record → sync.
+// Sleep tab: select a device, record, and sync.
 import React from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -23,7 +22,7 @@ export function SleepScreen() {
       <View style={styles.topBar}>
         <Logo height={30} />
         <View style={styles.topBarRight}>
-          {pairedDeviceId ? <StatusPill battery={deviceBattery ?? null} /> : null}
+          {deviceBattery !== null ? <StatusPill battery={deviceBattery} /> : null}
         </View>
       </View>
 
@@ -68,7 +67,7 @@ function DeviceIdentity({
     <View style={styles.deviceIdentity}>
       <View style={styles.deviceRow}>
         <View style={styles.deviceText}>
-          <Text style={styles.deviceStatus}>Device paired</Text>
+          <Text style={styles.deviceStatus}>Selected device</Text>
           <Text style={styles.deviceName} numberOfLines={1} adjustsFontSizeToFit>
             {serial ?? 'Neurex device'}
           </Text>
