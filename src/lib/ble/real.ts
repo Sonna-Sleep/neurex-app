@@ -38,7 +38,6 @@ import type {
   ConnectedDevice,
   ConnectOpts,
   FoundDevice,
-  ParsedPacket,
   StreamCallbacks,
   StreamHandle,
   StreamStats,

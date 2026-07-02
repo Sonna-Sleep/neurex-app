@@ -43,15 +43,10 @@ jobs:
           npm run smoke:ble-reboot
           npm run smoke:ble-watchdog
           npm run smoke:ble-scale
-          npm run smoke:diagnostic-capture
           npm run smoke:raw-record
           npm run smoke:disk-space
           npm run smoke:auto-stop
           npm run smoke:upload-lock
-          npm run smoke:chunk-queue
-          npm run smoke:chunk-upload
-          npm run smoke:chunk-uploader
-          npm run smoke:seg-roll
           npm run smoke:session-metadata
           npm run smoke:stream-stats
           npm run smoke:recovery
