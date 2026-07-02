@@ -4,7 +4,7 @@
 //   1. scan(): scoped by NEUREX_SERVICE_UUID (Apple-compliant for background BLE).
 //   2. connect(deviceId, { autoConnect: true }): MTU bump to fit one full packet.
 //   3. startStream(sessionId, cb): subscribe to the notify characteristic and
-//      append the device-described raw integer stream to RAW.BIN under
+//      append the device-described EEG/EOG raw integer stream to RAW.BIN under
 //      FileSystem.documentDirectory/sessions/<sessionId>/.
 //
 // Best-effort, lossy by design: BLE drops are unavoidable. Drops surface as
@@ -242,7 +242,7 @@ class AppendingFile {
   }
 }
 
-// startStream writes exactly one sample file: RAW.BIN.
+// startStream writes exactly one EEG/EOG sample file: RAW.BIN.
 
 // ── BleClient implementation ───────────────────────────────────────────────
 
@@ -255,7 +255,7 @@ class NotReadyError extends Error {
 
 export class RawStorageWriteError extends Error {
   constructor(detail?: string) {
-    super(`Raw EEG+EOG recording failed${detail ? ` (${detail})` : ''}.`);
+    super(`EEG/EOG raw recording failed${detail ? ` (${detail})` : ''}.`);
     this.name = 'RawStorageWriteError';
   }
 }
@@ -466,7 +466,7 @@ export const realBleClient: BleClient = {
           if (__DEV__) console.warn('[ble/real] scale.json write failed (non-fatal):', e);
         }
 
-        // RAW.BIN — the immutable raw integer stream, written lockstep
+        // RAW.BIN — the immutable EEG/EOG raw integer stream, written lockstep
         // with accepted packets. Raw open/write failure is fatal because every
         // successful recording must contain recoverable Fp1/Fp2/EOG-L/EOG-R data.
         const rawBinFile = new File(sessionDir, 'RAW.BIN');
@@ -589,9 +589,9 @@ export const realBleClient: BleClient = {
             return;
           }
 
-          // Persist FIRST. Only count a sample once the raw stream bytes are
-          // handed to the file buffer. Raw is required: a failed append stops the
-          // stream instead of silently degrading the night.
+          // Persist FIRST. Only count a sample once the EEG/EOG raw stream bytes
+          // are handed to the file buffer. Raw is required: a failed append stops
+          // the stream instead of silently degrading the night.
           try {
             const rawChunk = encodeRawPacket(
               bytes,

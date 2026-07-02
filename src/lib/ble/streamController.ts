@@ -251,9 +251,9 @@ export async function startSession(
 ): Promise<{ sessionId: string }> {
   if (active) return { sessionId: active.sessionId };
 
-  // Pre-flight: refuse to start a night the phone can't hold. RAW.BIN is kept
-  // locally until post-session sync, so the phone must have room before BLE
-  // starts. A flaky disk-space read yields ok=true (never block a legit
+  // Pre-flight: refuse to start a night the phone can't hold. EEG/EOG RAW.BIN
+  // is kept locally until post-session sync, so the phone must have room before
+  // BLE starts. A flaky disk-space read yields ok=true (never block a legit
   // recording); the live raw write error remains the backstop.
   const disk = checkDiskSpace();
   if (!disk.ok) {
@@ -357,7 +357,8 @@ export async function startSession(
 
 /**
  * Resume an interrupted recording after iOS state restoration cold-starts the
- * app in the background. Appends onto the SAME RAW.BIN in the same session dir.
+ * app in the background. Appends onto the SAME EEG/EOG RAW.BIN in the same
+ * session dir.
  * Best-effort and defensive — any failure leaves partial data on disk for
  * launch-time recovery.
  */

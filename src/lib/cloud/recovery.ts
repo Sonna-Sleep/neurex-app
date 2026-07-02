@@ -1,4 +1,4 @@
-// Crash / kill recovery for RAW.BIN overnight recordings.
+// Crash / kill recovery for EEG/EOG RAW.BIN overnight recordings.
 //
 // If the app is killed mid-night (OOM, crash, force-stop, reboot), the bytes are
 // on disk but the in-memory session state is gone, so without this nothing would
@@ -9,8 +9,8 @@
 //     (so an iOS state-restoration relaunch knows which session to resume).
 //   - At a clean stop, the marker is cleared.
 //   - On app launch, scanRecoverable() finds every session dir with a non-empty
-//     RAW.BIN that isn't the live session and isn't yet uploaded (an uploaded
-//     night's dir is removed by deleteLocalSession), and recoverAll() ships them
+//     EEG/EOG RAW.BIN that isn't the live session and isn't yet uploaded. An
+//     uploaded night's dir is removed by deleteLocalSession; recoverAll() ships them
 //     through the same transmitSession path. transmitSession deletes the local
 //     copy only after the cloud upload + finalize succeed, so a failed recovery
 //     keeps the bytes for next launch.
@@ -122,8 +122,8 @@ function readMeta(dir: Directory): RecordingMeta | null {
 
 /**
  * Find recordings on disk that were never uploaded: every session dir with a
- * non-empty RAW.BIN, except the one currently recording. Endpoints come from
- * meta.json when present, else are reconstructed from the file's byte count
+ * non-empty EEG/EOG RAW.BIN, except the one currently recording. Endpoints come
+ * from meta.json when present, else are reconstructed from the file's byte count
  * (→ duration) and modification time, so even a metadata-less orphan uploads.
  */
 export function scanRecoverable(activeSessionId?: string | null): RecoverableRecording[] {

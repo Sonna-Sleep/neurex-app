@@ -1,6 +1,6 @@
 // Cloud sync client for the "phone = transmitter" pipeline.
 //
-// Ships RAW.BIN to Supabase Storage as ordered segment chunks, finalizes
+// Ships EEG/EOG RAW.BIN to Supabase Storage as ordered segment chunks, finalizes
 // the session (which the backend webhook turns into the unified QC report and
 // beta sleep staging), deletes the local copy once the cloud confirms it, and
 // exposes artifact download-on-demand + live result delivery.
@@ -38,7 +38,7 @@ export const RECORDINGS_BUCKET = 'recordings';
 
 export type Stream = 'raw';
 
-// Fixed chunk size keeps upload memory bounded for RAW.BIN uploads.
+// Fixed chunk size keeps upload memory bounded for EEG/EOG RAW.BIN uploads.
 const SEGMENT_BYTES = 3_000_000;
 
 function segmentBytes(_stream: Stream): number {
@@ -145,7 +145,7 @@ export type SegmentUploadResult = {
   uploaded: number;
   /** Lowercase-hex SHA-256 of the whole file (the ordered concatenation the
    * backend reassembles), computed as a byproduct of the upload read. '' when the
-   * local file was absent. For the raw stream this is the client-declared
+   * local file was absent. For the EEG/EOG raw stream this is the client-declared
    * integrity hash that unlocks authoritative multichannel staging. */
   sha256: string;
 };
@@ -331,12 +331,12 @@ export type FinalizeInput = {
   sessionId: string;
   startMs: number;
   endMs: number;
-  /** Whole-stream SHA-256 of the uploaded RAW.BIN (lowercase hex). Set ONLY when
-   * the complete raw is confirmed in Storage — it is the backend's integrity gate
-   * that unlocks authoritative multichannel (Fp1/Fp2 + EOG) staging. Required
-   * for every new successful recording. */
+  /** Whole-stream SHA-256 of the uploaded EEG/EOG RAW.BIN (lowercase hex). Set
+   * ONLY when the complete raw stream is confirmed in Storage — it is the
+   * backend's integrity gate that unlocks authoritative multichannel
+   * (Fp1/Fp2 + EOG) staging. Required for every new successful recording. */
   rawSha256?: string | null;
-  /** Storage prefix of the raw stream (provenance only). */
+  /** Storage prefix of the EEG/EOG raw stream (provenance only). */
   rawStoragePath?: string | null;
 };
 
@@ -410,7 +410,7 @@ export async function finalizeSession(input: FinalizeInput, prefix: string): Pro
   const supabase = getSupabase();
   if (!supabase) throw new NotAuthedError();
   if (!hasRawProvenance(input)) {
-    throw new Error('finalize blocked: RAW.BIN upload/hash is required');
+    throw new Error('finalize blocked: EEG/EOG RAW.BIN upload/hash is required');
   }
   const uid = await currentUserId();
   const core = {
@@ -464,7 +464,7 @@ export function deleteLocalSession(sessionId: string): void {
 }
 
 /**
- * One-shot: upload a session's RAW.BIN, finalize, then delete the local copy.
+ * One-shot: upload a session's EEG/EOG RAW.BIN, finalize, then delete the local copy.
  */
 export async function transmitSession(input: FinalizeInput): Promise<string> {
   const dir = new Directory(Paths.document, 'sessions', input.sessionId);
@@ -475,18 +475,20 @@ export async function transmitSession(input: FinalizeInput): Promise<string> {
   const uid = await currentUserId();
   const prefix = `${uid}/${readableLabel(input.sessionId, input.startMs, input.endMs)}`;
 
-  // Required raw stream ({prefix}/segments/raw/segNNNN.bin → backend reads it in
-  // order). A retry may accept identical existing bytes, but never overwrites
-  // different bytes at the same segNNNN.bin.
+  // Required EEG/EOG raw stream ({prefix}/segments/raw/segNNNN.bin). The backend
+  // reads it in order. A retry may accept identical existing bytes, but never
+  // overwrites different bytes at the same segNNNN.bin.
   const rawBin = new File(dir, 'RAW.BIN');
-  if (!rawBin.exists || rawBin.size <= 0) throw new Error('raw upload required: missing RAW.BIN');
+  if (!rawBin.exists || rawBin.size <= 0) {
+    throw new Error('raw upload required: missing EEG/EOG RAW.BIN');
+  }
   const res = await uploadFileAsSegments(prefix, 'raw', rawBin);
   const rawSha256 = res.sha256 || null;
   if (!rawSha256) throw new Error('raw upload produced no sha256');
   // Self-describing scale/provenance sidecar (scale.json — separate from the
   // recovery meta.json) uploaded BEFORE finalize so the backend sees it when
   // staging. Best-effort: a missing/failed sidecar is reported by backend/QC,
-  // but must not delete an otherwise complete RAW.BIN night.
+  // but must not delete an otherwise complete EEG/EOG RAW.BIN night.
   try {
     await uploadSidecarIfPresent(prefix, new File(dir, 'scale.json'), 'scale.json');
   } catch (e) {
@@ -530,8 +532,8 @@ export async function transmitSession(input: FinalizeInput): Promise<string> {
 /**
  * Download a whole-file artifact back to the phone, on demand.
  * `prefix` is the session's storage_prefix ({user_id}/{readable label}).
- * Root files are usually generated artifacts; uploaded recordings live under
- * segments/raw.
+ * Root files are usually generated artifacts; uploaded EEG/EOG recordings live
+ * under segments/raw.
  */
 export async function downloadRaw(prefix: string, stream: Stream): Promise<string> {
   const supabase = getSupabase();

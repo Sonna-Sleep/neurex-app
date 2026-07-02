@@ -1,7 +1,8 @@
-// RAW.BIN v1 — the immutable integer stream the app persists.
+// RAW.BIN v1 — the immutable EEG/EOG integer stream the app persists.
 //
-// RAW.BIN keeps the device-described stream so any night can be decoded later by
-// a versioned backend decoder. The app does not write a derived FP1/EEG file.
+// RAW.BIN keeps the device-described biosignal stream so any night can be
+// decoded later by a versioned backend decoder. The app does not write a
+// derived single-channel FP1 file.
 //
 // The byte layout MUST match the backend reader (neurex-backend decoder.py,
 // parse_raw_header / decode_raw). All little-endian:
@@ -65,8 +66,8 @@ export function rawHeader(
 }
 
 /**
- * Encode one parsed packet's frames into RAW.BIN v1 records. `bytes` is the
- * original BLE packet; `baseMs`/`seq` come from the parse. Per sample s:
+ * Encode one parsed EEG/EOG packet's frames into RAW.BIN v1 records. `bytes`
+ * is the original BLE packet; `baseMs`/`seq` come from the parse. Per sample s:
  * ms = baseMs + s*4 ms, packet seq, 3 status bytes, and stream int24 channel
  * counts sign-extended to int32.
  */

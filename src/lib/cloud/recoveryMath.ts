@@ -22,7 +22,7 @@ export function isStageableDurationMs(durationMs: number): boolean {
   return durationMs >= MIN_STAGING_SEC * 1000;
 }
 
-/** Recorded duration (ms) implied by a RAW.BIN byte count. */
+/** Recorded duration (ms) implied by an EEG/EOG RAW.BIN byte count. */
 export function durationMsFromBytes(
   sizeBytes: number,
   sampleRateHz: number,
@@ -36,7 +36,7 @@ export function durationMsFromBytes(
 export type ReconstructInput = {
   sizeBytes: number;
   sampleRateHz: number;
-  /** RAW.BIN record size from the manifest/header. */
+  /** EEG/EOG RAW.BIN record size from the manifest/header. */
   rawBytesPerSample?: number | null;
   /** File modification time (ms epoch) — approximates when streaming stopped. */
   modificationTimeMs: number | null;

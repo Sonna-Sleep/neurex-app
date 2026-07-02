@@ -45,7 +45,7 @@ export type DeviceScaleInfo = {
    * Required for recording; null means the firmware/app contract is invalid.
    */
   channelRole: number[] | null;
-  /** Channels carried in each BLE frame / RAW.BIN record. */
+  /** EEG/EOG channels carried in each BLE frame / RAW.BIN record. */
   streamChannelCount: number;
 };
 
@@ -64,7 +64,7 @@ export const FP1_ROLE = 'Fp1';
 export type ActiveChannel = {
   /** 0-based physical ADS1299 channel index (0..7). */
   index: number;
-  /** 0-based channel index within the BLE frame / RAW.BIN record. */
+  /** 0-based EEG/EOG channel index within the BLE frame / RAW.BIN record. */
   streamIndex?: number;
   /** Role label, e.g. 'Fp1' | 'Fp2' | 'EOG-L' | 'EOG-R'. */
   role: string;

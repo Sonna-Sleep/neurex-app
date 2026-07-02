@@ -1,7 +1,7 @@
 // Pre-flight disk-space guard for overnight recordings.
 //
-// An 8-hour night writes RAW.BIN under documentDirectory/sessions/<id>/. If
-// storage fills mid-night, the native file write fails and capture halts —
+// An 8-hour night writes EEG/EOG RAW.BIN under documentDirectory/sessions/<id>/.
+// If storage fills mid-night, the native file write fails and capture halts —
 // surfaced (never silent) via RawStorageWriteError, but only AFTER the user has
 // already lost part of the night. This module moves that check to BEFORE the
 // recording starts:
@@ -34,7 +34,7 @@ export const MIN_FREE_FLOOR_BYTES = 150 * 1024 * 1024; // 150 MB
 
 const MB = 1024 * 1024;
 
-/** Bytes one recorded hour of RAW.BIN occupies on disk:
+/** Bytes one recorded hour of EEG/EOG RAW.BIN occupies on disk:
  * 250 Hz x 24 B/sample x 3600 s = 21,600,000 B/h. */
 export function bytesPerHour(): number {
   return EEG_SAMPLE_RATE_HZ * RAW_BYTES_PER_SAMPLE * 3600;

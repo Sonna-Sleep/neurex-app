@@ -35,7 +35,8 @@ export const NEUREX_ACK_WRITE_UUID = '6e6b0000-1000-8000-0078-65726e6b0003';
 // 6e6b0004). The device serializes its ACTUAL amplitude scale here — µV-per-LSB,
 // PGA gain, VREF, sample rate, channel map, firmware build id — as an append-only
 // little-endian struct. Current firmware requires schema v4: channel_role[8]
-// plus streamChannelCount, so BLE packets and RAW.BIN carry only active channels.
+// plus streamChannelCount, so BLE packets and RAW.BIN carry only active EEG/EOG
+// channels.
 // The app reads it once at connect so the scale and montage are self-describing
 // instead of assumptions that silently break when the firmware changes.
 export const NEUREX_SCALE_INFO_UUID = '6e6b0000-1000-8000-0078-65726e6b0004';

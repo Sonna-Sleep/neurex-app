@@ -1,9 +1,9 @@
 // Public contract for talking to the Neurex device over BLE.
 //
 // Live-stream model: scan → connect → startStream(sessionId, callbacks).
-// The firmware notifies raw ADS1299 frames batched at 250 Hz. RAW.BIN persists
-// the device-described stream, later decoded by backend metadata into
-// Fp1/Fp2/EOG-L/EOG-R.
+// The firmware notifies raw ADS1299 EEG/EOG frames batched at 250 Hz. RAW.BIN
+// persists the device-described biosignal stream, later decoded by backend
+// metadata into Fp1/Fp2/EOG-L/EOG-R.
 
 import type { DeviceScaleInfo } from './scale';
 
@@ -64,17 +64,17 @@ export type StreamStats = {
    * is a new epoch we detected (baseMs jumped far backward) and kept recording
    * across instead of discarding the rest of the night as duplicates. */
   deviceReboots: number;
-  /** Raw EEG+EOG is required for every new successful recording. */
+  /** EEG/EOG raw is required for every new successful recording. */
   rawRequired: boolean;
-  /** RAW.BIN was opened and accepted the header. */
+  /** EEG/EOG RAW.BIN was opened and accepted the header. */
   rawOpened: boolean;
-  /** Bytes handed to the RAW.BIN sink, including the 16-byte header. */
+  /** Bytes handed to the EEG/EOG RAW.BIN sink, including the 16-byte header. */
   rawBytesWritten: number;
-  /** RAW.BIN was flushed/closed successfully. */
+  /** EEG/EOG RAW.BIN was flushed/closed successfully. */
   rawClosed: boolean;
-  /** RAW.BIN was uploaded and confirmed as segments/raw. */
+  /** EEG/EOG RAW.BIN was uploaded and confirmed as segments/raw. */
   rawUploaded: boolean;
-  /** Whole RAW.BIN SHA-256 declared to the backend, or null until uploaded. */
+  /** Whole EEG/EOG RAW.BIN SHA-256 declared to the backend, or null until uploaded. */
   rawSha256: string | null;
   /** Fatal raw failure reason, if any. */
   rawFailureReason: string | null;
@@ -92,7 +92,7 @@ export type StreamCallbacks = {
 export type StreamHandle = {
   /** Path to the per-session directory under FileSystem.documentDirectory. */
   sessionDir: string;
-  /** file:// URI for the required RAW.BIN sample stream. */
+  /** file:// URI for the required EEG/EOG RAW.BIN sample stream. */
   rawUri: string;
   /** Stop notifications, flush + close file handles. Idempotent. */
   stop(): Promise<StreamStats>;

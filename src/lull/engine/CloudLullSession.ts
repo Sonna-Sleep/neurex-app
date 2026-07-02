@@ -4,7 +4,7 @@
  * It does NO DSP. It taps the live BLE feed (engineTap), forwards each packet's
  * four decoded channels to the cloud over a WebSocket, and applies the volume /
  * mute commands the cloud sends back to the injected AudioSink. At the first
- * onset command it mutes and closes the socket; the EEG recording/upload path
+ * onset command it mutes and closes the socket; the EEG/EOG recording/upload path
  * continues independently. The start()/stop()/onTick surface stays small so
  * WindDownScreen only coordinates session lifecycle.
  *
@@ -15,8 +15,8 @@
  *   2. Session log — every applied tick (W, phase, cloud target, time fade, the
  *      volume that actually played, onset) is recorded and written to
  *      sessions/<id>/lull.json at close, so the wind-down is reviewable next to
- *      the EEG after the night uploads. The cloud keeps its own authoritative
- *      copy (lull_server.json) at the same storage prefix.
+ *      the EEG/EOG recording after the night uploads. The cloud keeps its own
+ *      authoritative copy (lull_server.json) at the same storage prefix.
  */
 import type { EegSample } from '../../lib/ble/types';
 import type { AudioSink } from '../audio/AudioSink';

@@ -2,8 +2,8 @@
 // active, otherwise renders a richer "start recording" surface when paired.
 // Owns the start/stop orchestration via streamController.
 //
-// On stop, RAW.BIN is handed to Supabase Storage for staging. In dev, the local
-// raw file can still be shared manually.
+// On stop, EEG/EOG RAW.BIN is handed to Supabase Storage for staging. In dev,
+// the local raw file can still be shared manually.
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
