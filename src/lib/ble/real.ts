@@ -38,7 +38,6 @@ import { activeChannels, FALLBACK_SCALE, parseScaleInfo, scaleProvenance } from 
 import type { ActiveChannel, DeviceScaleInfo } from './scale';
 import { segObjectName, segThresholdBytes, shouldRollSeg } from './segRoll';
 import { RecordingManifestTracker, readRecordingManifest } from './recordingManifest';
-import { useDiagnostics } from '../../state/diagnostics';
 import type {
   BleClient,
   ConnectedDevice,
@@ -417,6 +416,13 @@ export class StorageWriteError extends Error {
   }
 }
 
+export class RawStorageWriteError extends Error {
+  constructor(detail?: string) {
+    super(`Raw EEG+EOG recording failed${detail ? ` (${detail})` : ''}.`);
+    this.name = 'RawStorageWriteError';
+  }
+}
+
 export const realBleClient: BleClient = {
   scan(onFound: (device: FoundDevice) => void): () => void {
     const manager = getBleManager();
@@ -628,29 +634,36 @@ export const realBleClient: BleClient = {
         }
 
         // RAW.BIN — the immutable ALL-channel integer ground truth, written
-        // lockstep with accepted EEG samples. This is now the PRIMARY multichannel
-        // source the backend stages from: when its whole-file hash is declared at
-        // finalize, the cloud decodes every channel and feeds Fp2/EOG into YASA.
-        // Captured for EVERY night (not just fleet/diagnostic builds) — an explicit
-        // diagnosticCapture='off' is the only opt-out. BEST-EFFORT: a raw write
-        // failure NEVER fails the eeg night (it disables raw + keeps recording,
-        // degrading that night to the Fp1 eeg stream). The 16-byte v1 header is
-        // written once on a fresh start.
-        const captureRaw = useDiagnostics.getState().diagnosticCapture !== 'off';
+        // lockstep with accepted packets. This is the required sleep biosignal
+        // source the backend stages from; the FP1 eeg stream is only a legacy
+        // compatibility artifact. Raw open/write failure is fatal because a new
+        // successful recording must contain Fp1/Fp2/EOG-L/EOG-R recoverable data.
         const rawBinFile = new File(sessionDir, 'RAW.BIN');
         const rawFresh = !rawBinFile.exists || (rawBinFile.size ?? 0) === 0;
-        let raw: SampleSink | null = null;
-        if (captureRaw) {
-          try {
-            raw = AppendingFile.open(sessionDir, 'RAW.BIN');
-            if (rawFresh) raw.appendChunk(rawHeader(deviceScale.sampleRateHz));
-          } catch (e) {
-            if (__DEV__) console.warn('[ble/real] raw capture init failed (non-fatal):', e);
-            raw = null;
-          }
-        }
-
         const stats: StreamStats = manifest.stats();
+        stats.rawRequired = true;
+        stats.rawOpened = false;
+        stats.rawBytesWritten = 0;
+        stats.rawClosed = false;
+        stats.rawUploaded = false;
+        stats.rawSha256 = null;
+        stats.rawFailureReason = null;
+        let raw: SampleSink;
+        try {
+          raw = AppendingFile.open(sessionDir, 'RAW.BIN');
+          if (rawFresh) {
+            const header = rawHeader(deviceScale.sampleRateHz);
+            raw.appendChunk(header);
+            stats.rawBytesWritten += header.length;
+          } else {
+            stats.rawBytesWritten = rawBinFile.size ?? 0;
+          }
+          stats.rawOpened = true;
+        } catch (e) {
+          const detail = (e as Error)?.message ?? String(e);
+          stats.rawFailureReason = `raw init failed: ${detail}`;
+          throw new RawStorageWriteError(detail);
+        }
         if (stats.lastBaseMs == null && opts?.resumeFromBaseMs != null) {
           stats.lastBaseMs = opts.resumeFromBaseMs;
         }
@@ -759,23 +772,18 @@ export const realBleClient: BleClient = {
             cb.onError?.(new StorageWriteError((e as Error)?.message));
             return;
           }
-          // Raw ground truth, LOCKSTEP with eeg (same accepted packet, same order;
-          // dup/reboot handled identically above). Best-effort: a raw write failure
-          // (raw is ~3.7x larger → may hit a full disk first) disables raw and lets
-          // the eeg night continue, rather than failing the recording.
-          if (raw) {
-            try {
-              raw.appendChunk(encodeRawPacket(bytes, pkt.baseMs, pkt.seq));
-            } catch (e) {
-              if (__DEV__)
-                console.warn('[ble/real] raw write failed — disabling raw, eeg continues:', e);
-              try {
-                raw.close();
-              } catch {
-                /* ignore */
-              }
-              raw = null;
-            }
+          // Raw ground truth, LOCKSTEP with eeg. Raw is required: a failed append
+          // stops the stream instead of silently degrading the night to FP1-only.
+          try {
+            const rawChunk = encodeRawPacket(bytes, pkt.baseMs, pkt.seq);
+            raw.appendChunk(rawChunk);
+            stats.rawBytesWritten += rawChunk.length;
+          } catch (e) {
+            const detail = (e as Error)?.message ?? String(e);
+            stats.rawFailureReason = `raw write failed: ${detail}`;
+            fatal = true;
+            cb.onError?.(new RawStorageWriteError(detail));
+            return;
           }
 
           // Bytes are on the way to disk — now advance counters + ACK frontier.
@@ -851,7 +859,10 @@ export const realBleClient: BleClient = {
             }
             try {
               raw?.close();
+              stats.rawClosed = true;
             } catch (e) {
+              const detail = (e as Error)?.message ?? String(e);
+              stats.rawFailureReason = `raw close failed: ${detail}`;
               if (__DEV__) console.warn('[ble/real] RAW close failed:', e);
             }
             return stats;

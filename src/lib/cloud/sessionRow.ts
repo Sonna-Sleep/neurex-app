@@ -12,13 +12,18 @@ export type RawProvenance = {
   rawStoragePath?: string | null;
 };
 
+export function hasRawProvenance({ rawSha256 }: RawProvenance): boolean {
+  return typeof rawSha256 === 'string' && rawSha256.length > 0;
+}
+
 /** Return a copy of `row` with raw_sha256/raw_storage_path added iff a non-empty
  * hash is supplied. Never mutates `row`. */
 export function sessionRowWithRaw(
   row: Record<string, unknown>,
-  { rawSha256, rawStoragePath }: RawProvenance,
+  provenance: RawProvenance,
 ): Record<string, unknown> {
-  if (!rawSha256) return { ...row };
+  const { rawSha256, rawStoragePath } = provenance;
+  if (typeof rawSha256 !== 'string' || rawSha256.length === 0) return { ...row };
   const out: Record<string, unknown> = { ...row, raw_sha256: rawSha256 };
   if (rawStoragePath) out.raw_storage_path = rawStoragePath;
   return out;

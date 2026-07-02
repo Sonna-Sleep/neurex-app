@@ -1,4 +1,4 @@
-import { sessionRowWithRaw } from '../sessionRow';
+import { hasRawProvenance, sessionRowWithRaw } from '../sessionRow';
 
 describe('sessionRowWithRaw — attach raw provenance to the sessions insert', () => {
   const base = { id: 's1', status: 'uploaded', storage_prefix: 'uid/label' };
@@ -16,7 +16,18 @@ describe('sessionRowWithRaw — attach raw provenance to the sessions insert', (
     expect((base as Record<string, unknown>).raw_sha256).toBeUndefined();
   });
 
-  test('omits raw columns entirely when the hash is absent (so the night still stages from eeg)', () => {
+  test('detects whether raw provenance is present for finalize gating', () => {
+    expect(
+      hasRawProvenance({
+        rawSha256: 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad',
+      }),
+    ).toBe(true);
+    for (const rawSha256 of [undefined, null, '']) {
+      expect(hasRawProvenance({ rawSha256 })).toBe(false);
+    }
+  });
+
+  test('omits raw columns entirely when the hash is absent', () => {
     for (const rawSha256 of [undefined, null, '']) {
       const row = sessionRowWithRaw(base, { rawSha256, rawStoragePath: 'x' });
       expect('raw_sha256' in row).toBe(false);

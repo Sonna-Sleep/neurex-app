@@ -195,6 +195,13 @@ export function statsFromManifest(manifest: RecordingManifest | null): StreamSta
     totalTimeGapMs: manifest?.totalTimeGapMs ?? 0,
     maxTimeGapMs: manifest?.maxTimeGapMs ?? 0,
     deviceReboots: manifest?.deviceReboots ?? 0,
+    rawRequired: false,
+    rawOpened: false,
+    rawBytesWritten: 0,
+    rawClosed: false,
+    rawUploaded: false,
+    rawSha256: null,
+    rawFailureReason: null,
   };
 }
 

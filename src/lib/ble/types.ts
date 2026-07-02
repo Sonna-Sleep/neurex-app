@@ -1,11 +1,10 @@
 // Public contract for talking to the Neurex device over BLE.
 //
 // Live-stream model: scan → connect → startStream(sessionId, callbacks).
-// The firmware notifies 226-byte packets at ~31.25 Hz (8 samples/packet @ 250
-// Hz). The app persists decoded FP1-active / FP2-reference samples in the
-// canonical 8-byte sample format. New recordings default to rolling
-// segments/eeg/segNNNN.bin files; the legacy local EEG.BIN writer remains as an
-// emergency fallback and old-recording recovery path.
+// The firmware notifies raw ADS1299 frames (8 or 18 samples/packet @ 250 Hz).
+// RAW.BIN is the canonical persisted sleep biosignal stream: all 8 integer
+// channels, later decoded by backend metadata into Fp1/Fp2/EOG-L/EOG-R. The
+// decoded FP1 segments remain only as a compatibility/debug artifact.
 
 import type { DeviceScaleInfo } from './scale';
 
@@ -22,8 +21,8 @@ export type FoundDevice = {
 export type EegSample = {
   ms: number;
   /**
-   * The Fp1 (Fpz active) channel in µV. RETAINED VERBATIM for existing
-   * consumers (recording/upload write only this). Equals channels['Fp1'].
+   * The Fp1 channel in µV. Retained for live compatibility consumers and the
+   * legacy FP1 side stream. Equals channels['Fp1'] when montage metadata exists.
    */
   fp1_uV: number;
   /**
@@ -67,6 +66,20 @@ export type StreamStats = {
    * is a new epoch we detected (baseMs jumped far backward) and kept recording
    * across instead of discarding the rest of the night as duplicates. */
   deviceReboots: number;
+  /** Raw EEG+EOG is required for every new successful recording. */
+  rawRequired: boolean;
+  /** RAW.BIN was opened and accepted the header. */
+  rawOpened: boolean;
+  /** Bytes handed to the RAW.BIN sink, including the 16-byte header. */
+  rawBytesWritten: number;
+  /** RAW.BIN was flushed/closed successfully. */
+  rawClosed: boolean;
+  /** RAW.BIN was uploaded and confirmed as segments/raw. */
+  rawUploaded: boolean;
+  /** Whole RAW.BIN SHA-256 declared to the backend, or null until uploaded. */
+  rawSha256: string | null;
+  /** Fatal raw failure reason, if any. */
+  rawFailureReason: string | null;
 };
 
 export type StreamCallbacks = {

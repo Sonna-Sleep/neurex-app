@@ -143,6 +143,26 @@ function freshStats(): StreamStats {
     totalTimeGapMs: 0,
     maxTimeGapMs: 0,
     deviceReboots: 0,
+    rawRequired: true,
+    rawOpened: false,
+    rawBytesWritten: 0,
+    rawClosed: false,
+    rawUploaded: false,
+    rawSha256: null,
+    rawFailureReason: null,
+  };
+}
+
+function withRawStats(base: StreamStats, raw: StreamStats): StreamStats {
+  return {
+    ...base,
+    rawRequired: raw.rawRequired,
+    rawOpened: raw.rawOpened,
+    rawBytesWritten: raw.rawBytesWritten,
+    rawClosed: raw.rawClosed,
+    rawUploaded: raw.rawUploaded,
+    rawSha256: raw.rawSha256,
+    rawFailureReason: raw.rawFailureReason,
   };
 }
 
@@ -153,7 +173,7 @@ function endMsFromSamples(startedAtMs: number, stats: StreamStats): number {
 function statsFromSession(sessionId: string, fallback: StreamStats): StreamStats {
   const manifest = readRecordingManifest(sessionId);
   const manifestStats = statsFromManifest(manifest);
-  return manifestStats.samples >= fallback.samples ? manifestStats : fallback;
+  return manifestStats.samples >= fallback.samples ? withRawStats(manifestStats, fallback) : fallback;
 }
 
 function endMsFromSession(sessionId: string, startedAtMs: number, fallback: StreamStats): number {

@@ -18,6 +18,7 @@ export type StreamStatsPayloadInput = {
   chunkSeconds: number;
   queuedChunkCount: number;
   confirmedChunkCount: number | null;
+  confirmedRawChunkCount: number | null;
   appVersion: string;
   appBuild: number | null;
   createdAtMs?: number;
@@ -53,6 +54,15 @@ export function buildStreamStatsPayload(input: StreamStatsPayloadInput) {
     chunkSeconds: input.chunkSeconds,
     queuedChunkCount: input.queuedChunkCount,
     confirmedChunkCount: input.confirmedChunkCount,
+    confirmedRawChunkCount: input.confirmedRawChunkCount,
+    rawRequired: stats.rawRequired ?? null,
+    rawOpened: stats.rawOpened ?? null,
+    rawBytesWritten: num(stats.rawBytesWritten),
+    rawClosed: stats.rawClosed ?? null,
+    rawUploaded: stats.rawUploaded ?? null,
+    rawSha256: typeof stats.rawSha256 === 'string' ? stats.rawSha256 : null,
+    rawFailureReason:
+      typeof stats.rawFailureReason === 'string' ? stats.rawFailureReason : null,
     appVersion: input.appVersion,
     appBuild: input.appBuild,
   };

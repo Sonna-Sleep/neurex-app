@@ -47,11 +47,14 @@ function queuedChunkCount(sessionId: string): number {
   return fileQueueStore.load().filter((task) => task.sessionId === sessionId).length;
 }
 
-async function confirmedChunkCount(prefix?: string | null): Promise<number | null> {
+async function confirmedChunkCount(
+  prefix?: string | null,
+  stream: 'eeg' | 'raw' = 'eeg',
+): Promise<number | null> {
   if (!prefix) return null;
   const supabase = getSupabase();
   if (!supabase) return null;
-  const dir = `${prefix}/segments/eeg`;
+  const dir = `${prefix}/segments/${stream}`;
   let total = 0;
   const pageSize = 100;
   for (let offset = 0; ; offset += pageSize) {
@@ -93,6 +96,7 @@ export async function writeStreamStatsSidecar(input: WriteStreamStatsInput): Pro
     chunkSeconds: CHUNK_SECONDS,
     queuedChunkCount: queuedChunkCount(input.sessionId),
     confirmedChunkCount: await confirmedChunkCount(input.prefix),
+    confirmedRawChunkCount: await confirmedChunkCount(input.prefix, 'raw'),
     appVersion: appConfig.expo.version,
     appBuild: appBuild(),
   });
@@ -108,6 +112,7 @@ export async function ensureStreamStatsSidecar(input: WriteStreamStatsInput): Pr
 export async function refreshStreamStatsSidecarUploadCounts(
   sessionId: string,
   prefix: string,
+  raw?: { rawSha256?: string | null; rawUploaded?: boolean },
 ): Promise<void> {
   const file = streamStatsFile(sessionId);
   const existing = readExisting(file);
@@ -116,5 +121,8 @@ export async function refreshStreamStatsSidecarUploadCounts(
     ...existing,
     queuedChunkCount: queuedChunkCount(sessionId),
     confirmedChunkCount: await confirmedChunkCount(prefix),
+    confirmedRawChunkCount: await confirmedChunkCount(prefix, 'raw'),
+    ...(raw?.rawUploaded !== undefined ? { rawUploaded: raw.rawUploaded } : {}),
+    ...(raw?.rawSha256 ? { rawSha256: raw.rawSha256 } : {}),
   });
 }

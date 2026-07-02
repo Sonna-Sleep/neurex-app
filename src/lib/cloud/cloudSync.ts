@@ -20,7 +20,7 @@ import { manifestFile } from '../ble/recordingManifest';
 import { supabaseSessionRepo } from '../repos/supabase';
 import type { Session } from '../repos/types';
 import { buildSessionMetadata } from './sessionMetadata';
-import { sessionRowWithRaw } from './sessionRow';
+import { hasRawProvenance, sessionRowWithRaw } from './sessionRow';
 import { Sha256Stream } from './sha256Stream';
 import {
   ensureStreamStatsSidecar,
@@ -341,11 +341,13 @@ export type FinalizeInput = {
   endMs: number;
   /** Whole-stream SHA-256 of the uploaded RAW.BIN (lowercase hex). Set ONLY when
    * the complete raw is confirmed in Storage — it is the backend's integrity gate
-   * that unlocks authoritative multichannel (Fp1/Fp2 + EOG) staging. Absent →
-   * the night stages from the eeg fallback (Fp1-only). */
+   * that unlocks authoritative multichannel (Fp1/Fp2 + EOG) staging. Required
+   * for every new successful recording. */
   rawSha256?: string | null;
   /** Storage prefix of the raw stream (provenance only). */
   rawStoragePath?: string | null;
+  /** Old imported EEG.BIN nights may be finalized without raw; new recordings may not. */
+  allowMissingRawForLegacy?: boolean;
 };
 
 function recordingLabel(startMs: number): string {
@@ -416,6 +418,9 @@ function isMissingColumnError(error: { code?: string; message?: string }): boole
 export async function finalizeSession(input: FinalizeInput, prefix: string): Promise<void> {
   const supabase = getSupabase();
   if (!supabase) throw new NotAuthedError();
+  if (!hasRawProvenance(input) && !input.allowMissingRawForLegacy) {
+    throw new Error('finalize blocked: RAW.BIN upload/hash is required');
+  }
   const uid = await currentUserId();
   const core = {
     id: input.sessionId,
@@ -429,9 +434,8 @@ export async function finalizeSession(input: FinalizeInput, prefix: string): Pro
   const readable = {
     recording_label: recordingLabel(input.startMs),
   };
-  // raw_sha256/raw_storage_path ride the full insert (like the 0015 metadata
-  // columns); the additive-fallback below drops them if the live DB lacks the
-  // columns, so a night is never lost to a not-yet-applied migration.
+  // raw_sha256/raw_storage_path ride every non-legacy insert. The additive
+  // fallback may drop optional metadata columns, but it must not drop raw_sha256.
   const full = sessionRowWithRaw(
     { ...core, ...readable, ...readFinalizeMetadata(input.sessionId) },
     { rawSha256: input.rawSha256, rawStoragePath: input.rawStoragePath },
@@ -441,9 +445,15 @@ export async function finalizeSession(input: FinalizeInput, prefix: string): Pro
     if (__DEV__)
       console.warn(
         `[cloudSync] sessions metadata columns missing (migration 0015 not applied?) — ` +
-          `inserting core columns only: ${error.message}`,
+          `retrying with core/raw columns only: ${error.message}`,
       );
-    ({ error } = await supabase.from('sessions').insert(core));
+    const fallback = input.rawSha256
+      ? sessionRowWithRaw(core, {
+          rawSha256: input.rawSha256,
+          rawStoragePath: input.rawStoragePath,
+        })
+      : core;
+    ({ error } = await supabase.from('sessions').insert(fallback));
   }
   // Idempotent: a retry with the same session id re-runs finalize after the row
   // already exists. A unique-violation (23505) just means "already finalized" —
@@ -463,8 +473,9 @@ export function deleteLocalSession(sessionId: string): void {
 }
 
 /**
- * One-shot: upload a session's local EEG as segments, finalize, then delete
- * the local copy. Throws (and keeps local bytes) on any failure.
+ * One-shot: upload a session's local recording artifacts, finalize, then delete
+ * the local copy. New recordings require RAW.BIN + raw_sha256; legacy EEG.BIN
+ * imports may still finalize without raw.
  */
 export async function transmitSession(input: FinalizeInput): Promise<string> {
   const dir = new Directory(Paths.document, 'sessions', input.sessionId);
@@ -487,31 +498,23 @@ export async function transmitSession(input: FinalizeInput): Promise<string> {
   const prefix = `${uid}/${readableLabel(input.sessionId, input.startMs, input.endMs)}`;
 
   // Legacy fallback: upload the completed local EEG.BIN as ordered cloud
-  // segments. This stays for old recordings and the explicit
-  // EXPO_PUBLIC_CHUNKED_UPLOAD=0 emergency path; new recordings write local
-  // segments directly.
+  // segments. New normal recordings use chunked sessions above and require raw;
+  // this path remains for old imported nights and emergency EEG.BIN captures.
   const eeg = new File(dir, 'EEG.BIN');
   await uploadFileAsSegments(prefix, 'eeg', eeg);
-  // Diagnostic raw ground truth, uploaded as a parallel 'raw' segment stream
-  // ({prefix}/segments/raw/segNNNN.bin → backend reads it in order). Present only
-  // when raw capture was on. BEST-EFFORT: raw is a debugging bonus and must never
-  // block finalizing the night. NOTE: this post-session path (and the eeg upload
-  // above) writes directly to Supabase Storage with conflict-safe segment paths:
+  // Required raw ground truth, uploaded as a parallel 'raw' segment stream
+  // ({prefix}/segments/raw/segNNNN.bin → backend reads it in order). NOTE: this
+  // post-session path (and the eeg upload above) writes directly to Supabase
+  // Storage with conflict-safe segment paths:
   // a retry may accept identical existing bytes, but never overwrites different
   // bytes at the same segNNNN.bin. The live chunked-recording eeg stream still has
   // the stronger /ingest sha256 confirmation before local delete.
-  // Capture the raw whole-file hash so finalize can declare it — the integrity
-  // gate that unlocks authoritative multichannel staging. Best-effort: on failure
-  // we finalize without it and the night stages from the Fp1 eeg fallback.
   let rawSha256: string | null = null;
   const rawBin = new File(dir, 'RAW.BIN');
   if (rawBin.exists) {
-    try {
-      const res = await uploadFileAsSegments(prefix, 'raw', rawBin);
-      rawSha256 = res.sha256 || null;
-    } catch (e) {
-      if (__DEV__) console.warn('[cloudSync] raw upload failed (non-fatal):', e);
-    }
+    const res = await uploadFileAsSegments(prefix, 'raw', rawBin);
+    rawSha256 = res.sha256 || null;
+    if (!rawSha256) throw new Error('raw upload produced no sha256');
   }
   // Self-describing scale/provenance sidecar (scale.json — separate from the
   // recovery meta.json) uploaded BEFORE finalize so the backend sees it when
@@ -537,13 +540,21 @@ export async function transmitSession(input: FinalizeInput): Promise<string> {
       stopReason: 'recovery',
       prefix,
     });
-    await refreshStreamStatsSidecarUploadCounts(input.sessionId, prefix);
+    await refreshStreamStatsSidecarUploadCounts(input.sessionId, prefix, {
+      rawSha256,
+      rawUploaded: !!rawSha256,
+    });
     await uploadSidecarIfPresent(prefix, streamStatsFile(input.sessionId), 'stream_stats.json');
   } catch (e) {
     if (__DEV__) console.warn('[cloudSync] stream_stats.json upload failed (non-fatal):', e);
   }
   await finalizeSession(
-    { ...input, rawSha256, rawStoragePath: rawSha256 ? `${prefix}/segments/raw` : null },
+    {
+      ...input,
+      rawSha256,
+      rawStoragePath: rawSha256 ? `${prefix}/segments/raw` : null,
+      allowMissingRawForLegacy: !rawBin.exists,
+    },
     prefix,
   );
   deleteLocalSession(input.sessionId); // nothing stays on the phone

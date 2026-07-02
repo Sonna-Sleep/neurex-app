@@ -215,24 +215,16 @@ async function settleChunkedSession(
   ].filter((v): v is number => typeof v === 'number' && Number.isFinite(v));
   const endMs = candidates.length > 0 ? Math.max(...candidates) : meta.startedAtMs;
 
-  // Upload the raw ALL-channel ground truth (single RAW.BIN, written lockstep with
-  // the eeg chunks) as a parallel 'raw' segment stream, and capture its whole-file
-  // hash — the client-declared integrity gate that unlocks authoritative
-  // MULTICHANNEL (Fp1/Fp2 + EOG) staging. The hash is only declared once the full
-  // raw is confirmed in Storage (uploadFileAsSegments resolves only after every
-  // segment lands). Best-effort: on ANY failure we finalize WITHOUT the hash, so
-  // the night safely stages from the Fp1 eeg fallback rather than failing the
-  // backend integrity check on a partial upload.
-  let rawSha256: string | null = null;
-  try {
-    const rawBin = new File(new Directory(sessionsRoot(), sessionId), 'RAW.BIN');
-    if (rawBin.exists) {
-      const res = await uploadFileAsSegments(prefix, 'raw', rawBin);
-      rawSha256 = res.sha256 || null;
-    }
-  } catch {
-    /* non-fatal — finalize without the hash → Fp1 eeg fallback */
-  }
+  // Upload the raw ALL-channel ground truth (single RAW.BIN, written lockstep
+  // with the eeg chunks) as a parallel 'raw' segment stream, and capture its
+  // whole-file hash. New chunked recordings are not successful without this:
+  // if RAW.BIN is missing or upload/hash fails, throw so the local session stays
+  // on the phone and recovery can retry instead of silently staging FP1-only.
+  const rawBin = new File(new Directory(sessionsRoot(), sessionId), 'RAW.BIN');
+  if (!rawBin.exists) throw new Error('raw upload required: missing RAW.BIN');
+  const rawRes = await uploadFileAsSegments(prefix, 'raw', rawBin);
+  const rawSha256 = rawRes.sha256 || null;
+  if (!rawSha256) throw new Error('raw upload required: missing raw sha256');
 
   // Ship the self-describing µV-scale sidecar (scale.json) so the backend stages
   // with the EXACT scale this recording used, not the assumed fallback. Best-
@@ -270,7 +262,10 @@ async function settleChunkedSession(
       stopReason: 'recovery',
       prefix,
     });
-    await refreshStreamStatsSidecarUploadCounts(sessionId, prefix);
+    await refreshStreamStatsSidecarUploadCounts(sessionId, prefix, {
+      rawSha256,
+      rawUploaded: true,
+    });
     await uploadSidecarIfPresent(prefix, streamStatsFile(sessionId), 'stream_stats.json');
   } catch {
     /* non-fatal — QC will flag missing stream_stats.json inside the report */
