@@ -9,8 +9,6 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import * as Sharing from 'expo-sharing';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
-import { useNavigation } from '@react-navigation/native';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 import { Button } from '../../../components/Button';
 import { Card } from '../../../components/Card';
@@ -22,7 +20,6 @@ import { EEG_SAMPLE_RATE_HZ } from '../../../lib/ble/constants';
 import { transmitSession } from '../../../lib/cloud/cloudSync';
 import { MIN_STAGING_MIN, MIN_STAGING_SEC } from '../../../lib/cloud/recoveryMath';
 import { exportRecordingBundle } from '../../../lib/files/recordingBundleExport';
-import type { RootStackParamList } from '../../../navigation/types';
 
 // Holds the just-finished local recording so the UI can offer a share button.
 type SavedRecording = {
@@ -39,7 +36,6 @@ export function RecordingCard({ idleFooter }: { idleFooter?: React.ReactNode }) 
   const streaming = useSession((s) => s.streaming);
   const pairedDeviceId = useSession((s) => s.pairedDeviceId);
   const pairedSerial = useSession((s) => s.pairedSerial);
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
   const [busy, setBusy] = useState<'idle' | 'starting' | 'stopping'>('idle');
   const [error, setError] = useState<string | null>(null);
@@ -358,15 +354,6 @@ export function RecordingCard({ idleFooter }: { idleFooter?: React.ReactNode }) 
         {busy === 'starting' ? <ActivityIndicator color={colors.textPrimary} /> : null}
         <Text style={styles.startLabel}>{busy === 'starting' ? 'Connecting' : 'Start\nSession'}</Text>
       </Pressable>
-      <Pressable
-        onPress={() => navigation.navigate('Lull')}
-        hitSlop={8}
-        accessibilityRole="button"
-        accessibilityLabel="Wind down"
-        style={({ pressed }) => [styles.windDownLink, pressed && styles.windDownLinkPressed]}
-      >
-        <Text style={styles.windDownLabel}>Wind down</Text>
-      </Pressable>
       {error ? <Text style={styles.error}>{error}</Text> : null}
       {idleFooter ? <View style={styles.idleFooter}>{idleFooter}</View> : null}
     </View>
@@ -503,18 +490,5 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginTop: spacing.sm,
     letterSpacing: 0.3,
-  },
-  windDownLink: {
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-  },
-  windDownLinkPressed: {
-    opacity: 0.7,
-  },
-  windDownLabel: {
-    fontSize: 15,
-    fontWeight: '600',
-    letterSpacing: 0.3,
-    color: colors.accent,
   },
 });

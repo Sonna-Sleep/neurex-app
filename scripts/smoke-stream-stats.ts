@@ -26,8 +26,17 @@ const payload = buildStreamStatsPayload({
     rawUploaded: true,
     rawSha256: 'abc123',
     rawFailureReason: null,
+    imuAvailable: true,
+    imuOpened: true,
+    imuNotifications: 1234,
+    imuBytesWritten: 37036,
+    imuClosed: true,
+    imuUploaded: true,
+    imuSha256: 'def456',
+    imuFailureReason: null,
   },
   confirmedRawSegmentCount: 2,
+  confirmedImuSegmentCount: 1,
   appVersion: '0.1.0',
   appBuild: 21,
   createdAtMs: 62_000,
@@ -56,6 +65,15 @@ assert.equal(payload.rawClosed, true);
 assert.equal(payload.rawUploaded, true);
 assert.equal(payload.rawSha256, 'abc123');
 assert.equal(payload.rawFailureReason, null);
+assert.equal(payload.confirmedImuSegmentCount, 1);
+assert.equal(payload.imuAvailable, true);
+assert.equal(payload.imuOpened, true);
+assert.equal(payload.imuNotifications, 1234);
+assert.equal(payload.imuBytesWritten, 37036);
+assert.equal(payload.imuClosed, true);
+assert.equal(payload.imuUploaded, true);
+assert.equal(payload.imuSha256, 'def456');
+assert.equal(payload.imuFailureReason, null);
 assert.equal(payload.appVersion, '0.1.0');
 assert.equal(payload.appBuild, 21);
 

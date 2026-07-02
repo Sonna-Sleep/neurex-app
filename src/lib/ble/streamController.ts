@@ -45,7 +45,6 @@ import {
   readRecordingManifest,
   statsFromManifest,
 } from './recordingManifest';
-import { feedLull } from '../../lull/engine/engineTap';
 
 // User-initiated session start: time-bounded so a device that's off or out of
 // range fails fast with an error instead of an infinite spinner. The background
@@ -144,19 +143,35 @@ function freshStats(): StreamStats {
     rawUploaded: false,
     rawSha256: null,
     rawFailureReason: null,
+    imuAvailable: false,
+    imuOpened: false,
+    imuNotifications: 0,
+    imuBytesWritten: 0,
+    imuClosed: false,
+    imuUploaded: false,
+    imuSha256: null,
+    imuFailureReason: null,
   };
 }
 
-function withRawStats(base: StreamStats, raw: StreamStats): StreamStats {
+function withFileStats(base: StreamStats, latest: StreamStats): StreamStats {
   return {
     ...base,
-    rawRequired: raw.rawRequired,
-    rawOpened: raw.rawOpened,
-    rawBytesWritten: raw.rawBytesWritten,
-    rawClosed: raw.rawClosed,
-    rawUploaded: raw.rawUploaded,
-    rawSha256: raw.rawSha256,
-    rawFailureReason: raw.rawFailureReason,
+    rawRequired: latest.rawRequired,
+    rawOpened: latest.rawOpened,
+    rawBytesWritten: latest.rawBytesWritten,
+    rawClosed: latest.rawClosed,
+    rawUploaded: latest.rawUploaded,
+    rawSha256: latest.rawSha256,
+    rawFailureReason: latest.rawFailureReason,
+    imuAvailable: latest.imuAvailable,
+    imuOpened: latest.imuOpened,
+    imuNotifications: latest.imuNotifications,
+    imuBytesWritten: latest.imuBytesWritten,
+    imuClosed: latest.imuClosed,
+    imuUploaded: latest.imuUploaded,
+    imuSha256: latest.imuSha256,
+    imuFailureReason: latest.imuFailureReason,
   };
 }
 
@@ -167,7 +182,7 @@ function endMsFromSamples(startedAtMs: number, stats: StreamStats): number {
 function statsFromSession(sessionId: string, fallback: StreamStats): StreamStats {
   const manifest = readRecordingManifest(sessionId);
   const manifestStats = statsFromManifest(manifest);
-  return manifestStats.samples >= fallback.samples ? withRawStats(manifestStats, fallback) : fallback;
+  return manifestStats.samples >= fallback.samples ? withFileStats(manifestStats, fallback) : fallback;
 }
 
 function endMsFromSession(sessionId: string, startedAtMs: number, fallback: StreamStats): number {
@@ -178,12 +193,8 @@ function endMsFromSession(sessionId: string, startedAtMs: number, fallback: Stre
 
 function makeCallbacks(statsRef: StatsRef): StreamCallbacks {
   return {
-    onPacket: (pkt, stats) => {
+    onPacket: (_pkt, stats) => {
       statsRef.current = stats;
-      // Live Lull tap: forward decoded samples to the active wind-down engine,
-      // if any. A no-op when Lull is idle — it never touches recording state and
-      // swallows its own errors, so it cannot disturb the night's capture.
-      feedLull(pkt.samples);
     },
     onDrop: (_reason, stats) => {
       statsRef.current = stats;
@@ -585,6 +596,7 @@ export type StopResult = {
   sessionId: string;
   sessionDir: string;
   rawUri: string;
+  imuUri?: string | null;
   stats: StreamStats;
 };
 
@@ -668,6 +680,7 @@ export async function stopSession(): Promise<StopResult | null> {
     sessionId: session.sessionId,
     sessionDir: session.handle.sessionDir,
     rawUri: session.handle.rawUri,
+    imuUri: session.handle.imuUri,
     stats,
   };
 }

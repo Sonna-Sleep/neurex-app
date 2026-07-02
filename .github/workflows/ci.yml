@@ -44,6 +44,7 @@ jobs:
           npm run smoke:ble-watchdog
           npm run smoke:ble-scale
           npm run smoke:raw-record
+          npm run smoke:imu-record
           npm run smoke:disk-space
           npm run smoke:auto-stop
           npm run smoke:upload-lock

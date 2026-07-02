@@ -1,9 +1,10 @@
 // Public contract for talking to the Neurex device over BLE.
 //
-// Live-stream model: scan → connect → startStream(sessionId, callbacks).
+// Live-stream model: scan -> connect -> startStream(sessionId, callbacks).
 // The firmware notifies raw ADS1299 EEG/EOG frames batched at 250 Hz. RAW.BIN
 // persists the device-described biosignal stream, later decoded by backend
-// metadata into Fp1/Fp2/EOG-L/EOG-R.
+// metadata into Fp1/Fp2/EOG-L/EOG-R. Optional IMU notifications are recorded
+// separately as IMU.BIN when firmware exposes that characteristic.
 
 import type { DeviceScaleInfo } from './scale';
 
@@ -27,7 +28,6 @@ export type EegSample = {
   /**
    * Every active montage channel, keyed by role label, in µV:
    *   'Fp1' | 'Fp2' | 'EOG-L' | 'EOG-R' for the 4-channel montage.
-   * The EOG pair drives Lull's sleep-onset detection.
    */
   channels: Record<string, number>;
 };
@@ -78,6 +78,22 @@ export type StreamStats = {
   rawSha256: string | null;
   /** Fatal raw failure reason, if any. */
   rawFailureReason: string | null;
+  /** Optional IMU notify characteristic was present on this device connection. */
+  imuAvailable: boolean;
+  /** IMU.BIN was opened and accepted the header. */
+  imuOpened: boolean;
+  /** BLE IMU notifications written to IMU.BIN. */
+  imuNotifications: number;
+  /** Bytes handed to the IMU.BIN sink, including the 16-byte header. */
+  imuBytesWritten: number;
+  /** IMU.BIN was flushed/closed successfully. */
+  imuClosed: boolean;
+  /** IMU.BIN was uploaded and confirmed as segments/imu. */
+  imuUploaded: boolean;
+  /** Whole IMU.BIN SHA-256, or null until uploaded. */
+  imuSha256: string | null;
+  /** Non-fatal IMU failure reason, if any. */
+  imuFailureReason: string | null;
 };
 
 export type StreamCallbacks = {
@@ -94,6 +110,8 @@ export type StreamHandle = {
   sessionDir: string;
   /** file:// URI for the required EEG/EOG RAW.BIN sample stream. */
   rawUri: string;
+  /** file:// URI for optional IMU.BIN, null when firmware has no IMU stream. */
+  imuUri?: string | null;
   /** Stop notifications, flush + close file handles. Idempotent. */
   stop(): Promise<StreamStats>;
 };
@@ -107,6 +125,8 @@ export type ConnectedDevice = {
   deviceId: string;
   /** The device's schema-v4 scale/montage, read once at connect. */
   scale: DeviceScaleInfo;
+  /** True when this connection exposed the optional IMU notify characteristic. */
+  imuAvailable?: boolean;
   /** Subscribe to the notify characteristic and start writing samples to disk. */
   startStream(
     sessionId: string,

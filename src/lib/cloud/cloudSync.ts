@@ -1,12 +1,14 @@
 // Cloud sync client for the "phone = transmitter" pipeline.
 //
-// Ships EEG/EOG RAW.BIN to Supabase Storage as ordered segment chunks, finalizes
-// the session (which the backend webhook turns into the unified QC report and
-// beta sleep staging), deletes the local copy once the cloud confirms it, and
-// exposes artifact download-on-demand + live result delivery.
+// Ships EEG/EOG RAW.BIN plus optional IMU.BIN to Supabase Storage as ordered
+// segment chunks, finalizes the session (which the backend webhook turns into
+// the unified QC report and beta sleep staging), deletes the local copy once
+// the cloud confirms it, and exposes artifact download-on-demand + live result
+// delivery.
 //
 // Storage layout for normal QC:
 //   {uid}/{readable-label}/segments/raw/segNNNN.bin
+//   {uid}/{readable-label}/segments/imu/segNNNN.bin   (optional)
 // The backend concatenates these in memory; storage stays segment-shaped.
 
 import { File, Directory, Paths } from 'expo-file-system';
@@ -15,6 +17,7 @@ import { AppState, Platform } from 'react-native';
 import appConfig from '../../../app.json';
 
 import { getSupabase } from '../auth/supabase';
+import { IMU_BIN_NAME, IMU_META_NAME } from '../ble/imuRecord';
 import type { DeviceScaleInfo } from '../ble/scale';
 import { manifestFile } from '../ble/recordingManifest';
 import { supabaseSessionRepo } from '../repos/supabase';
@@ -36,9 +39,9 @@ export { uploadLockStats } from './uploadLock';
 
 export const RECORDINGS_BUCKET = 'recordings';
 
-export type Stream = 'raw';
+export type Stream = 'raw' | 'imu';
 
-// Fixed chunk size keeps upload memory bounded for EEG/EOG RAW.BIN uploads.
+// Fixed chunk size keeps upload memory bounded for raw stream uploads.
 const SEGMENT_BYTES = 3_000_000;
 
 function segmentBytes(_stream: Stream): number {
@@ -145,8 +148,8 @@ export type SegmentUploadResult = {
   uploaded: number;
   /** Lowercase-hex SHA-256 of the whole file (the ordered concatenation the
    * backend reassembles), computed as a byproduct of the upload read. '' when the
-   * local file was absent. For the EEG/EOG raw stream this is the client-declared
-   * integrity hash that unlocks authoritative multichannel staging. */
+   * local file was absent. For EEG/EOG raw this is the client-declared integrity
+   * hash that unlocks authoritative multichannel staging. */
   sha256: string;
 };
 
@@ -464,7 +467,8 @@ export function deleteLocalSession(sessionId: string): void {
 }
 
 /**
- * One-shot: upload a session's EEG/EOG RAW.BIN, finalize, then delete the local copy.
+ * One-shot: upload a session's EEG/EOG RAW.BIN plus optional IMU.BIN, finalize,
+ * then delete the local copy.
  */
 export async function transmitSession(input: FinalizeInput): Promise<string> {
   const dir = new Directory(Paths.document, 'sessions', input.sessionId);
@@ -485,6 +489,16 @@ export async function transmitSession(input: FinalizeInput): Promise<string> {
   const res = await uploadFileAsSegments(prefix, 'raw', rawBin);
   const rawSha256 = res.sha256 || null;
   if (!rawSha256) throw new Error('raw upload produced no sha256');
+
+  const imuBin = new File(dir, IMU_BIN_NAME);
+  let imuSha256: string | null = null;
+  let imuUploaded = false;
+  if (imuBin.exists && imuBin.size > 0) {
+    const imuRes = await uploadFileAsSegments(prefix, 'imu', imuBin);
+    imuSha256 = imuRes.sha256 || null;
+    if (!imuSha256) throw new Error('IMU upload produced no sha256');
+    imuUploaded = true;
+  }
   // Self-describing scale/provenance sidecar (scale.json — separate from the
   // recovery meta.json) uploaded BEFORE finalize so the backend sees it when
   // staging. Best-effort: a missing/failed sidecar is reported by backend/QC,
@@ -499,6 +513,11 @@ export async function transmitSession(input: FinalizeInput): Promise<string> {
   } catch (e) {
     if (__DEV__) console.warn('[cloudSync] recording_manifest.json upload failed (non-fatal):', e);
   }
+  try {
+    await uploadSidecarIfPresent(prefix, new File(dir, IMU_META_NAME), IMU_META_NAME);
+  } catch (e) {
+    if (__DEV__) console.warn('[cloudSync] imu.json upload failed (non-fatal):', e);
+  }
   // App-side BLE/upload forensic sidecar. Best-effort, but written/uploaded
   // before finalize so the backend can include it in the one QC report.
   try {
@@ -509,10 +528,18 @@ export async function transmitSession(input: FinalizeInput): Promise<string> {
       stopReason: 'recovery',
       prefix,
     });
-    await refreshStreamStatsSidecarUploadCounts(input.sessionId, prefix, {
-      rawSha256,
-      rawUploaded: !!rawSha256,
-    });
+    await refreshStreamStatsSidecarUploadCounts(
+      input.sessionId,
+      prefix,
+      {
+        rawSha256,
+        rawUploaded: !!rawSha256,
+      },
+      {
+        imuSha256,
+        imuUploaded,
+      },
+    );
     await uploadSidecarIfPresent(prefix, streamStatsFile(input.sessionId), 'stream_stats.json');
   } catch (e) {
     if (__DEV__) console.warn('[cloudSync] stream_stats.json upload failed (non-fatal):', e);

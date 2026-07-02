@@ -6,7 +6,6 @@ import { useSession } from '../state/session';
 import { colors } from '../theme/tokens';
 import { OnboardingNavigator } from './OnboardingNavigator';
 import { TabNavigator } from './TabNavigator';
-import { WindDownScreen } from '../screens/lull/WindDownScreen';
 import { navigationRef } from './navigationRef';
 import { NotificationRouter } from './NotificationRouter';
 import { useRecoverOnLaunch } from '../lib/cloud/useRecoverOnLaunch';
@@ -41,14 +40,7 @@ export function RootNavigator() {
     <NavigationContainer theme={navTheme} ref={navigationRef}>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         {onboardingComplete ? (
-          <>
-            <Stack.Screen name="Main" component={TabNavigator} />
-            <Stack.Screen
-              name="Lull"
-              component={WindDownScreen}
-              options={{ presentation: 'fullScreenModal' }}
-            />
-          </>
+          <Stack.Screen name="Main" component={TabNavigator} />
         ) : (
           <Stack.Screen name="Onboarding" component={OnboardingNavigator} />
         )}

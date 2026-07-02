@@ -45,6 +45,10 @@ export const NEUREX_SCALE_INFO_SCHEMA_VER = 4;
 export const NEUREX_SCALE_INFO_BYTES_V3 = 29;
 export const NEUREX_SCALE_INFO_BYTES_V4 = 30;
 
+// Optional IMU notify characteristic. Firmware may omit this; the app records
+// it when present as a separate IMU.BIN stream so RAW.BIN stays EEG/EOG only.
+export const NEUREX_IMU_NOTIFY_UUID = '6e6b0000-1000-8000-0078-65726e6b0005';
+
 // How often the ACK loop writes the contiguous frontier. Firmware just needs
 // SOMETHING periodic to drain the ring, not a per-packet ACK.
 export const NEUREX_ACK_INTERVAL_MS = 250;

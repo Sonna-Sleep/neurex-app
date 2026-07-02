@@ -2,22 +2,24 @@
 
 Mobile companion app for the Neurex EEG/EOG sleep mask. It connects to the
 sleep mask over Bluetooth Low Energy, records the raw EEG/EOG biosignal stream
-through the night, uploads the recording to the cloud, and shows the finished
-session once backend QC/sleep analysis has completed.
+and optional IMU stream through the night, uploads the recording to the cloud,
+and shows the finished session once backend QC/sleep analysis has completed.
 
 Built with React Native + Expo (SDK 54, new architecture). iOS and Android.
 
 ## Features
 
 - **BLE streaming** — pairs and streams the device-described EEG/EOG raw signal
-  from one sleep mask (`src/lib/ble/`),
+  plus optional firmware-declared IMU notifications from one sleep mask
+  (`src/lib/ble/`),
   with auto-reconnect/backoff and an Android foreground service
   (`modules/neurex-foreground-service/`) so recording survives the screen
   turning off.
 - **Cloud sync** — each night is written as `RAW.BIN`, uploaded to Supabase
   Storage under `segments/raw`, and finalized with SHA-256 provenance,
   `scale.json`, `stream_stats.json`, and a stable per-recording prefix
-  (`src/lib/cloud/cloudSync.ts`).
+  (`src/lib/cloud/cloudSync.ts`). When IMU is present, `IMU.BIN` is uploaded
+  separately under `segments/imu` with `imu.json` provenance.
 - **Automated analysis** — a serverless backend ([neurex-backend](https://github.com/aleksaspetro/neurex-backend))
   reads the uploaded EEG/EOG raw stream, writes one unified QC report to
   Supabase, and keeps beta sleep staging available for users who already rely on
@@ -119,6 +121,7 @@ Install with `adb install -r <apk>` (in-place `-r` preserves app data).
 | `npm run smoke:ble-watchdog` | BLE watchdog/drop accounting smoke test |
 | `npm run smoke:ble-scale` | BLE scale sidecar parsing smoke test |
 | `npm run smoke:raw-record` | EEG/EOG RAW.BIN writer smoke test |
+| `npm run smoke:imu-record` | IMU.BIN notification-envelope smoke test |
 | `npm run smoke:disk-space` | Overnight storage preflight smoke test |
 | `npm run smoke:auto-stop` | Battery/device-lost auto-stop smoke test |
 | `npm run smoke:stream-stats` | `stream_stats.json` sidecar smoke test |
@@ -138,21 +141,26 @@ Install with `adb install -r <apk>` (in-place `-r` preserves app data).
 
 1. Phone connects to one sleep mask over BLE and reads the required Scale
    descriptor: sample rate, µV-per-LSB, firmware build, montage roles, and stream
-   channel count.
+   channel count. If firmware exposes the optional IMU notify characteristic, the
+   app records it too.
 2. The app records the EEG/EOG biosignal stream to one local `RAW.BIN` under the
    session directory. Current firmware writes compact 4-channel EEG/EOG records;
-   legacy v3 full-8 recordings remain decodeable by metadata.
+   legacy v3 full-8 recordings remain decodeable by metadata. Optional IMU
+   notifications are preserved exactly as received in `IMU.BIN`, not mixed into
+   `RAW.BIN`.
 3. On stop, auto-stop, or recovery, the app uploads `RAW.BIN` to Supabase
-   Storage as ordered `segments/raw/segNNNN.bin` chunks, computes the whole-file
-   SHA-256, uploads `scale.json`, `recording_manifest.json`, and
-   `stream_stats.json`, then inserts one `public.sessions` row.
+   Storage as ordered `segments/raw/segNNNN.bin` chunks. If `IMU.BIN` exists,
+   it uploads ordered `segments/imu/segNNNN.bin` chunks before finalize. The app
+   computes whole-file SHA-256 hashes, uploads `scale.json`,
+   `recording_manifest.json`, optional `imu.json`, and `stream_stats.json`, then
+   inserts one `public.sessions` row.
 4. The Modal backend reads the raw segments, verifies integrity, writes
    `signal_quality_report`, and preserves beta sleep staging.
 5. The app reads the finished row and renders it in Journal.
 
-IMU is intentionally separate from this EEG/EOG raw path. When firmware exposes
-an IMU stream, it should be recorded/uploaded as its own declared stream rather
-than mixed into `RAW.BIN`.
+IMU is intentionally separate from the EEG/EOG raw path. Firmware owns the IMU
+payload schema; the app stores exact BLE notification payloads with receive
+timestamps so the backend can decode the firmware-defined format later.
 
 ## Android push setup
 

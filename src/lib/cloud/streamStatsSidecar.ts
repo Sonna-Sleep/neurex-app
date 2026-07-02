@@ -41,11 +41,14 @@ function appBuild(): number | null {
   return appConfig.expo.android?.versionCode ?? null;
 }
 
-async function confirmedRawSegmentCount(prefix?: string | null): Promise<number | null> {
+async function confirmedSegmentCount(
+  prefix: string | null | undefined,
+  stream: 'raw' | 'imu',
+): Promise<number | null> {
   if (!prefix) return null;
   const supabase = getSupabase();
   if (!supabase) return null;
-  const dir = `${prefix}/segments/raw`;
+  const dir = `${prefix}/segments/${stream}`;
   let total = 0;
   const pageSize = 100;
   for (let offset = 0; ; offset += pageSize) {
@@ -83,7 +86,8 @@ export async function writeStreamStatsSidecar(input: WriteStreamStatsInput): Pro
     endMs: input.endMs,
     stopReason: input.stopReason,
     stats: input.stats,
-    confirmedRawSegmentCount: await confirmedRawSegmentCount(input.prefix),
+    confirmedRawSegmentCount: await confirmedSegmentCount(input.prefix, 'raw'),
+    confirmedImuSegmentCount: await confirmedSegmentCount(input.prefix, 'imu'),
     appVersion: appConfig.expo.version,
     appBuild: appBuild(),
   });
@@ -100,14 +104,18 @@ export async function refreshStreamStatsSidecarUploadCounts(
   sessionId: string,
   prefix: string,
   raw?: { rawSha256?: string | null; rawUploaded?: boolean },
+  imu?: { imuSha256?: string | null; imuUploaded?: boolean },
 ): Promise<void> {
   const file = streamStatsFile(sessionId);
   const existing = readExisting(file);
   if (!existing) return;
   writeJson(sessionId, file, {
     ...existing,
-    confirmedRawSegmentCount: await confirmedRawSegmentCount(prefix),
+    confirmedRawSegmentCount: await confirmedSegmentCount(prefix, 'raw'),
+    confirmedImuSegmentCount: await confirmedSegmentCount(prefix, 'imu'),
     ...(raw?.rawUploaded !== undefined ? { rawUploaded: raw.rawUploaded } : {}),
     ...(raw?.rawSha256 ? { rawSha256: raw.rawSha256 } : {}),
+    ...(imu?.imuUploaded !== undefined ? { imuUploaded: imu.imuUploaded } : {}),
+    ...(imu?.imuSha256 ? { imuSha256: imu.imuSha256 } : {}),
   });
 }

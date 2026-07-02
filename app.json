@@ -81,7 +81,6 @@
           "bluetoothAlwaysPermission": "Neurex uses Bluetooth to sync your sleep data from your Neurex device."
         }
       ],
-      "expo-secure-store",
       [
         "expo-image-picker",
         {

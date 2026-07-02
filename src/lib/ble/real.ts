@@ -24,10 +24,22 @@ import {
   NEUREX_ACK_INTERVAL_MS,
   NEUREX_ACK_WRITE_UUID,
   NEUREX_EEG_NOTIFY_UUID,
+  NEUREX_IMU_NOTIFY_UUID,
   NEUREX_SCALE_INFO_UUID,
   NEUREX_SERVICE_UUID,
   TIME_GAP_REPORT_THRESHOLD_MS,
 } from './constants';
+import {
+  encodeImuNotification,
+  imuHeader,
+  IMU_BIN_NAME,
+  IMU_HEADER_BYTES,
+  IMU_MAGIC,
+  IMU_MAX_NOTIFY_BYTES,
+  IMU_META_NAME,
+  IMU_RECORD_HEADER_BYTES,
+  IMU_SCHEMA_VER,
+} from './imuRecord';
 import { classifyResume, parsePacket } from './packet';
 import { encodeRawPacket, rawHeader, rawRecordBytes } from './rawRecord';
 import { activeChannels, parseScaleInfo, scaleProvenance } from './scale';
@@ -98,6 +110,28 @@ function manualBtoa(bytes: Uint8Array): string {
     out += i + 2 < bytes.length ? B64_ALPHABET[triple & 0x3f] : '=';
   }
   return out;
+}
+
+function sameUuid(a?: string | null, b?: string | null): boolean {
+  return !!a && !!b && a.toLowerCase() === b.toLowerCase();
+}
+
+async function hasCharacteristic(
+  device: {
+    characteristicsForService?: (
+      serviceUuid: string,
+    ) => Promise<{ uuid?: string | null }[]>;
+  },
+  serviceUuid: string,
+  characteristicUuid: string,
+): Promise<boolean> {
+  if (typeof device.characteristicsForService !== 'function') return false;
+  try {
+    const chars = await device.characteristicsForService(serviceUuid);
+    return chars.some((c) => sameUuid(c.uuid, characteristicUuid));
+  } catch {
+    return false;
+  }
 }
 
 // ── ACK contiguous-frontier tracker (Plan 02) ───────────────────────────────
@@ -242,7 +276,7 @@ class AppendingFile {
   }
 }
 
-// startStream writes exactly one EEG/EOG sample file: RAW.BIN.
+// startStream writes required EEG/EOG RAW.BIN plus optional IMU.BIN.
 
 // ── BleClient implementation ───────────────────────────────────────────────
 
@@ -328,6 +362,13 @@ export const realBleClient: BleClient = {
       if (__DEV__) console.warn('[ble/real] requestMTU(512) failed:', e);
     });
     await device.discoverAllServicesAndCharacteristics();
+    const imuAvailable = await hasCharacteristic(
+      device,
+      NEUREX_SERVICE_UUID,
+      NEUREX_IMU_NOTIFY_UUID,
+    );
+    if (__DEV__)
+      console.log(`[ble/real] IMU stream ${imuAvailable ? 'available' : 'not present'}`);
 
     // Read the device's self-describing amplitude scale ONCE: µV-per-LSB, gain,
     // VREF, firmware build id, montage, and stream channel count. The app
@@ -413,6 +454,7 @@ export const realBleClient: BleClient = {
 
     return {
       deviceId,
+      imuAvailable,
       // Expose the scale read above so the session controller can refuse to
       // record on an unconfigured board (deviceScale.variantKnown === 0).
       scale,
@@ -479,6 +521,14 @@ export const realBleClient: BleClient = {
         stats.rawUploaded = false;
         stats.rawSha256 = null;
         stats.rawFailureReason = null;
+        stats.imuAvailable = imuAvailable;
+        stats.imuOpened = false;
+        stats.imuNotifications = 0;
+        stats.imuBytesWritten = 0;
+        stats.imuClosed = false;
+        stats.imuUploaded = false;
+        stats.imuSha256 = null;
+        stats.imuFailureReason = null;
         let raw: AppendingFile;
         try {
           raw = AppendingFile.open(sessionDir, 'RAW.BIN');
@@ -497,6 +547,58 @@ export const realBleClient: BleClient = {
         }
         if (stats.lastBaseMs == null && opts?.resumeFromBaseMs != null) {
           stats.lastBaseMs = opts.resumeFromBaseMs;
+        }
+        let imu: AppendingFile | null = null;
+        let imuSubscription: Subscription | null = null;
+        if (imuAvailable) {
+          const imuFile = new File(sessionDir, IMU_BIN_NAME);
+          const imuFresh = !imuFile.exists || (imuFile.size ?? 0) === 0;
+          try {
+            imu = AppendingFile.open(sessionDir, IMU_BIN_NAME);
+            if (imuFresh) {
+              const header = imuHeader();
+              imu.appendChunk(header);
+              stats.imuBytesWritten += header.length;
+            } else {
+              stats.imuBytesWritten = imuFile.size ?? 0;
+            }
+            stats.imuOpened = true;
+          } catch (e) {
+            const detail = (e as Error)?.message ?? String(e);
+            stats.imuFailureReason = `imu init failed: ${detail}`;
+            if (__DEV__) console.warn('[ble/real] IMU open failed (non-fatal):', e);
+            imu = null;
+          }
+          try {
+            const imuMeta = {
+              schemaVer: 1,
+              sessionId,
+              stream: 'imu',
+              file: IMU_BIN_NAME,
+              source: 'ble',
+              serviceUuid: NEUREX_SERVICE_UUID,
+              characteristicUuid: NEUREX_IMU_NOTIFY_UUID,
+              container: {
+                magic: IMU_MAGIC,
+                schemaVer: IMU_SCHEMA_VER,
+                headerBytes: IMU_HEADER_BYTES,
+                recordHeaderBytes: IMU_RECORD_HEADER_BYTES,
+                maxNotifyBytes: IMU_MAX_NOTIFY_BYTES,
+                record: 'receivedAtMs u64le + payloadBytes u16le + exact BLE notification payload',
+              },
+              payloadFormat: {
+                status: 'firmware-defined',
+                note: 'The app preserves IMU notification bytes exactly; firmware/backend own payload decoding.',
+              },
+              createdAtMs: Date.now(),
+            };
+            const imuMetaFile = new File(sessionDir, IMU_META_NAME);
+            if (imuMetaFile.exists) imuMetaFile.delete();
+            imuMetaFile.create();
+            imuMetaFile.write(JSON.stringify(imuMeta));
+          } catch (e) {
+            if (__DEV__) console.warn('[ble/real] imu.json write failed (non-fatal):', e);
+          }
         }
         let stopped = false;
         // Set on a fatal write failure (storage full). Distinct from `stopped`
@@ -662,9 +764,44 @@ export const realBleClient: BleClient = {
           onValue,
         );
 
+        if (imuAvailable && imu) {
+          imuSubscription = manager.monitorCharacteristicForDevice(
+            deviceId,
+            NEUREX_SERVICE_UUID,
+            NEUREX_IMU_NOTIFY_UUID,
+            (error, characteristic) => {
+              if (stopped) return;
+              if (error) {
+                stats.imuFailureReason = (error as Error)?.message ?? String(error);
+                if (__DEV__) console.warn('[ble/real] IMU monitor:', error);
+                return;
+              }
+              const b64 = characteristic?.value;
+              if (!b64 || !imu) return;
+              try {
+                const record = encodeImuNotification(b64ToBytes(b64));
+                imu.appendChunk(record);
+                stats.imuNotifications += 1;
+                stats.imuBytesWritten += record.length;
+              } catch (e) {
+                const detail = (e as Error)?.message ?? String(e);
+                stats.imuFailureReason = `imu write failed: ${detail}`;
+                if (__DEV__) console.warn('[ble/real] IMU write failed; stopping IMU stream:', e);
+                try {
+                  imuSubscription?.remove();
+                } catch {
+                  /* ignore */
+                }
+                imuSubscription = null;
+              }
+            },
+          );
+        }
+
         return {
           sessionDir: sessionDir.uri,
           rawUri: raw.uri,
+          imuUri: imu?.uri ?? null,
           async stop(): Promise<StreamStats> {
             if (stopped) return stats;
             stopped = true;
@@ -675,12 +812,27 @@ export const realBleClient: BleClient = {
               /* ignore */
             }
             try {
+              imuSubscription?.remove();
+            } catch {
+              /* ignore */
+            }
+            try {
               raw?.close();
               stats.rawClosed = true;
             } catch (e) {
               const detail = (e as Error)?.message ?? String(e);
               stats.rawFailureReason = `raw close failed: ${detail}`;
               if (__DEV__) console.warn('[ble/real] RAW close failed:', e);
+            }
+            if (imu) {
+              try {
+                imu.close();
+                stats.imuClosed = true;
+              } catch (e) {
+                const detail = (e as Error)?.message ?? String(e);
+                stats.imuFailureReason = `imu close failed: ${detail}`;
+                if (__DEV__) console.warn('[ble/real] IMU close failed:', e);
+              }
             }
             try {
               manifest.flush();

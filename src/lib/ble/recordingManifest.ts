@@ -155,6 +155,14 @@ export function statsFromManifest(manifest: RecordingManifest | null): StreamSta
     rawUploaded: false,
     rawSha256: null,
     rawFailureReason: null,
+    imuAvailable: false,
+    imuOpened: false,
+    imuNotifications: 0,
+    imuBytesWritten: 0,
+    imuClosed: false,
+    imuUploaded: false,
+    imuSha256: null,
+    imuFailureReason: null,
   };
 }
 
