@@ -22,7 +22,7 @@ import type { DeviceScaleInfo } from '../ble/scale';
 import { manifestFile } from '../ble/recordingManifest';
 import { supabaseSessionRepo } from '../repos/supabase';
 import type { Session } from '../repos/types';
-import { buildSessionMetadata } from './sessionMetadata';
+import { buildSessionMetadata, colorFromSerial } from './sessionMetadata';
 import { hasRawProvenance, sessionRowWithRaw } from './sessionRow';
 import { Sha256Stream } from './sha256Stream';
 import {
@@ -40,6 +40,8 @@ export { uploadLockStats } from './uploadLock';
 export const RECORDINGS_BUCKET = 'recordings';
 
 export type Stream = 'raw' | 'imu';
+
+const DEVICE_META_NAME = 'device.json';
 
 // Fixed chunk size keeps upload memory bounded for raw stream uploads.
 const SEGMENT_BYTES = 3_000_000;
@@ -368,43 +370,94 @@ function recordingLabel(startMs: number): string {
   )}`;
 }
 
-/** Read the device/scale provenance the recording stamped locally (meta.json +
- *  scale.json) plus the tester log, and assemble the sessions metadata columns.
- *  Best-effort and never throws; missing sidecars just mean fewer metadata
- *  columns on the sessions row. */
-function readFinalizeMetadata(sessionId: string): Record<string, unknown> {
+type LocalSessionProvenance = {
+  deviceId?: string | null;
+  serial?: string | null;
+  scale?: DeviceScaleInfo;
+};
+
+function sessionDirectory(sessionId: string): Directory {
+  return new Directory(Paths.document, 'sessions', sessionId);
+}
+
+/** Read the device/scale provenance stamped locally at recording start.
+ * Best-effort and never throws; missing/corrupt sidecars only remove metadata,
+ * never block the required EEG/EOG RAW.BIN upload. */
+function readLocalSessionProvenance(sessionId: string): LocalSessionProvenance {
   let deviceId: string | null | undefined;
   let serial: string | null | undefined;
   let scale: DeviceScaleInfo | undefined;
+  const dir = sessionDirectory(sessionId);
+
   try {
-    const dir = new Directory(Paths.document, 'sessions', sessionId);
     const metaF = new File(dir, 'meta.json');
     if (metaF.exists) {
       const m = JSON.parse(metaF.textSync()) as { deviceId?: string; serial?: string };
       deviceId = m.deviceId;
       serial = m.serial;
     }
+  } catch {
+    /* missing/corrupt meta.json only drops the display device name */
+  }
+
+  try {
     const scaleF = new File(dir, 'scale.json');
     if (scaleF.exists) {
       const s = JSON.parse(scaleF.textSync()) as { scale?: DeviceScaleInfo };
       scale = s.scale;
     }
   } catch {
-    /* best-effort — a missing/corrupt sidecar just means fewer metadata columns */
+    /* missing/corrupt scale.json only drops scale/device provenance */
   }
-  const testerLog = useDiagnostics.getState().lastTesterLog;
-  // Per-platform build number (the night should be stamped with the binary that
-  // produced it). iOS has no buildNumber in app.json yet → null (honest) rather
-  // than wrongly stamping the Android versionCode.
-  let appBuild: number | null;
+
+  return { deviceId, serial, scale };
+}
+
+function currentAppBuild(): number | null {
   if (Platform.OS === 'ios') {
     const b = (appConfig.expo as { ios?: { buildNumber?: string } }).ios?.buildNumber;
     const n = b == null ? NaN : Number(b);
-    appBuild = Number.isFinite(n) ? n : null; // string buildNumber → int column
-  } else {
-    appBuild = appConfig.expo.android?.versionCode ?? null;
+    return Number.isFinite(n) ? n : null; // string buildNumber -> int column
   }
-  return buildSessionMetadata({ deviceId, serial, scale, testerLog, appBuild });
+  return appConfig.expo.android?.versionCode ?? null;
+}
+
+/** Read the device/scale provenance plus the tester log, and assemble the
+ * sessions metadata columns. Best-effort and never throws; missing sidecars
+ * just mean fewer metadata columns on the sessions row. */
+function readFinalizeMetadata(sessionId: string): Record<string, unknown> {
+  const { deviceId, serial, scale } = readLocalSessionProvenance(sessionId);
+  const testerLog = useDiagnostics.getState().lastTesterLog;
+  return buildSessionMetadata({ deviceId, serial, scale, testerLog, appBuild: currentAppBuild() });
+}
+
+function writeDeviceSidecar(sessionId: string, provenance: LocalSessionProvenance): File {
+  const dir = sessionDirectory(sessionId);
+  if (!dir.exists) dir.create({ intermediates: true });
+  const file = new File(dir, DEVICE_META_NAME);
+  if (file.exists) file.delete();
+  file.create();
+  const serial = provenance.serial?.trim() || null;
+  const scale = provenance.scale;
+  file.write(
+    JSON.stringify({
+      schemaVer: 1,
+      sessionId,
+      deviceId: provenance.deviceId ?? null,
+      serial,
+      deviceColor: colorFromSerial(serial),
+      deviceDisplayName: serial,
+      variantKnown: scale ? scale.variantKnown === 1 : null,
+      firmwareBuildId: scale ? (scale.fwBuildId >>> 0).toString(16) : null,
+      scaleSchemaVer: scale?.schemaVer ?? null,
+      streamChannelCount: scale?.streamChannelCount ?? null,
+      channelRole: scale?.channelRole ?? null,
+      appVersion: appConfig.expo.version,
+      appBuild: currentAppBuild(),
+      createdAtMs: Date.now(),
+    }),
+  );
+  return file;
 }
 
 function isMissingColumnError(error: { code?: string; message?: string }): boolean {
@@ -488,13 +541,20 @@ export function deleteLocalSession(sessionId: string): void {
  * then delete the local copy.
  */
 export async function transmitSession(input: FinalizeInput): Promise<string> {
-  const dir = new Directory(Paths.document, 'sessions', input.sessionId);
+  const dir = sessionDirectory(input.sessionId);
   if (!dir.exists) throw new Error(`no local session ${input.sessionId}`);
+
+  const provenance = readLocalSessionProvenance(input.sessionId);
 
   // {user_id}/{readable label} — account folder stays the opaque uid; the
   // session folder is human-readable date_time_device_shortid.
   const uid = await currentUserId();
-  const prefix = `${uid}/${readableLabel(input.sessionId, input.startMs, input.endMs)}`;
+  const prefix = `${uid}/${readableLabel(
+    input.sessionId,
+    input.startMs,
+    input.endMs,
+    provenance.serial ?? undefined,
+  )}`;
 
   // Required EEG/EOG raw stream ({prefix}/segments/raw/segNNNN.bin). The backend
   // reads it in order. A retry may accept identical existing bytes, but never
@@ -530,6 +590,15 @@ export async function transmitSession(input: FinalizeInput): Promise<string> {
     await uploadSidecarIfPresent(prefix, manifestFile(input.sessionId), 'recording_manifest.json');
   } catch (e) {
     if (__DEV__) console.warn('[cloudSync] recording_manifest.json upload failed (non-fatal):', e);
+  }
+  try {
+    await uploadSidecarIfPresent(
+      prefix,
+      writeDeviceSidecar(input.sessionId, provenance),
+      DEVICE_META_NAME,
+    );
+  } catch (e) {
+    if (__DEV__) console.warn('[cloudSync] device.json upload failed (non-fatal):', e);
   }
   if (hasImuSamples) {
     try {
