@@ -146,9 +146,9 @@ export function ConnectDeviceCard() {
     return (
       <View style={styles.wrap}>
         <Card style={styles.card}>
-          <SerifHeadline>Connect device</SerifHeadline>
-          <Body style={styles.subtext}>Turn on your device and keep it nearby.</Body>
-          <Button label="Connect" onPress={beginScan} />
+          <SerifHeadline>No device paired</SerifHeadline>
+          <Body style={styles.subtext}>Pair a Neurex device before recording.</Body>
+          <Button label="Pair device" onPress={beginScan} />
         </Card>
       </View>
     );

@@ -23,7 +23,7 @@ export function SleepScreen() {
       <View style={styles.topBar}>
         <Logo height={30} />
         <View style={styles.topBarRight}>
-          <StatusPill battery={deviceBattery ?? null} />
+          {pairedDeviceId ? <StatusPill battery={deviceBattery ?? null} /> : null}
         </View>
       </View>
 
@@ -68,7 +68,7 @@ function DeviceIdentity({
     <View style={styles.deviceIdentity}>
       <View style={styles.deviceRow}>
         <View style={styles.deviceText}>
-          <Text style={styles.deviceStatus}>Last paired</Text>
+          <Text style={styles.deviceStatus}>Device paired</Text>
           <Text style={styles.deviceName} numberOfLines={1} adjustsFontSizeToFit>
             {serial ?? 'Neurex device'}
           </Text>
@@ -81,7 +81,7 @@ function DeviceIdentity({
           hitSlop={10}
           style={styles.changeButton}
         >
-          <Text style={styles.changeText}>Switch</Text>
+          <Text style={styles.changeText}>Change</Text>
         </Pressable>
       </View>
     </View>
