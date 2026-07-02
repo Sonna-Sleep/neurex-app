@@ -11,7 +11,7 @@ import type { DeviceScaleInfo } from './scale';
 export type FoundDevice = {
   /** Platform-stable identifier — UUID on iOS, MAC address on Android. */
   deviceId: string;
-  /** Human-readable name; usually the advertised local name "Neurex-EEG". */
+  /** Human-readable name; usually the advertised local name "Neurex <Color>". */
   serial: string;
   /** Signal strength at the moment of discovery. Lower (more negative) = farther. */
   rssi: number;

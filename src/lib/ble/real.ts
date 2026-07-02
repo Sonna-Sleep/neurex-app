@@ -23,8 +23,8 @@ import {
   EEG_SAMPLE_INTERVAL_MS,
   NEUREX_ACK_INTERVAL_MS,
   NEUREX_ACK_WRITE_UUID,
-  NEUREX_EEG_NOTIFY_UUID,
   NEUREX_IMU_NOTIFY_UUID,
+  NEUREX_RAW_NOTIFY_UUID,
   NEUREX_SCALE_INFO_UUID,
   NEUREX_SERVICE_UUID,
   TIME_GAP_REPORT_THRESHOLD_MS,
@@ -320,7 +320,7 @@ export const realBleClient: BleClient = {
       if (!device) return;
       const name = device.name ?? device.localName;
       // Accept a device if EITHER its name carries the "Neurex" prefix
-      // ("Neurex Yellow"/"Neurex-EEG-XXXX"/…) OR it advertises our stable
+      // ("Neurex Yellow"/"Neurex-Raw-XXXX"/...) OR it advertises our stable
       // service UUID. Matching the UUID means renamed devices and any future
       // naming scheme still appear in the Pair UI without shipping an app
       // update; the name check still catches units whose UUID only rides in a
@@ -356,8 +356,8 @@ export const realBleClient: BleClient = {
     const device = await withTimeout(connecting, opts?.timeoutMs ?? 0, () => {
       manager.cancelDeviceConnection(deviceId).catch(() => undefined);
     });
-    // Request the max ATT MTU (512) so legacy and compact packets fit one notify
-    // PDU instead of fragmenting/truncating. The peer negotiates down if needed.
+    // Request the max ATT MTU (512) so raw packets fit one notify PDU instead
+    // of fragmenting/truncating. The peer negotiates down if needed.
     await device.requestMTU(512).catch((e) => {
       if (__DEV__) console.warn('[ble/real] requestMTU(512) failed:', e);
     });
@@ -714,8 +714,8 @@ export const realBleClient: BleClient = {
           // Bytes are on the way to disk — now advance counters + ACK frontier.
           if (stats.lastBaseMs !== null) {
             // Expected next baseMs = last + (this packet's sample count)×interval.
-            // The parsed packet length is the right stride for both legacy and
-            // compact firmware.
+            // The parsed packet length is the right stride for the current
+            // device-declared stream width.
             const timeGapMs =
               pkt.baseMs - (stats.lastBaseMs + pkt.samples.length * EEG_SAMPLE_INTERVAL_MS);
             if (timeGapMs >= TIME_GAP_REPORT_THRESHOLD_MS) {
@@ -760,7 +760,7 @@ export const realBleClient: BleClient = {
         subscription = manager.monitorCharacteristicForDevice(
           deviceId,
           NEUREX_SERVICE_UUID,
-          NEUREX_EEG_NOTIFY_UUID,
+          NEUREX_RAW_NOTIFY_UUID,
           onValue,
         );
 

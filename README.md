@@ -144,10 +144,10 @@ Install with `adb install -r <apk>` (in-place `-r` preserves app data).
    channel count. If firmware exposes the optional IMU notify characteristic, the
    app records it too.
 2. The app records the EEG/EOG biosignal stream to one local `RAW.BIN` under the
-   session directory. Current firmware writes compact 4-channel EEG/EOG records;
-   legacy v3 full-8 recordings remain decodeable by metadata. Optional IMU
-   notifications are preserved exactly as received in `IMU.BIN`, not mixed into
-   `RAW.BIN`.
+   session directory. Current firmware writes compact 4-channel EEG/EOG records,
+   and `scale.json` carries the stream count plus montage metadata the backend
+   uses to decode them. Optional IMU notifications are preserved exactly as
+   received in `IMU.BIN`, not mixed into `RAW.BIN`.
 3. On stop, auto-stop, or recovery, the app uploads `RAW.BIN` to Supabase
    Storage as ordered `segments/raw/segNNNN.bin` chunks. If `IMU.BIN` exists,
    it uploads ordered `segments/imu/segNNNN.bin` chunks before finalize. The app

@@ -8,7 +8,7 @@ import type { DeviceScaleInfo } from '../ble/scale';
 const KNOWN_COLORS = ['YELLOW', 'BLUE', 'GREEN', 'WHITE', 'LT'] as const;
 
 /** Map a BLE advertised name to a fleet color: "Neurex Yellow" -> "YELLOW".
- *  Unrecognized names (e.g. the "Neurex-EEG-XXXX" fallback) -> "UNKNOWN". */
+ *  Unrecognized names (e.g. the "Neurex-Raw-XXXX" fallback) -> "UNKNOWN". */
 export function colorFromSerial(serial?: string | null): string {
   if (!serial) return 'UNKNOWN';
   const m = serial.match(/Neurex[\s-]+([A-Za-z]+)/i);

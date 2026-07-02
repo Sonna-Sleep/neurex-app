@@ -9,7 +9,7 @@ import {
 
 // ── colorFromSerial: "Neurex Yellow" -> "YELLOW" ──
 assert.equal(colorFromSerial('Neurex Yellow'), 'YELLOW');
-assert.equal(colorFromSerial('Neurex-EEG-AB12'), 'UNKNOWN'); // unrecognized fallback name
+assert.equal(colorFromSerial('Neurex-Raw-AB12'), 'UNKNOWN'); // unrecognized fallback name
 assert.equal(colorFromSerial(null), 'UNKNOWN');
 assert.equal(colorFromSerial('something else'), 'UNKNOWN');
 assert.equal(colorFromSerial('neurex blue'), 'BLUE'); // case-insensitive

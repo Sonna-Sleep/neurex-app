@@ -1,10 +1,9 @@
 // BLE service + characteristic UUIDs for the Neurex single-board tracker.
 //
-// Source of truth: firmware/cerelog/firmware/main/ble_stream.c on
-// feat/single-board-ble-tracker in the Neurex algoritmai repo. The firmware
-// names two custom 128-bit UUIDs:
+// Source of truth: neurex-firmware/firmware/shared/main/ble_stream.c. The
+// firmware names these custom 128-bit UUIDs:
 //   - Service:    6e6b0000-1000-8000-0078-65726e6b0001
-//   - EEG notify: 6e6b0000-1000-8000-0078-65726e6b0002
+//   - Raw notify: 6e6b0000-1000-8000-0078-65726e6b0002
 // (Derived from NimBLE's little-endian BLE_UUID128_INIT byte order.)
 //
 // Each device advertises a per-color local name ("Neurex Yellow",
@@ -16,7 +15,7 @@
 // user's restored connections silently vanish.
 
 export const NEUREX_SERVICE_UUID = '6e6b0000-1000-8000-0078-65726e6b0001';
-export const NEUREX_EEG_NOTIFY_UUID = '6e6b0000-1000-8000-0078-65726e6b0002';
+export const NEUREX_RAW_NOTIFY_UUID = '6e6b0000-1000-8000-0078-65726e6b0002';
 
 // Shared advertised-name prefix. The scanner matches this prefix client-side
 // (see ble/real.ts) and uses the full name ("Neurex Yellow", …) as the
@@ -69,7 +68,7 @@ export const BATTERY_LEVEL_CHAR_UUID = '00002a19-0000-1000-8000-00805f9b34fb';
  */
 export const NEUREX_BLE_RESTORE_IDENTIFIER = 'neurex-ble-bg' as const;
 
-// ── EEG signal scale ────────────────────────────────────────────────────────
+// ── ADS1299 signal scale ────────────────────────────────────────────────────
 // ADS1299, gain 1, ±4.5 V reference: 4.5 / 2^23 / 1 * 1e6 ≈ 0.5364 µV/LSB.
 export const EEG_UV_PER_LSB = (4.5 / Math.pow(2, 23) / 1) * 1e6;
 
@@ -77,8 +76,8 @@ export const EEG_UV_PER_LSB = (4.5 / Math.pow(2, 23) / 1) * 1e6;
 export const EEG_SAMPLE_RATE_HZ = 250;
 export const EEG_SAMPLE_INTERVAL_MS = 4;
 // 2026-06-03: 8 samples/packet (was 4). Full 250 SPS, but HALF the notification
-// rate (~31/s vs 62.5/s) — far less native→JS bridge load. Must match the
-// firmware BLE build's -DSAMPLES_PER_PACKET=8 EXACTLY.
+// rate (~31/s vs 62.5/s) — far less native→JS bridge load. Must match firmware
+// SAMPLES_PER_PACKET.
 export const SAMPLES_PER_PACKET = 8;
 export const EEG_PACKET_INTERVAL_MS = SAMPLES_PER_PACKET * EEG_SAMPLE_INTERVAL_MS;
 export const TIME_GAP_REPORT_THRESHOLD_MS = 1000;
