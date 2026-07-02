@@ -32,7 +32,7 @@ function makeScaleBytes(
     streamChannelCount: number;
   }> = {},
 ): Uint8Array {
-  const schemaVer = over.schemaVer ?? 3;
+  const schemaVer = over.schemaVer ?? 4;
   const buf = new ArrayBuffer(schemaVer >= 4 ? NEUREX_SCALE_INFO_BYTES_V4 : NEUREX_SCALE_INFO_BYTES_V3);
   const dv = new DataView(buf);
   dv.setUint16(0, schemaVer, true);
@@ -51,7 +51,7 @@ function makeScaleBytes(
   return new Uint8Array(buf);
 }
 
-function makePacketWithFp1(code: number, streamChannelCount = 8): Uint8Array {
+function makePacketWithFp1(code: number, streamChannelCount = 4): Uint8Array {
   const frameBytes = bytesPerFrame(streamChannelCount);
   const checksumIdx = 7 + SAMPLES_PER_PACKET * frameBytes;
   const pkt = new Uint8Array(checksumIdx + 3);
@@ -74,8 +74,8 @@ function makePacketWithFp1(code: number, streamChannelCount = 8): Uint8Array {
 }
 
 const g1 = parseScaleInfo(makeScaleBytes());
-assert.ok(g1, 'schema-v3 scale should parse');
-assert.equal(g1!.schemaVer, 3);
+assert.ok(g1, 'schema-v4 scale should parse');
+assert.equal(g1!.schemaVer, 4);
 assert.equal(g1!.pgaGain, 1);
 assert.equal(g1!.adcBits, 24);
 assert.equal(Math.round(g1!.vrefV * 10), 45);
@@ -84,7 +84,7 @@ assert.equal(g1!.nChannels, 4);
 assert.equal(g1!.fp1Index, 0);
 assert.equal(g1!.variantKnown, 1);
 assert.equal(g1!.fwBuildId, 0xdeadbeef);
-assert.equal(g1!.streamChannelCount, 8);
+assert.equal(g1!.streamChannelCount, 4);
 assert.deepEqual(g1!.channelRole, [1, 2, 3, 4, 0, 0, 0, 0]);
 assert.ok(Math.abs(g1!.uvPerLsb - EEG_UV_PER_LSB) < 1e-3, 'gain-1 uV/LSB matches firmware formula');
 
@@ -107,13 +107,14 @@ assert.deepEqual(activeChannels(v4!), [
 
 assert.equal(parseScaleInfo(null), null, 'null scale rejected');
 assert.equal(parseScaleInfo(new Uint8Array(20)), null, 'v1-sized scale rejected');
-assert.equal(parseScaleInfo(makeScaleBytes({ schemaVer: 2 })), null, 'pre-v3 scale rejected');
+assert.equal(parseScaleInfo(makeScaleBytes({ schemaVer: 3 })), null, 'older scale rejected');
+assert.equal(parseScaleInfo(makeScaleBytes({ schemaVer: 2 })), null, 'pre-v4 scale rejected');
 assert.equal(parseScaleInfo(makeScaleBytes({ schemaVer: 0 })), null, 'schema 0 rejected');
 assert.equal(parseScaleInfo(makeScaleBytes({ uvPerLsb: 0 })), null, 'non-positive uV/LSB rejected');
 assert.equal(parseScaleInfo(makeScaleBytes({ uvPerLsb: Number.NaN })), null, 'NaN uV/LSB rejected');
 
 const unknownBoard = parseScaleInfo(makeScaleBytes({ variantKnown: 0 }));
-assert.ok(unknownBoard, 'v3 unknown-board payload should parse');
+assert.ok(unknownBoard, 'v4 unknown-board payload should parse');
 assert.equal(unknownBoard!.variantKnown, 0, 'unconfigured board -> variantKnown 0');
 assert.equal(scaleProvenance(unknownBoard!).variantKnown, 0, 'provenance includes variantKnown 0');
 assert.equal(scaleProvenance(g1!).source, 'device');
@@ -123,8 +124,8 @@ const gain24 = parseScaleInfo(makeScaleBytes({ pgaGain: 24, uvPerLsb: (4.5 / 2 *
 assert.ok(gain24, 'gain-24 scale should parse');
 
 const pkt = makePacketWithFp1(CODE);
-const atG1 = parsePacket(pkt, 0, g1!.uvPerLsb, activeChannels(g1!));
-const atG24 = parsePacket(pkt, 0, gain24!.uvPerLsb, activeChannels(gain24!));
+const atG1 = parsePacket(pkt, 0, g1!.uvPerLsb, activeChannels(g1!), g1!.streamChannelCount);
+const atG24 = parsePacket(pkt, 0, gain24!.uvPerLsb, activeChannels(gain24!), gain24!.streamChannelCount);
 assert.ok(atG1.ok && atG24.ok);
 if (!atG1.ok || !atG24.ok) throw new Error('unreachable');
 

@@ -1,31 +1,48 @@
 import assert from 'node:assert/strict';
 
 import {
-  BYTES_PER_FRAME,
   EEG_SAMPLE_INTERVAL_MS,
   PACKET_END_HI,
   PACKET_END_LO,
-  PACKET_SIZE,
   PACKET_START_HI,
   PACKET_START_LO,
-  PKT_IDX_CHECKSUM,
   PKT_IDX_DATA,
   PKT_IDX_SEQ,
   PKT_IDX_TS,
+  PKT_TRAILER_BYTES,
+  RAW_STATUS_BYTES,
   SAMPLES_PER_PACKET,
+  bytesPerFrame,
 } from '../src/lib/ble/constants';
 import { parsePacket } from '../src/lib/ble/packet';
 import type { ActiveChannel } from '../src/lib/ble/scale';
 
+const STREAM_CHANNELS = 4;
+const FRAME_BYTES = bytesPerFrame(STREAM_CHANNELS);
+const STATUS_OFF = PKT_IDX_DATA - RAW_STATUS_BYTES;
+
 const MONTAGE: ActiveChannel[] = [
-  { index: 0, role: 'Fp1' },
-  { index: 1, role: 'Fp2' },
-  { index: 2, role: 'EOG-L' },
-  { index: 3, role: 'EOG-R' },
+  { index: 0, streamIndex: 0, role: 'Fp1' },
+  { index: 1, streamIndex: 1, role: 'Fp2' },
+  { index: 2, streamIndex: 2, role: 'EOG-L' },
+  { index: 3, streamIndex: 3, role: 'EOG-R' },
 ];
 
+function checksumIndex(pkt: Uint8Array): number {
+  return pkt.length - PKT_TRAILER_BYTES;
+}
+
+function finishPacket(pkt: Uint8Array): void {
+  const checksumIdx = checksumIndex(pkt);
+  let sum = 0;
+  for (let i = PKT_IDX_SEQ; i < checksumIdx; i++) sum = (sum + pkt[i]) & 0xff;
+  pkt[checksumIdx] = sum;
+  pkt[checksumIdx + 1] = PACKET_END_HI;
+  pkt[checksumIdx + 2] = PACKET_END_LO;
+}
+
 function makePacket(seq = 7, baseMs = 1234): Uint8Array {
-  const pkt = new Uint8Array(PACKET_SIZE);
+  const pkt = new Uint8Array(7 + SAMPLES_PER_PACKET * FRAME_BYTES + PKT_TRAILER_BYTES);
   pkt[0] = PACKET_START_HI;
   pkt[1] = PACKET_START_LO;
   pkt[PKT_IDX_SEQ] = seq;
@@ -34,22 +51,20 @@ function makePacket(seq = 7, baseMs = 1234): Uint8Array {
   pkt[PKT_IDX_TS + 2] = (baseMs >>> 8) & 0xff;
   pkt[PKT_IDX_TS + 3] = baseMs & 0xff;
   for (let s = 0; s < SAMPLES_PER_PACKET; s++) {
-    const o = PKT_IDX_DATA + s * BYTES_PER_FRAME;
-    pkt[o] = 0xc0;
-    pkt[o + 3] = s + 1;
+    const status = STATUS_OFF + s * FRAME_BYTES;
+    pkt[status] = 0xc0;
+    const data = PKT_IDX_DATA + s * FRAME_BYTES;
+    pkt[data] = s + 1;
   }
-  let sum = 0;
-  for (let i = PKT_IDX_SEQ; i < PKT_IDX_CHECKSUM; i++) sum = (sum + pkt[i]) & 0xff;
-  pkt[PKT_IDX_CHECKSUM] = sum;
-  pkt[PKT_IDX_CHECKSUM + 1] = PACKET_END_HI;
-  pkt[PKT_IDX_CHECKSUM + 2] = PACKET_END_LO;
+  finishPacket(pkt);
   return pkt;
 }
 
-const parsed = parsePacket(makePacket(), 3, 1, MONTAGE);
+const parsed = parsePacket(makePacket(), 3, 1, MONTAGE, STREAM_CHANNELS);
 
 assert.equal(SAMPLES_PER_PACKET, 8);
-assert.equal(PACKET_SIZE, 226);
+assert.equal(FRAME_BYTES, 15);
+assert.equal(makePacket().length, 130);
 assert.equal(parsed.ok, true);
 if (!parsed.ok) throw new Error('unreachable');
 
@@ -62,35 +77,30 @@ assert.equal(parsed.packet.samples[1].ms, 1234 + EEG_SAMPLE_INTERVAL_MS);
 assert.equal(parsed.packet.samples[7].ms, 1234 + 7 * EEG_SAMPLE_INTERVAL_MS);
 
 const badChecksum = makePacket();
-badChecksum[PKT_IDX_CHECKSUM] ^= 0xff;
-assert.deepEqual(parsePacket(badChecksum, 0, 1, MONTAGE), { ok: false, reason: 'checksum' });
+badChecksum[checksumIndex(badChecksum)] ^= 0xff;
+assert.deepEqual(parsePacket(badChecksum, 0, 1, MONTAGE, STREAM_CHANNELS), {
+  ok: false,
+  reason: 'checksum',
+});
 
-// Four-channel montage: every active role comes from the schema-v3 scale metadata.
 function makeMultiChannelPacket(): Uint8Array {
-  const pkt = new Uint8Array(PACKET_SIZE);
-  pkt[0] = PACKET_START_HI;
-  pkt[1] = PACKET_START_LO;
-  pkt[PKT_IDX_SEQ] = 1;
+  const pkt = makePacket(1, 0);
   for (let s = 0; s < SAMPLES_PER_PACKET; s++) {
-    const o = PKT_IDX_DATA + s * BYTES_PER_FRAME;
-    for (let ch = 0; ch < 8; ch++) {
-      const code = (ch + 1) * 0x000100; // distinct positive int24: CH1=256, CH5=1280
-      const co = o + ch * 3;
+    const data = PKT_IDX_DATA + s * FRAME_BYTES;
+    for (let ch = 0; ch < STREAM_CHANNELS; ch++) {
+      const code = (ch + 1) * 0x000100;
+      const co = data + ch * 3;
       pkt[co] = (code >>> 16) & 0xff;
       pkt[co + 1] = (code >>> 8) & 0xff;
       pkt[co + 2] = code & 0xff;
     }
   }
-  let sum = 0;
-  for (let i = PKT_IDX_SEQ; i < PKT_IDX_CHECKSUM; i++) sum = (sum + pkt[i]) & 0xff;
-  pkt[PKT_IDX_CHECKSUM] = sum;
-  pkt[PKT_IDX_CHECKSUM + 1] = PACKET_END_HI;
-  pkt[PKT_IDX_CHECKSUM + 2] = PACKET_END_LO;
+  finishPacket(pkt);
   return pkt;
 }
 
 const multi = makeMultiChannelPacket();
-const asMontage = parsePacket(multi, 0, 1, MONTAGE);
+const asMontage = parsePacket(multi, 0, 1, MONTAGE, STREAM_CHANNELS);
 assert.equal(asMontage.ok, true);
 if (!asMontage.ok) throw new Error('unreachable');
 assert.equal(asMontage.packet.samples[0].fp1_uV, 256);

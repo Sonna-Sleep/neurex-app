@@ -3,7 +3,7 @@
 // this with the filesystem scan.
 
 export const RAW_HEADER_BYTES = 16;
-export const RAW_BYTES_PER_SAMPLE = 40; // legacy 8-channel fallback record size
+export const RAW_BYTES_PER_SAMPLE = 24; // current 4-channel RAW record size
 
 // Minimum recorded length worth uploading: short setup/debug captures are kept
 // local instead of being sent to cloud analysis. Shared with the live
@@ -36,7 +36,7 @@ export function durationMsFromBytes(
 export type ReconstructInput = {
   sizeBytes: number;
   sampleRateHz: number;
-  /** RAW.BIN record size from the manifest/header; defaults to legacy 8-channel. */
+  /** RAW.BIN record size from the manifest/header. */
   rawBytesPerSample?: number | null;
   /** File modification time (ms epoch) — approximates when streaming stopped. */
   modificationTimeMs: number | null;

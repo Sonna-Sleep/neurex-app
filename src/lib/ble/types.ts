@@ -26,7 +26,7 @@ export type EegSample = {
   fp1_uV: number;
   /**
    * Every active montage channel, keyed by role label, in µV:
-   *   'Fp1' | 'Fp2' | 'EOG-L' | 'EOG-R' for the 4-channel montage (schema v3).
+   *   'Fp1' | 'Fp2' | 'EOG-L' | 'EOG-R' for the 4-channel montage.
    * The EOG pair drives Lull's sleep-onset detection.
    */
   channels: Record<string, number>;
@@ -105,7 +105,7 @@ export type StreamResumeOpts = {
 
 export type ConnectedDevice = {
   deviceId: string;
-  /** The device's schema-v3 scale/montage, read once at connect. */
+  /** The device's schema-v4 scale/montage, read once at connect. */
   scale: DeviceScaleInfo;
   /** Subscribe to the notify characteristic and start writing samples to disk. */
   startStream(

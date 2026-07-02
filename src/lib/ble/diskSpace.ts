@@ -29,14 +29,13 @@ export const NIGHT_HOURS = 8;
 export const SAFETY_FACTOR = 2;
 
 // Never start a night with less than this free regardless of the computed
-// estimate. The estimate uses the largest legacy EEG record size because this
-// check runs before connect/Scale, so compact recordings just get extra margin.
+// estimate.
 export const MIN_FREE_FLOOR_BYTES = 150 * 1024 * 1024; // 150 MB
 
 const MB = 1024 * 1024;
 
-/** Conservative bytes one recorded hour of RAW.BIN may occupy on disk:
- * 250 Hz × 40 B/sample × 3600 s = 36,000,000 B/h. */
+/** Bytes one recorded hour of RAW.BIN occupies on disk:
+ * 250 Hz x 24 B/sample x 3600 s = 21,600,000 B/h. */
 export function bytesPerHour(): number {
   return EEG_SAMPLE_RATE_HZ * RAW_BYTES_PER_SAMPLE * 3600;
 }

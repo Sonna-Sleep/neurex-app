@@ -34,15 +34,13 @@ export const NEUREX_ACK_WRITE_UUID = '6e6b0000-1000-8000-0078-65726e6b0003';
 // Scale/DeviceInfo characteristic (READ-only, same 6e6b… family; firmware UUID
 // 6e6b0004). The device serializes its ACTUAL amplitude scale here — µV-per-LSB,
 // PGA gain, VREF, sample rate, channel map, firmware build id — as an append-only
-// little-endian struct. Schema v3 is 29 bytes with variant_known and
-// channel_role[8]. Schema v4 appends streamChannelCount so compact BLE packets
-// can carry only active channels. The app reads it once at connect so the
-// scale and montage are self-describing instead of assumptions that silently
-// break when the firmware changes. Mirror the layout on nRF5340.
+// little-endian struct. Current firmware requires schema v4: channel_role[8]
+// plus streamChannelCount, so BLE packets and RAW.BIN carry only active channels.
+// The app reads it once at connect so the scale and montage are self-describing
+// instead of assumptions that silently break when the firmware changes.
 export const NEUREX_SCALE_INFO_UUID = '6e6b0000-1000-8000-0078-65726e6b0004';
-// Minimum accepted schema. v3 means legacy 8-physical-channel BLE frames.
-// v4 appends streamChannelCount for compact active-channel frames.
-export const NEUREX_SCALE_INFO_SCHEMA_VER = 3;
+// Minimum accepted schema. v4 is the compact active-channel stream contract.
+export const NEUREX_SCALE_INFO_SCHEMA_VER = 4;
 export const NEUREX_SCALE_INFO_BYTES_V3 = 29;
 export const NEUREX_SCALE_INFO_BYTES_V4 = 30;
 
@@ -90,9 +88,6 @@ export const TIME_GAP_REPORT_THRESHOLD_MS = 1000;
 //                           stream channels × 3 bytes int24 big-endian
 //   next   checksum       sum(bytes[2..last payload]) & 0xFF
 //   final  0xDC 0xBA      end marker
-// Legacy v3 firmware used stream channels = 8, so packet size was 226 B.
-// v4 compact 4-channel firmware uses packet size 130 B.
-export const PACKET_SIZE = 226;
 export const PACKET_START_HI = 0xab;
 export const PACKET_START_LO = 0xcd;
 export const PACKET_END_HI = 0xdc;
@@ -102,9 +97,8 @@ export const PKT_IDX_TS = 3;
 // First sample's channel data starts after start[2] + seq[1] + ts[4] + status[3] = byte 10.
 export const PKT_IDX_DATA = 10;
 export const RAW_STATUS_BYTES = 3;
-export const LEGACY_RAW_CHANNELS = 8;
-export const BYTES_PER_FRAME = RAW_STATUS_BYTES + LEGACY_RAW_CHANNELS * 3;
-export const PKT_IDX_CHECKSUM = 223; // nominal 8-sample build: 7 (header) + 8 × 27
+export const ADS1299_PHYSICAL_CHANNELS = 8;
+export const ACTIVE_STREAM_CHANNELS = 4;
 
 // Samples-per-packet is DERIVED from the BLE notification length, never hardcoded:
 // a packet is a 7-byte header (start[2] + seq[1] + ts[4]) + N frames +
@@ -112,8 +106,12 @@ export const PKT_IDX_CHECKSUM = 223; // nominal 8-sample build: 7 (header) + 8 �
 // device Scale descriptor. Returns 0 when len is not valid packet framing.
 export const PKT_HEADER_BYTES = 7;
 export const PKT_TRAILER_BYTES = 3;
-export function bytesPerFrame(streamChannelCount: number = LEGACY_RAW_CHANNELS): number {
-  if (!Number.isInteger(streamChannelCount) || streamChannelCount < 1 || streamChannelCount > 8) {
+export function bytesPerFrame(streamChannelCount: number = ACTIVE_STREAM_CHANNELS): number {
+  if (
+    !Number.isInteger(streamChannelCount) ||
+    streamChannelCount < 1 ||
+    streamChannelCount > ADS1299_PHYSICAL_CHANNELS
+  ) {
     return 0;
   }
   return RAW_STATUS_BYTES + streamChannelCount * 3;
@@ -121,7 +119,7 @@ export function bytesPerFrame(streamChannelCount: number = LEGACY_RAW_CHANNELS):
 
 export function samplesPerPacket(
   len: number,
-  streamChannelCount: number = LEGACY_RAW_CHANNELS,
+  streamChannelCount: number = ACTIVE_STREAM_CHANNELS,
 ): number {
   const frameBytes = bytesPerFrame(streamChannelCount);
   if (frameBytes <= 0) return 0;

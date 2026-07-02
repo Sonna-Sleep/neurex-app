@@ -16,9 +16,10 @@
 // app's sample clock reconstruction (baseMs + sampleIndex * 4 ms).
 
 import {
+  ACTIVE_STREAM_CHANNELS,
+  ADS1299_PHYSICAL_CHANNELS,
   EEG_SAMPLE_INTERVAL_MS,
   EEG_SAMPLE_RATE_HZ,
-  LEGACY_RAW_CHANNELS,
   PKT_IDX_DATA,
   RAW_STATUS_BYTES,
   bytesPerFrame,
@@ -26,19 +27,18 @@ import {
 } from './constants';
 
 export const RAW_SCHEMA_VER = 1;
-export const RAW_N_CHANNELS = LEGACY_RAW_CHANNELS;
 export const RAW_HEADER_BYTES = 16;
 const RAW_FLAG_STATUS_PRESENT = 0x01;
 
-export function rawRecordBytes(nChannels: number = RAW_N_CHANNELS): number {
-  if (!Number.isInteger(nChannels) || nChannels < 1 || nChannels > RAW_N_CHANNELS) {
+export function rawRecordBytes(nChannels: number = ACTIVE_STREAM_CHANNELS): number {
+  if (!Number.isInteger(nChannels) || nChannels < 1 || nChannels > ADS1299_PHYSICAL_CHANNELS) {
     throw new Error(`invalid RAW channel count ${nChannels}`);
   }
   return 4 + 1 + RAW_STATUS_BYTES + 4 * nChannels;
 }
 
-// Legacy v1 default: ms(4) + seq(1) + status(3) + 8 channels * int32(4)
-export const RAW_RECORD_BYTES = rawRecordBytes(RAW_N_CHANNELS);
+// Current v1 default: ms(4) + seq(1) + status(3) + 4 active channels * int32(4)
+export const RAW_RECORD_BYTES = rawRecordBytes(ACTIVE_STREAM_CHANNELS);
 
 // The 3 status bytes of a sample's frame sit immediately before its channel data.
 const FRAME_STATUS_OFF = PKT_IDX_DATA - RAW_STATUS_BYTES;
@@ -46,7 +46,7 @@ const FRAME_STATUS_OFF = PKT_IDX_DATA - RAW_STATUS_BYTES;
 /** The 16-byte RAW.BIN v1 file header (written once, at the start of the stream). */
 export function rawHeader(
   nominalFs: number = EEG_SAMPLE_RATE_HZ,
-  nChannels: number = RAW_N_CHANNELS,
+  nChannels: number = ACTIVE_STREAM_CHANNELS,
 ): Uint8Array {
   const recordBytes = rawRecordBytes(nChannels);
   const h = new Uint8Array(RAW_HEADER_BYTES);
@@ -74,7 +74,7 @@ export function encodeRawPacket(
   bytes: Uint8Array,
   baseMs: number,
   seq: number,
-  nChannels: number = RAW_N_CHANNELS,
+  nChannels: number = ACTIVE_STREAM_CHANNELS,
 ): Uint8Array {
   const recordBytes = rawRecordBytes(nChannels);
   const frameBytes = bytesPerFrame(nChannels);

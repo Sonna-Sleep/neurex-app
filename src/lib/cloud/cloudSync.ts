@@ -38,8 +38,7 @@ export const RECORDINGS_BUCKET = 'recordings';
 
 export type Stream = 'raw';
 
-// Fixed chunk size keeps upload memory bounded without knowing whether this
-// recording used legacy 8-channel EEG records or compact active-channel records.
+// Fixed chunk size keeps upload memory bounded for RAW.BIN uploads.
 const SEGMENT_BYTES = 3_000_000;
 
 function segmentBytes(_stream: Stream): number {

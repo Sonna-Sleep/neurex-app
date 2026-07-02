@@ -352,12 +352,12 @@ export const realBleClient: BleClient = {
       if (__DEV__) console.warn('[ble/real] scale read failed:', e);
     }
     if (!deviceScale) {
-      throw new Error('Neurex firmware must expose schema-v3 scale/montage before recording.');
+      throw new Error('Neurex firmware must expose schema-v4 scale/montage before recording.');
     }
     const scale = deviceScale;
 
     // Resolve the device montage once: which physical channel carries which role
-    // (schema v3 channel_role[] → Fp1/Fp2/EOG-L/EOG-R). Passed to parsePacket so
+    // (channel_role[] -> Fp1/Fp2/EOG-L/EOG-R). Passed to parsePacket so
     // every sample carries the full montage in sample.channels.
     const montage: ActiveChannel[] = activeChannels(scale);
     const roles = new Set(montage.map((c) => c.role));

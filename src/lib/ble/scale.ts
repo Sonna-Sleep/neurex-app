@@ -1,22 +1,26 @@
 // Device-reported EEG amplitude scale, read once at connect from the
 // Scale/DeviceInfo characteristic (NEUREX_SCALE_INFO_UUID). The firmware
 // serializes neurex_scale_info_t (firmware/.../neurex_scale.h) as a packed
-// little-endian struct; this is the app-side mirror. Schema v3 is 29 bytes with
-// variant_known and channel_role[8]. Schema v4 appends streamChannelCount.
+// little-endian struct; this is the app-side mirror. Current recordings require
+// schema v4: variant_known, channel_role[8], and streamChannelCount.
 //
 // Reading the device's ACTUAL µV-per-LSB (instead of hardcoding EEG_UV_PER_LSB)
 // means a future PGA-gain change propagates by itself — a firmware-only flash
 // can no longer silently 24× every recorded microvolt.
 //
 // LAYOUT CONTRACT: the struct is APPEND-ONLY. Newer firmware may add fields at
-// the end and bump NEUREX_SCALE_SCHEMA_VER; the v3 fields below keep their
+// the end and bump NEUREX_SCALE_SCHEMA_VER; the current fields below keep their
 // offsets. A reordering/removal is a breaking change and MUST ship under a new
 // characteristic UUID, never a bumped schema.
 
-import { LEGACY_RAW_CHANNELS, NEUREX_SCALE_INFO_BYTES_V3 } from './constants';
+import {
+  ADS1299_PHYSICAL_CHANNELS,
+  NEUREX_SCALE_INFO_BYTES_V4,
+  NEUREX_SCALE_INFO_SCHEMA_VER,
+} from './constants';
 
 export type DeviceScaleInfo = {
-  /** Firmware schema version; recording requires v3+. */
+  /** Firmware schema version; recording requires v4+. */
   schemaVer: number;
   pgaGain: number;
   adcBits: number;
@@ -34,18 +38,18 @@ export type DeviceScaleInfo = {
    */
   variantKnown: number;
   /**
-   * Schema-v3 field (offset 21, 8 bytes): the per-physical-channel montage map.
+   * Per-physical-channel montage map (offset 21, 8 bytes).
    * channelRole[c] is the role wire-value of physical channel c (0-based):
    *   0=UNUSED 1=Fp1 2=Fp2 3=EOG-L 4=EOG-R (must match firmware
-   *   neurex_montage.h). Mirrors scale_v3.py's channel_role[].
+   *   neurex_montage.h).
    * Required for recording; null means the firmware/app contract is invalid.
    */
   channelRole: number[] | null;
-  /** Channels carried in each BLE frame / RAW.BIN record. v3 omitted this and sent all 8. */
+  /** Channels carried in each BLE frame / RAW.BIN record. */
   streamChannelCount: number;
 };
 
-/** Role wire-value → human label. Mirrors scale_v3.py `_ROLE_LABEL`. */
+/** Role wire-value -> human label. Mirrors firmware neurex_montage.h. */
 export const ROLE_LABEL: Readonly<Record<number, string>> = {
   1: 'Fp1',
   2: 'Fp2',
@@ -60,7 +64,7 @@ export const FP1_ROLE = 'Fp1';
 export type ActiveChannel = {
   /** 0-based physical ADS1299 channel index (0..7). */
   index: number;
-  /** 0-based channel index within the BLE frame / RAW.BIN record. Defaults to index for v3 helpers. */
+  /** 0-based channel index within the BLE frame / RAW.BIN record. */
   streamIndex?: number;
   /** Role label, e.g. 'Fp1' | 'Fp2' | 'EOG-L' | 'EOG-R'. */
   role: string;
@@ -69,11 +73,9 @@ export type ActiveChannel = {
 };
 
 /**
- * Resolve the active montage from a scale: `[{index, role}, …]`. Mirrors
- * scale_v3.py `active_channels`:
- * every physical channel whose role is a known electrode (1..4), in physical-
- * channel order. A missing/empty channelRole is invalid for current recordings.
- * Always guards the index to an in-frame channel (0..7).
+ * Resolve the active montage from a scale: every physical channel whose role is
+ * a known electrode (1..4), in physical-channel order. Current firmware packs
+ * active stream channels in that same order.
  */
 export function activeChannels(scale: DeviceScaleInfo): ActiveChannel[] {
   const roles = scale.channelRole;
@@ -82,9 +84,8 @@ export function activeChannels(scale: DeviceScaleInfo): ActiveChannel[] {
     for (let i = 0; i < roles.length; i++) {
       const roleValue = roles[i];
       const label = ROLE_LABEL[roleValue];
-      if (label !== undefined && i >= 0 && i < LEGACY_RAW_CHANNELS) {
-        const streamIndex =
-          scale.streamChannelCount === LEGACY_RAW_CHANNELS ? i : out.length;
+      if (label !== undefined && i >= 0 && i < ADS1299_PHYSICAL_CHANNELS) {
+        const streamIndex = out.length;
         if (streamIndex < scale.streamChannelCount) {
           out.push({ index: i, streamIndex, role: label, roleValue });
         }
@@ -107,25 +108,25 @@ const OFF = {
   fp1Index: 15, // u8
   fwBuildId: 16, // u32
   variantKnown: 20, // u8 — schema v2+ only (byte 20)
-  channelRole: 21, // u8[8] — schema v3+ only (bytes 21..28)
-  streamChannelCount: 29, // u8 — schema v4+ only
+  channelRole: 21, // u8[8] (bytes 21..28)
+  streamChannelCount: 29, // u8
 } as const;
 
-/** Bytes of the channel_role[] array appended in schema v3 (8 physical channels). */
+/** Bytes of the channel_role[] array (8 physical channels). */
 const CHANNEL_ROLE_LEN = 8;
 
 /**
  * Parse the Scale/DeviceInfo payload. Returns null when the bytes are absent,
- * short, older than v3, missing the montage tail, or µV-per-LSB is not sane.
+ * short, older than v4, missing the stream count, or µV-per-LSB is not sane.
  * The BLE connection path treats null as a hard stop before recording.
  */
 export function parseScaleInfo(
   bytes: Uint8Array | null | undefined,
 ): DeviceScaleInfo | null {
-  if (!bytes || bytes.length < NEUREX_SCALE_INFO_BYTES_V3) return null;
+  if (!bytes || bytes.length < NEUREX_SCALE_INFO_BYTES_V4) return null;
   const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const schemaVer = dv.getUint16(OFF.schemaVer, true);
-  if (schemaVer < 3) return null;
+  if (schemaVer < NEUREX_SCALE_INFO_SCHEMA_VER) return null;
   const uvPerLsb = dv.getFloat32(OFF.uvPerLsb, true);
   if (!Number.isFinite(uvPerLsb) || uvPerLsb <= 0) return null;
   const variantKnown = dv.getUint8(OFF.variantKnown);
@@ -133,14 +134,11 @@ export function parseScaleInfo(
   for (let i = 0; i < CHANNEL_ROLE_LEN; i++) {
     channelRole.push(dv.getUint8(OFF.channelRole + i));
   }
-  const streamChannelCount =
-    schemaVer >= 4 && bytes.length > OFF.streamChannelCount
-      ? dv.getUint8(OFF.streamChannelCount)
-      : LEGACY_RAW_CHANNELS;
+  const streamChannelCount = dv.getUint8(OFF.streamChannelCount);
   if (
     !Number.isInteger(streamChannelCount) ||
     streamChannelCount < 1 ||
-    streamChannelCount > LEGACY_RAW_CHANNELS
+    streamChannelCount > ADS1299_PHYSICAL_CHANNELS
   ) {
     return null;
   }

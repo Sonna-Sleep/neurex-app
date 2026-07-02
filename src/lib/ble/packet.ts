@@ -57,7 +57,7 @@ function u32be(bytes: Uint8Array, offset: number): number {
   );
 }
 
-// uvPerLsb and active come from the device's schema-v3 Scale characteristic.
+// uvPerLsb and active come from the device's schema-v4 Scale characteristic.
 // active describes which physical channel carries which role. parsePacket decodes
 // every active channel into sample.channels keyed by role
 // ('Fp1'/'Fp2'/'EOG-L'/'EOG-R') and sets fp1_uV from the Fp1 role for live consumers.
@@ -102,7 +102,7 @@ export function parsePacket(
       channels[role] = i24be(bytes, o + (streamIndex ?? index) * 3) * uvPerLsb;
     }
     // fp1_uV is a live-consumer convenience. The connection path has already
-    // verified the current firmware exposes Fp1 in the schema-v3 montage.
+    // verified the current firmware exposes Fp1 in the montage.
     const fp1_uV = channels[FP1_ROLE] ?? 0;
     samples[s] = { ms, fp1_uV, channels };
   }
