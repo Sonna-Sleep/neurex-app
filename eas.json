@@ -11,10 +11,7 @@
     },
     "preview": {
       "distribution": "internal",
-      "channel": "preview",
-      "env": {
-        "EXPO_PUBLIC_DIAGNOSTIC_CAPTURE": "1"
-      }
+      "channel": "preview"
     },
     "ios-sim": {
       "distribution": "internal",
@@ -33,10 +30,7 @@
     "android-apk": {
       "extends": "production",
       "distribution": "internal",
-      "android": { "buildType": "apk" },
-      "env": {
-        "EXPO_PUBLIC_DIAGNOSTIC_CAPTURE": "1"
-      }
+      "android": { "buildType": "apk" }
     }
   },
   "submit": {

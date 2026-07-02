@@ -41,13 +41,10 @@ function blank(v?: string | null): boolean {
   return v == null || v.trim() === '';
 }
 
-// Tester-logged fields required for a "complete" diagnostic capture. This gate
-// covers ONLY the tester-logged fields. The backend's REQUIRED_METADATA_FIELDS also
-// includes the device-intrinsic firmware_build_id + uv_per_lsb, which come from the
-// Scale characteristic — a unit on pre-Scale-char (fallback) firmware cannot supply
-// them, so such a night still lands 'incomplete' at the backend even when this gate
-// is satisfied. The fleet boards all report the Scale char, so in practice the two
-// agree; this is documented honestly rather than over-promised. notes + biasSite optional.
+// Tester-logged fields required before recording. This gate covers only fields
+// the firmware cannot know; device-intrinsic metadata such as firmware_build_id
+// and uv_per_lsb comes from the required Scale characteristic. notes + biasSite
+// are optional.
 export const REQUIRED_TESTER_FIELDS = [
   'electrodeType',
   'electrodeBatch',

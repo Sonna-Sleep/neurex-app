@@ -351,7 +351,8 @@ function recordingLabel(startMs: number): string {
 
 /** Read the device/scale provenance the recording stamped locally (meta.json +
  *  scale.json) plus the tester log, and assemble the sessions metadata columns.
- *  Returns {} if nothing is available (older recordings) — never throws. */
+ *  Best-effort and never throws; missing sidecars just mean fewer metadata
+ *  columns on the sessions row. */
 function readFinalizeMetadata(sessionId: string): Record<string, unknown> {
   let deviceId: string | null | undefined;
   let serial: string | null | undefined;
@@ -485,8 +486,8 @@ export async function transmitSession(input: FinalizeInput): Promise<string> {
   if (!rawSha256) throw new Error('raw upload produced no sha256');
   // Self-describing scale/provenance sidecar (scale.json — separate from the
   // recovery meta.json) uploaded BEFORE finalize so the backend sees it when
-  // staging. Best-effort: a missing/failed sidecar must not lose the night
-  // (older recordings have none and fall back to the assumed scale).
+  // staging. Best-effort: a missing/failed sidecar is reported by backend/QC,
+  // but must not delete an otherwise complete RAW.BIN night.
   try {
     await uploadSidecarIfPresent(prefix, new File(dir, 'scale.json'), 'scale.json');
   } catch (e) {

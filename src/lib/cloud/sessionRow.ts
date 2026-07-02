@@ -4,8 +4,8 @@
 // verifies the assembled segments/raw against it and, on a match, stages the
 // authoritative MULTICHANNEL path (Fp1/Fp2 + EOG → YASA). A MISMATCH FAILS the
 // night. So the caller must only pass a hash once the COMPLETE raw is confirmed
-// uploaded — absent/empty here means "stage from the eeg fallback" (Fp1-only),
-// which is the safe default for interrupted nights.
+// uploaded. New recordings are raw-gated before finalize; absent/empty here is
+// only a guardrail so an incomplete upload cannot claim raw provenance.
 
 export type RawProvenance = {
   rawSha256?: string | null;

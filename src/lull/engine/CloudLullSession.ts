@@ -4,9 +4,9 @@
  * It does NO DSP. It taps the live BLE feed (engineTap), forwards each packet's
  * four decoded channels to the cloud over a WebSocket, and applies the volume /
  * mute commands the cloud sends back to the injected AudioSink. At the first
- * onset command it mutes and closes the socket; the night keeps recording via
- * the unchanged segment-upload path. Same start()/stop()/onTick shape as the old
- * LullEngine so WindDownScreen barely changes.
+ * onset command it mutes and closes the socket; the EEG recording/upload path
+ * continues independently. The start()/stop()/onTick surface stays small so
+ * WindDownScreen only coordinates session lifecycle.
  *
  * Two guarantees layered on top of the cloud commands:
  *   1. One-way volume ratchet — the speaker volume can ONLY ever go down. The

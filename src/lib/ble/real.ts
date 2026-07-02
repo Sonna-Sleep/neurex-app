@@ -447,7 +447,8 @@ export const realBleClient: BleClient = {
         // recovery; reusing that name would clobber it). Written once at stream
         // start so the cloud QC/staging knows the EXACT µV-per-LSB (and gain /
         // firmware build) this recording used. Uploaded alongside the segments
-        // (cloudSync). Old recordings without it fall back to the gain-1 scale.
+        // (cloudSync). Write failure is non-fatal here so RAW.BIN capture is
+        // never interrupted by sidecar I/O.
         try {
           const scaleMeta = {
             schemaVer: 1,
