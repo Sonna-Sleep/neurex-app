@@ -181,6 +181,23 @@ function bytesEqual(a: Uint8Array, b: Uint8Array): boolean {
   return true;
 }
 
+function storageUploadBody(bytes: Uint8Array): ArrayBuffer {
+  const buffer = bytes.buffer;
+  if (
+    buffer instanceof ArrayBuffer &&
+    bytes.byteOffset === 0 &&
+    bytes.byteLength === buffer.byteLength
+  ) {
+    return buffer;
+  }
+  if (buffer instanceof ArrayBuffer) {
+    return buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+  }
+  const copy = new Uint8Array(bytes.byteLength);
+  copy.set(bytes);
+  return copy.buffer;
+}
+
 async function existingObjectMatches(path: string, chunk: Uint8Array): Promise<boolean | null> {
   const supabase = getSupabase();
   if (!supabase) throw new NotAuthedError();
@@ -208,7 +225,7 @@ async function uploadObjectNoOverwrite(
 
   const { error } = await supabase.storage
     .from(RECORDINGS_BUCKET)
-    .upload(path, chunk, { contentType, upsert: false });
+    .upload(path, storageUploadBody(chunk), { contentType, upsert: false });
   if (!error) return;
 
   const e = error as { status?: number; statusCode?: string | number; message: string };
@@ -229,7 +246,7 @@ async function uploadObjectWithOverwrite(
   if (!supabase) throw new NotAuthedError();
   const { error } = await supabase.storage
     .from(RECORDINGS_BUCKET)
-    .upload(path, chunk, { contentType, upsert: true });
+    .upload(path, storageUploadBody(chunk), { contentType, upsert: true });
   if (error) throw error;
 }
 
