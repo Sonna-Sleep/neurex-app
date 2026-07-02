@@ -44,7 +44,9 @@ const m = buildSessionMetadata({
 });
 
 assert.equal(m.device_id, 'DID-1');
-assert.equal(m.device_color, 'GREEN');
+assert.equal(m.device_label, 'Green');
+assert.equal('device_color' in m, false);
+assert.equal('device_display_name' in m, false);
 assert.equal(m.firmware_build_id, 'a1b2c3d4'); // uint32 -> hex
 assert.equal(m.uv_per_lsb, 0.536);
 assert.equal(m.pga_gain, 1);
@@ -64,7 +66,7 @@ assert.equal(m.tester, 'alex');
 // No scale -> still emits device + app version, no scale fields. The BLE
 // recording path requires scale before this finalization metadata is built.
 const mNoScale = buildSessionMetadata({ deviceId: 'x', serial: 'Neurex Yellow' });
-assert.equal(mNoScale.device_color, 'YELLOW');
+assert.equal(mNoScale.device_label, 'Yellow');
 assert.equal('uv_per_lsb' in mNoScale, false);
 
 // Blank tester-log fields are omitted (so metadata_status sees them as missing)

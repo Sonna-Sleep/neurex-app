@@ -22,7 +22,7 @@ import type { DeviceScaleInfo } from '../ble/scale';
 import { manifestFile } from '../ble/recordingManifest';
 import { supabaseSessionRepo } from '../repos/supabase';
 import type { Session } from '../repos/types';
-import { buildSessionMetadata, colorFromSerial } from './sessionMetadata';
+import { buildSessionMetadata, colorFromSerial, deviceLabelFromColor } from './sessionMetadata';
 import { hasRawProvenance, sessionRowWithRaw } from './sessionRow';
 import { Sha256Stream } from './sha256Stream';
 import {
@@ -445,8 +445,7 @@ function writeDeviceSidecar(sessionId: string, provenance: LocalSessionProvenanc
       sessionId,
       deviceId: provenance.deviceId ?? null,
       serial,
-      deviceColor: colorFromSerial(serial),
-      deviceDisplayName: serial,
+      deviceLabel: deviceLabelFromColor(colorFromSerial(serial)),
       variantKnown: scale ? scale.variantKnown === 1 : null,
       firmwareBuildId: scale ? (scale.fwBuildId >>> 0).toString(16) : null,
       scaleSchemaVer: scale?.schemaVer ?? null,
