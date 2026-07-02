@@ -8,7 +8,8 @@ import {
   MIN_STAGING_MIN,
   MIN_STAGING_SEC,
   RECOVERY_RESTORE_GRACE_MS,
-  EEG_BYTES_PER_SAMPLE,
+  RAW_BYTES_PER_SAMPLE,
+  RAW_HEADER_BYTES,
 } from '../src/lib/cloud/recoveryMath';
 
 let failures = 0;
@@ -27,20 +28,21 @@ function ok(cond: boolean, label: string) {
   }
 }
 
-ok(EEG_BYTES_PER_SAMPLE === 8, 'EEG_BYTES_PER_SAMPLE is 8');
+ok(RAW_HEADER_BYTES === 16, 'RAW_HEADER_BYTES is 16');
+ok(RAW_BYTES_PER_SAMPLE === 40, 'RAW_BYTES_PER_SAMPLE is 40');
 
-// 250 samples × 8 bytes = 2000 bytes = 1 s at 250 Hz.
-eq(durationMsFromBytes(2000, 250), 1000, '2000B @250Hz = 1000ms');
+// 16-byte header + 250 samples × 40 bytes = 1 s at 250 Hz.
+eq(durationMsFromBytes(10_016, 250), 1000, '10016B @250Hz = 1000ms');
 eq(durationMsFromBytes(0, 250), 0, '0 bytes = 0ms');
-eq(durationMsFromBytes(2000, 0), 0, '0 Hz guarded = 0ms');
+eq(durationMsFromBytes(10_016, 0), 0, '0 Hz guarded = 0ms');
 eq(durationMsFromBytes(-5, 250), 0, 'negative bytes guarded = 0ms');
-// One real hour: 250 Hz × 3600 s × 8 B = 7,200,000 B.
-eq(durationMsFromBytes(7_200_000, 250), 3_600_000, '1h of bytes = 3,600,000ms');
+// One real hour: 16-byte header + 250 Hz × 3600 s × 40 B.
+eq(durationMsFromBytes(36_000_016, 250), 3_600_000, '1h of bytes = 3,600,000ms');
 
 // meta.json start present → start is authoritative, end = start + duration.
 {
   const { startedAtMs, endMs } = reconstructTiming({
-    sizeBytes: 2000,
+    sizeBytes: 10_016,
     sampleRateHz: 250,
     modificationTimeMs: 9_999_999,
     metaStartedAtMs: 1000,
@@ -53,7 +55,7 @@ eq(durationMsFromBytes(7_200_000, 250), 3_600_000, '1h of bytes = 3,600,000ms');
 // No meta, mtime present → start = mtime − duration, end = mtime.
 {
   const { startedAtMs, endMs } = reconstructTiming({
-    sizeBytes: 2000,
+    sizeBytes: 10_016,
     sampleRateHz: 250,
     modificationTimeMs: 50_000,
     metaStartedAtMs: null,
@@ -66,7 +68,7 @@ eq(durationMsFromBytes(7_200_000, 250), 3_600_000, '1h of bytes = 3,600,000ms');
 // No meta, no mtime → fall back to nowMs as the end reference.
 {
   const { startedAtMs, endMs } = reconstructTiming({
-    sizeBytes: 2000,
+    sizeBytes: 10_016,
     sampleRateHz: 250,
     modificationTimeMs: null,
     metaStartedAtMs: null,
@@ -84,10 +86,10 @@ ok(isStageableDurationMs(600_000) === true, 'exactly 10 min is stageable');
 ok(isStageableDurationMs(599_999) === false, 'just under 10 min is NOT stageable');
 ok(isStageableDurationMs(0) === false, 'zero-length is NOT stageable');
 ok(isStageableDurationMs(3_600_000) === true, '1 h is stageable');
-// A 1-second orphan (2000 B @250 Hz) must be skipped by recovery.
-ok(isStageableDurationMs(durationMsFromBytes(2000, 250)) === false, '1 s orphan skipped');
-// A 10-minute recording (250 × 8 × 600 = 1,200,000 B) is recovered.
-ok(isStageableDurationMs(durationMsFromBytes(1_200_000, 250)) === true, '10 min orphan recovered');
+// A 1-second orphan must be skipped by recovery.
+ok(isStageableDurationMs(durationMsFromBytes(10_016, 250)) === false, '1 s orphan skipped');
+// A 10-minute recording is recovered.
+ok(isStageableDurationMs(durationMsFromBytes(6_000_016, 250)) === true, '10 min orphan recovered');
 
 if (failures) {
   console.error(`\n${failures} RECOVERY ASSERTION(S) FAILED`);

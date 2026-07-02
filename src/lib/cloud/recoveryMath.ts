@@ -2,7 +2,8 @@
 // unit-testable in plain Node (scripts/smoke-recovery.ts). recovery.ts wraps
 // this with the filesystem scan.
 
-export const EEG_BYTES_PER_SAMPLE = 8; // uint32 ms + float32 µV — matches real.ts encoder
+export const RAW_HEADER_BYTES = 16;
+export const RAW_BYTES_PER_SAMPLE = 40; // ms + seq + status + 8 int32 channel counts
 
 // Minimum recorded length worth uploading: short setup/debug captures are kept
 // local instead of being sent to cloud analysis. Shared with the live
@@ -21,10 +22,11 @@ export function isStageableDurationMs(durationMs: number): boolean {
   return durationMs >= MIN_STAGING_SEC * 1000;
 }
 
-/** Recorded duration (ms) implied by an EEG.BIN byte count. */
+/** Recorded duration (ms) implied by a RAW.BIN byte count. */
 export function durationMsFromBytes(sizeBytes: number, sampleRateHz: number): number {
   if (sizeBytes <= 0 || sampleRateHz <= 0) return 0;
-  return (sizeBytes / EEG_BYTES_PER_SAMPLE / sampleRateHz) * 1000;
+  const payloadBytes = Math.max(0, sizeBytes - RAW_HEADER_BYTES);
+  return (payloadBytes / RAW_BYTES_PER_SAMPLE / sampleRateHz) * 1000;
 }
 
 export type ReconstructInput = {

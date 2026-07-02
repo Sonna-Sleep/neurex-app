@@ -27,11 +27,7 @@ const payload = buildStreamStatsPayload({
     rawSha256: 'abc123',
     rawFailureReason: null,
   },
-  chunkedUploadEnabled: true,
-  chunkSeconds: 1_800,
-  queuedChunkCount: 0,
-  confirmedChunkCount: 4,
-  confirmedRawChunkCount: 2,
+  confirmedRawSegmentCount: 2,
   appVersion: '0.1.0',
   appBuild: 21,
   createdAtMs: 62_000,
@@ -52,11 +48,7 @@ assert.equal(payload.maxTimeGapMs, 61_148);
 assert.equal(payload.timeGapThresholdMs, 1_000);
 assert.equal(payload.lastSeq, 42);
 assert.equal(payload.lastBaseMs, 60_000);
-assert.equal(payload.chunkedUploadEnabled, true);
-assert.equal(payload.chunkSeconds, 1_800);
-assert.equal(payload.queuedChunkCount, 0);
-assert.equal(payload.confirmedChunkCount, 4);
-assert.equal(payload.confirmedRawChunkCount, 2);
+assert.equal(payload.confirmedRawSegmentCount, 2);
 assert.equal(payload.rawRequired, true);
 assert.equal(payload.rawOpened, true);
 assert.equal(payload.rawBytesWritten, 600_016);

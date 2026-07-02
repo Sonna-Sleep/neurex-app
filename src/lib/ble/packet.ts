@@ -64,11 +64,10 @@ function u32be(bytes: Uint8Array, offset: number): number {
 // characteristic decode byte-identically to before.
 //
 // active is the device's montage (from scale.activeChannels): which physical
-// channel carries which role. When provided, parsePacket decodes EVERY active
+// channel carries which role. When provided, parsePacket decodes every active
 // channel into sample.channels keyed by role ('Fp1'/'Fp2'/'EOG-L'/'EOG-R'), and
-// sets fp1_uV from the Fp1 role for back-compat. When omitted (legacy callers,
-// pre-v3 firmware), it decodes only the single fp1Index channel as 'Fp1' →
-// channels = { 'Fp1': fp1_uV }, byte-identical to the old single-channel path.
+// sets fp1_uV from the Fp1 role for live consumers. When omitted, it decodes the
+// single fp1Index channel as 'Fp1'.
 export function parsePacket(
   bytes: Uint8Array,
   generation: number,
@@ -102,9 +101,9 @@ export function parsePacket(
   // channel (0..7); fall back to CH_FP1 if the device reports something invalid.
   const ch = fp1Index >= 0 && fp1Index < 8 ? fp1Index : CH_FP1;
 
-  // Resolve the montage to decode. With an explicit active list (schema-v3
-  // montage) we decode every role into channels{}. Without one (legacy/pre-v3),
-  // fall back to a single Fp1 channel at fp1Index — byte-identical to before.
+  // Resolve the montage to decode. With an explicit active list we decode every
+  // role into channels{}. Without one, fall back to a single Fp1 channel at
+  // fp1Index.
   const montage: ActiveChannel[] =
     active && active.length > 0
       ? active.filter((c) => c.index >= 0 && c.index < 8)
@@ -118,9 +117,8 @@ export function parsePacket(
     for (const { index, role } of montage) {
       channels[role] = i24be(bytes, o + index * 3) * uvPerLsb;
     }
-    // fp1_uV is retained verbatim for existing consumers (recording/upload). It
-    // is the Fp1 role when the montage names one, else the resolved fp1Index
-    // channel — identical to the pre-montage single-channel decode.
+    // fp1_uV is a live-consumer convenience: the Fp1 role when the montage names
+    // one, else the resolved fp1Index channel.
     const fp1_uV =
       channels[FP1_ROLE] !== undefined
         ? channels[FP1_ROLE]

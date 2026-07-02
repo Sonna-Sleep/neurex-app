@@ -1,18 +1,15 @@
-// Crash / kill recovery for legacy local-EEG.BIN overnight recordings.
+// Crash / kill recovery for RAW.BIN overnight recordings.
 //
-// Current recordings default to segments/eeg/segNNNN.bin and are recovered by
-// chunkRecovery.ts. This module stays for older local EEG.BIN recordings and for
-// the emergency EXPO_PUBLIC_CHUNKED_UPLOAD=0 fallback. If the app is killed
-// mid-night (OOM, crash, force-stop, reboot), the bytes are on disk but the
-// in-memory session state is gone, so without this nothing would upload them.
-// This module closes that gap:
+// If the app is killed mid-night (OOM, crash, force-stop, reboot), the bytes are
+// on disk but the in-memory session state is gone, so without this nothing would
+// upload them. This module closes that gap:
 //
 //   - At session start, streamController writes a self-describing meta.json into
 //     the session dir AND a durable "active recording" marker in AsyncStorage
 //     (so an iOS state-restoration relaunch knows which session to resume).
 //   - At a clean stop, the marker is cleared.
 //   - On app launch, scanRecoverable() finds every session dir with a non-empty
-//     EEG.BIN that isn't the live session and isn't yet uploaded (an uploaded
+//     RAW.BIN that isn't the live session and isn't yet uploaded (an uploaded
 //     night's dir is removed by deleteLocalSession), and recoverAll() ships them
 //     through the same transmitSession path. transmitSession deletes the local
 //     copy only after the cloud upload + finalize succeed, so a failed recovery
@@ -32,7 +29,7 @@ import { EEG_SAMPLE_RATE_HZ } from '../ble/constants';
 
 const ACTIVE_KEY = 'neurex-active-recording';
 const META_NAME = 'meta.json';
-const EEG_NAME = 'EEG.BIN';
+const RAW_NAME = 'RAW.BIN';
 
 export type RecordingMeta = {
   sessionId: string;
@@ -124,7 +121,7 @@ function readMeta(dir: Directory): RecordingMeta | null {
 
 /**
  * Find recordings on disk that were never uploaded: every session dir with a
- * non-empty EEG.BIN, except the one currently recording. Endpoints come from
+ * non-empty RAW.BIN, except the one currently recording. Endpoints come from
  * meta.json when present, else are reconstructed from the file's byte count
  * (→ duration) and modification time, so even a metadata-less orphan uploads.
  */
@@ -145,14 +142,14 @@ export function scanRecoverable(activeSessionId?: string | null): RecoverableRec
     // Reserved '__'-prefixed dirs are NOT recordings (e.g. the contact-quality
     // preview '__contact_preview__') — never upload them as a night.
     if (sessionId.startsWith('__')) continue;
-    let eeg: File;
+    let raw: File;
     try {
-      eeg = new File(item, EEG_NAME);
-      if (!eeg.exists || eeg.size <= 0) continue;
+      raw = new File(item, RAW_NAME);
+      if (!raw.exists || raw.size <= 0) continue;
     } catch {
       continue;
     }
-    const sizeBytes = eeg.size;
+    const sizeBytes = raw.size;
     // Apply the same minimum-length floor as the live sync path. Short setup or
     // debug captures are not useful for cloud staging, so don't ship them — they
     // stay on disk like a short recording kept in the app.
@@ -161,7 +158,7 @@ export function scanRecoverable(activeSessionId?: string | null): RecoverableRec
     const { startedAtMs, endMs } = reconstructTiming({
       sizeBytes,
       sampleRateHz: EEG_SAMPLE_RATE_HZ,
-      modificationTimeMs: eeg.modificationTime,
+      modificationTimeMs: raw.modificationTime,
       metaStartedAtMs: meta?.startedAtMs ?? null,
       nowMs: Date.now(),
     });

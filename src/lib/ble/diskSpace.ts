@@ -1,11 +1,10 @@
 // Pre-flight disk-space guard for overnight recordings.
 //
-// An 8-hour night writes EEG samples under documentDirectory/sessions/<id>/,
-// usually as rolling segments that upload/delete during recording. If the phone
-// is offline long enough, local segments can still accumulate; if storage fills
-// mid-night, the native file write fails and EEG capture halts — surfaced (never
-// silent) via StorageWriteError, but only AFTER the user has already lost part
-// of the night. This module moves that check to BEFORE the recording starts:
+// An 8-hour night writes RAW.BIN under documentDirectory/sessions/<id>/. If
+// storage fills mid-night, the native file write fails and capture halts —
+// surfaced (never silent) via RawStorageWriteError, but only AFTER the user has
+// already lost part of the night. This module moves that check to BEFORE the
+// recording starts:
 // estimate the bytes a full night needs, compare against free space, and refuse
 // to start when there isn't enough headroom.
 //
@@ -15,7 +14,7 @@
 
 import { Paths } from 'expo-file-system';
 
-import { EEG_BYTES_PER_SAMPLE } from '../cloud/recoveryMath';
+import { RAW_BYTES_PER_SAMPLE } from '../cloud/recoveryMath';
 import { EEG_SAMPLE_RATE_HZ } from './constants';
 
 // A typical unattended night. Used only to size the headroom estimate — the
@@ -30,18 +29,17 @@ export const NIGHT_HOURS = 8;
 export const SAFETY_FACTOR = 2;
 
 // Never start a night with less than this free regardless of the computed
-// estimate. A night is only ~58 MB, so a healthy 2× is ~115 MB; this floor
-// keeps a small headroom buffer even if the math is ever shortened, and matches
-// the "leave the OS some breathing room" intent.
+// estimate. RAW.BIN is ~288 MB for 8 h, so the computed 2× estimate usually
+// dominates; this floor keeps a small OS breathing-room buffer.
 export const MIN_FREE_FLOOR_BYTES = 150 * 1024 * 1024; // 150 MB
 
 const MB = 1024 * 1024;
 
-/** Bytes one recorded hour of EEG occupies on disk: 250 Hz × 8 B/sample × 3600 s
- * = 7,200,000 B/h. Derived from the SAME constants the encoder + recovery use so
- * a format/rate change can't silently desync this guard. */
+/** Bytes one recorded hour of RAW.BIN occupies on disk: 250 Hz × 40 B/sample ×
+ * 3600 s = 36,000,000 B/h. Derived from the same constants the encoder +
+ * recovery use so a format/rate change can't silently desync this guard. */
 export function bytesPerHour(): number {
-  return EEG_SAMPLE_RATE_HZ * EEG_BYTES_PER_SAMPLE * 3600;
+  return EEG_SAMPLE_RATE_HZ * RAW_BYTES_PER_SAMPLE * 3600;
 }
 
 /** Bytes a full `hours`-long night is expected to write. */
@@ -64,7 +62,7 @@ export type DiskSpaceVerdict = {
 /** Pure decision: is `freeBytes` enough to start an `hours`-long night? Separated
  * from the FS read so it's exhaustively unit-testable. A non-finite/negative
  * free reading (sensor unavailable) is treated as "ok" — we never want a flaky
- * disk-space API to BLOCK a legitimate recording; the live StorageWriteError
+ * disk-space API to BLOCK a legitimate recording; the live raw write error
  * path remains the backstop. */
 export function evaluateDiskSpace(
   freeBytes: number,
@@ -104,7 +102,7 @@ export class InsufficientStorageError extends Error {
  * SDK 54 file-system API (expo-file-system v19; the legacy
  * getFreeDiskStorageAsync() is deprecated and THROWS at runtime in this
  * version). Any failure reading the value yields an "ok" verdict so a flaky API
- * never blocks a recording (the in-stream StorageWriteError stays the backstop).
+ * never blocks a recording (the in-stream raw write error stays the backstop).
  */
 export function checkDiskSpace(hours: number = NIGHT_HOURS): DiskSpaceVerdict {
   let freeBytes: number;

@@ -1,6 +1,6 @@
 // Smoke assertions for the pre-flight disk-space guard: before an overnight
 // recording starts we estimate the bytes a full night needs and refuse to start
-// when there isn't enough free space (so EEG capture can't silently halt at 3am
+// when there isn't enough free space (so raw capture can't silently halt at 3am
 // when the disk fills). Run: npm run smoke:disk-space
 //
 // Preloads the expo-file-system stub so diskSpace.ts's `import { Paths }` loads
@@ -36,26 +36,26 @@ function ok(cond: boolean, label: string) {
 const MB = 1024 * 1024;
 
 // ── byte math (derived from the real on-disk format) ───────────────────────
-// EEG.BIN is (uint32 ms, float32 µV) pairs = 8 B/sample at 250 Hz.
-// 250 × 8 × 3600 = 7,200,000 B/h.
-eq(bytesPerHour(), 7_200_000, '1 recorded hour = 7,200,000 B');
+// RAW.BIN records are 40 B/sample at 250 Hz.
+// 250 × 40 × 3600 = 36,000,000 B/h.
+eq(bytesPerHour(), 36_000_000, '1 recorded hour = 36,000,000 B');
 eq(NIGHT_HOURS, 8, 'night sizing uses 8 hours');
-eq(estimateNightBytes(8), 57_600_000, '8 h night ≈ 57.6 MB');
-eq(estimateNightBytes(1), 7_200_000, '1 h night = 7.2 MB');
+eq(estimateNightBytes(8), 288_000_000, '8 h night = 288,000,000 B');
+eq(estimateNightBytes(1), 36_000_000, '1 h night = 36,000,000 B');
 eq(estimateNightBytes(0), 0, '0 h = 0 B');
 eq(estimateNightBytes(-5), 0, 'negative hours guarded to 0');
 
 // ── required headroom: max(estimate × safety factor, floor) ────────────────
 eq(SAFETY_FACTOR, 2, 'safety factor is 2×');
 eq(MIN_FREE_FLOOR_BYTES, 150 * MB, 'floor is 150 MB');
-// 8 h × 2 = 115.2 MB < 150 MB floor → floor wins for a normal night.
-eq(requiredFreeBytes(8), 150 * MB, '8 h requirement clamps up to the 150 MB floor');
-// A long night (40 h) × 2 = 576 MB exceeds the floor → estimate×2 wins.
-eq(requiredFreeBytes(40), 40 * 7_200_000 * 2, '40 h requirement = estimate × 2 (above floor)');
+// 8 h × 2 = 576,000,000 B > the 150 MB floor → estimate×2 wins.
+eq(requiredFreeBytes(8), 576_000_000, '8 h requirement = estimate × 2');
+// A long night (40 h) also uses estimate×2.
+eq(requiredFreeBytes(40), 40 * 36_000_000 * 2, '40 h requirement = estimate × 2');
 
 // ── verdict: blocks when below requirement, allows when above ───────────────
 {
-  const req = requiredFreeBytes(8); // 150 MB
+  const req = requiredFreeBytes(8);
   ok(evaluateDiskSpace(req, 8).ok === true, 'exactly the requirement is allowed');
   ok(evaluateDiskSpace(req + 1, 8).ok === true, 'just above requirement is allowed');
   ok(evaluateDiskSpace(req - 1, 8).ok === false, 'just below requirement is BLOCKED');
@@ -73,7 +73,7 @@ ok(evaluateDiskSpace(-1).ok === true, 'negative free → allowed (unreadable)');
 {
   const v = evaluateDiskSpace(5 * MB, 8);
   eq(v.freeBytes, 5 * MB, 'verdict reports freeBytes');
-  eq(v.requiredBytes, 150 * MB, 'verdict reports requiredBytes');
+  eq(v.requiredBytes, 576_000_000, 'verdict reports requiredBytes');
 }
 
 // ── the user-facing error names the shortfall ──────────────────────────────

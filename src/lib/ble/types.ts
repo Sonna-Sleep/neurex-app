@@ -2,9 +2,8 @@
 //
 // Live-stream model: scan → connect → startStream(sessionId, callbacks).
 // The firmware notifies raw ADS1299 frames (8 or 18 samples/packet @ 250 Hz).
-// RAW.BIN is the canonical persisted sleep biosignal stream: all 8 integer
-// channels, later decoded by backend metadata into Fp1/Fp2/EOG-L/EOG-R. The
-// decoded FP1 segments remain only as a compatibility/debug artifact.
+// RAW.BIN is the persisted sleep biosignal stream: all 8 integer channels,
+// later decoded by backend metadata into Fp1/Fp2/EOG-L/EOG-R.
 
 import type { DeviceScaleInfo } from './scale';
 
@@ -21,15 +20,14 @@ export type FoundDevice = {
 export type EegSample = {
   ms: number;
   /**
-   * The Fp1 channel in µV. Retained for live compatibility consumers and the
-   * legacy FP1 side stream. Equals channels['Fp1'] when montage metadata exists.
+   * Convenience copy of the Fp1 channel in µV for live consumers. Equals
+   * channels['Fp1'] when montage metadata exists.
    */
   fp1_uV: number;
   /**
    * Every active montage channel, keyed by role label, in µV:
    *   'Fp1' | 'Fp2' | 'EOG-L' | 'EOG-R' for the 4-channel montage (schema v3).
-   * Legacy single-channel devices (v1/v2) carry only { 'Fp1': fp1_uV }. The
-   * EOG pair drives Lull's sleep-onset detection.
+   * The EOG pair drives Lull's sleep-onset detection.
    */
   channels: Record<string, number>;
 };
@@ -89,28 +87,13 @@ export type StreamCallbacks = {
   onDrop?: (reason: 'markers' | 'checksum' | 'size' | 'gap', stats: StreamStats) => void;
   /** Fired on a fatal stream error (connection lost mid-session, file I/O, etc.). */
   onError?: (err: Error) => void;
-  /** Fired when a recording segment is finalized — rolled at the chunk boundary
-   * or flushed on stop. Carries the segment's monotonic index, file URI, and
-   * byte length. Only the legacy local EEG.BIN fallback does not emit it. */
-  onSegmentClosed?: (seg: SegmentClosed) => void;
-};
-
-/** A finalized recording segment ready to be hashed, uploaded, and (after the
- * server confirms an exact byte+hash match) deleted to reclaim on-device space. */
-export type SegmentClosed = {
-  /** Monotonic index within the session — the segNNNN.bin name + upload seq. */
-  index: number;
-  /** file:// URI of the closed segment. */
-  uri: string;
-  /** Exact bytes in the segment (whole packets, lossless boundary). */
-  byteLength: number;
 };
 
 export type StreamHandle = {
   /** Path to the per-session directory under FileSystem.documentDirectory. */
   sessionDir: string;
-  /** file:// URI for sharing/debug: current segment by default, EEG.BIN in fallback mode. */
-  eegUri: string;
+  /** file:// URI for the required RAW.BIN sample stream. */
+  rawUri: string;
   /** Stop notifications, flush + close file handles. Idempotent. */
   stop(): Promise<StreamStats>;
 };

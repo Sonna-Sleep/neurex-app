@@ -1,10 +1,7 @@
-// raw.bin v1 — the immutable, all-channel integer GROUND TRUTH the app persists.
+// RAW.BIN v1 — the immutable, all-channel integer stream the app persists.
 //
-// Today eeg.bin is the app's already-decoded single-channel µV stream; once the
-// phone selects FP1 and applies uvPerLsb, the other 7 channels and the original
-// integer counts are gone forever. raw.bin keeps the device's full output so any
-// night can be re-decoded later (e.g. after finding a scale/channel bug) by a
-// versioned backend decoder. eeg.bin is a DERIVED artifact.
+// RAW.BIN keeps the device's full output so any night can be decoded later by a
+// versioned backend decoder. The app does not write a derived FP1/EEG file.
 //
 // The byte layout MUST match the backend reader (neurex-backend decoder.py,
 // parse_raw_header / decode_raw). All little-endian:
@@ -16,8 +13,7 @@
 //
 // int32 (not packed int24) so the backend decodes it with a plain numpy struct
 // dtype — int24 is exactly representable, so this is lossless. ms mirrors the
-// app's eeg.bin reconstruction (baseMs + sampleIndex * 4 ms), so a backend
-// re-decode of the FP1 channel reproduces eeg.bin byte-for-byte.
+// app's sample clock reconstruction (baseMs + sampleIndex * 4 ms).
 
 import {
   BYTES_PER_FRAME,
@@ -38,7 +34,7 @@ export const RAW_RECORD_BYTES = 4 + 1 + RAW_STATUS_BYTES + 4 * RAW_N_CHANNELS;
 // The 3 status bytes of a sample's frame sit immediately before its channel data.
 const FRAME_STATUS_OFF = PKT_IDX_DATA - RAW_STATUS_BYTES;
 
-/** The 16-byte raw.bin v1 file header (written once, at the start of the stream). */
+/** The 16-byte RAW.BIN v1 file header (written once, at the start of the stream). */
 export function rawHeader(nominalFs: number = EEG_SAMPLE_RATE_HZ): Uint8Array {
   const h = new Uint8Array(RAW_HEADER_BYTES);
   const dv = new DataView(h.buffer);
@@ -56,11 +52,11 @@ export function rawHeader(nominalFs: number = EEG_SAMPLE_RATE_HZ): Uint8Array {
 }
 
 /**
- * Encode one parsed packet's SAMPLES_PER_PACKET frames into raw.bin v1 records
+ * Encode one parsed packet's frames into RAW.BIN v1 records
  * (all 8 channels, integer counts). `bytes` is the original 226-byte packet;
- * `baseMs`/`seq` come from the parse. Per sample s: ms = baseMs + s*4 ms
- * (matching eeg.bin), the packet seq, the 3 status bytes, and the 8 int24
- * channel counts sign-extended to int32.
+ * `baseMs`/`seq` come from the parse. Per sample s: ms = baseMs + s*4 ms,
+ * the packet seq, the 3 status bytes, and the 8 int24 channel counts
+ * sign-extended to int32.
  */
 export function encodeRawPacket(bytes: Uint8Array, baseMs: number, seq: number): Uint8Array {
   const n = samplesPerPacket(bytes.length); // 8 (226 B) or 18 (496 B) — from length
@@ -73,7 +69,7 @@ export function encodeRawPacket(bytes: Uint8Array, baseMs: number, seq: number):
     out[r + 4] = seq & 0xff; // seq
     out[r + 5] = bytes[frame];
     out[r + 6] = bytes[frame + 1];
-    out[r + 7] = bytes[frame + 2]; // status[0..3]
+    out[r + 7] = bytes[frame + 2]; // status[0..2]
     for (let ch = 0; ch < RAW_N_CHANNELS; ch++) {
       const co = frame + RAW_STATUS_BYTES + ch * 3;
       const v = (bytes[co] << 16) | (bytes[co + 1] << 8) | bytes[co + 2];

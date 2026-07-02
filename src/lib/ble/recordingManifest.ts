@@ -1,25 +1,18 @@
 import { Directory, File, Paths } from 'expo-file-system';
 
 import { EEG_SAMPLE_RATE_HZ } from './constants';
+import { RAW_RECORD_BYTES } from './rawRecord';
 import type { StreamStats } from './types';
 
 export const RECORDING_MANIFEST_NAME = 'recording_manifest.json';
 const SCHEMA_VER = 1;
-const EEG_RECORD_BYTES = 8;
-
-export type ManifestSegment = {
-  index: number;
-  bytes: number;
-  closedAtMs: number;
-  uploadedAtMs?: number;
-};
 
 export type RecordingManifest = {
   schemaVer: number;
   sessionId: string;
   startedAtMs: number;
   sampleRateHz: number;
-  eegRecordBytes: number;
+  rawRecordBytes: number;
   samplesWritten: number;
   packetsWritten: number;
   drops: number;
@@ -31,11 +24,6 @@ export type RecordingManifest = {
   lastSeq: number | null;
   generation: number;
   lastBaseMs: number | null;
-  nextSegmentIndex: number;
-  currentSegmentIndex: number | null;
-  currentSegmentBytes: number;
-  closedSegments: ManifestSegment[];
-  uploadedSegments: ManifestSegment[];
   updatedAtMs: number;
 };
 
@@ -43,7 +31,7 @@ export type EnsureManifestInput = {
   sessionId: string;
   startedAtMs: number;
   sampleRateHz?: number;
-  eegRecordBytes?: number;
+  rawRecordBytes?: number;
 };
 
 function sessionsDir(): Directory {
@@ -68,7 +56,7 @@ function defaultManifest(input: EnsureManifestInput): RecordingManifest {
     sessionId: input.sessionId,
     startedAtMs: input.startedAtMs,
     sampleRateHz: input.sampleRateHz ?? EEG_SAMPLE_RATE_HZ,
-    eegRecordBytes: input.eegRecordBytes ?? EEG_RECORD_BYTES,
+    rawRecordBytes: input.rawRecordBytes ?? RAW_RECORD_BYTES,
     samplesWritten: 0,
     packetsWritten: 0,
     drops: 0,
@@ -80,11 +68,6 @@ function defaultManifest(input: EnsureManifestInput): RecordingManifest {
     lastSeq: null,
     generation: 0,
     lastBaseMs: null,
-    nextSegmentIndex: 0,
-    currentSegmentIndex: null,
-    currentSegmentBytes: 0,
-    closedSegments: [],
-    uploadedSegments: [],
     updatedAtMs: now(),
   };
 }
@@ -97,42 +80,17 @@ function nullableNum(v: unknown): number | null {
   return typeof v === 'number' && Number.isFinite(v) ? v : null;
 }
 
-function segments(v: unknown): ManifestSegment[] {
-  if (!Array.isArray(v)) return [];
-  return v
-    .filter((s) => s && typeof s === 'object')
-    .map((s) => {
-      const o = s as Record<string, unknown>;
-      return {
-        index: num(o.index, -1),
-        bytes: num(o.bytes),
-        closedAtMs: num(o.closedAtMs),
-        uploadedAtMs: nullableNum(o.uploadedAtMs) ?? undefined,
-      };
-    })
-    .filter((s) => s.index >= 0);
-}
-
 function normalize(raw: unknown, fallback: EnsureManifestInput): RecordingManifest {
   const d = defaultManifest(fallback);
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return d;
   const o = raw as Record<string, unknown>;
-  const closed = segments(o.closedSegments);
-  const uploaded = segments(o.uploadedSegments);
-  const maxKnown = Math.max(
-    -1,
-    ...closed.map((s) => s.index),
-    ...uploaded.map((s) => s.index),
-    num(o.currentSegmentIndex, -1),
-    num(o.nextSegmentIndex, 0) - 1,
-  );
   return {
     ...d,
     schemaVer: num(o.schemaVer, SCHEMA_VER),
     sessionId: typeof o.sessionId === 'string' ? o.sessionId : d.sessionId,
     startedAtMs: num(o.startedAtMs, d.startedAtMs),
     sampleRateHz: num(o.sampleRateHz, d.sampleRateHz),
-    eegRecordBytes: num(o.eegRecordBytes, d.eegRecordBytes),
+    rawRecordBytes: num(o.rawRecordBytes, d.rawRecordBytes),
     samplesWritten: num(o.samplesWritten),
     packetsWritten: num(o.packetsWritten),
     drops: num(o.drops),
@@ -144,11 +102,6 @@ function normalize(raw: unknown, fallback: EnsureManifestInput): RecordingManife
     lastSeq: nullableNum(o.lastSeq),
     generation: num(o.generation),
     lastBaseMs: nullableNum(o.lastBaseMs),
-    nextSegmentIndex: Math.max(num(o.nextSegmentIndex), maxKnown + 1, 0),
-    currentSegmentIndex: nullableNum(o.currentSegmentIndex),
-    currentSegmentBytes: num(o.currentSegmentBytes),
-    closedSegments: closed,
-    uploadedSegments: uploaded,
     updatedAtMs: num(o.updatedAtMs, d.updatedAtMs),
   };
 }
@@ -177,7 +130,7 @@ export function ensureRecordingManifest(input: EnsureManifestInput): RecordingMa
   const manifest = normalize(existing, input);
   if (!existing || manifest.startedAtMs <= 0) manifest.startedAtMs = input.startedAtMs;
   manifest.sampleRateHz = input.sampleRateHz ?? manifest.sampleRateHz;
-  manifest.eegRecordBytes = input.eegRecordBytes ?? manifest.eegRecordBytes;
+  manifest.rawRecordBytes = input.rawRecordBytes ?? manifest.rawRecordBytes;
   writeRecordingManifest(manifest);
   return manifest;
 }
@@ -224,43 +177,6 @@ export class RecordingManifestTracker {
 
   stats(): StreamStats {
     return statsFromManifest(this.manifest);
-  }
-
-  nextSegmentIndex(): number {
-    return Math.max(0, this.manifest.nextSegmentIndex);
-  }
-
-  markSegmentOpened(index: number): void {
-    this.manifest.currentSegmentIndex = index;
-    this.manifest.currentSegmentBytes = 0;
-    this.manifest.nextSegmentIndex = Math.max(this.manifest.nextSegmentIndex, index + 1);
-    this.flush();
-  }
-
-  markSegmentClosed(index: number, bytes: number): void {
-    const rest = this.manifest.closedSegments.filter((s) => s.index !== index);
-    this.manifest.closedSegments = [...rest, { index, bytes, closedAtMs: now() }].sort(
-      (a, b) => a.index - b.index,
-    );
-    if (this.manifest.currentSegmentIndex === index) {
-      this.manifest.currentSegmentIndex = null;
-      this.manifest.currentSegmentBytes = 0;
-    }
-    this.flush();
-  }
-
-  addCurrentSegmentBytes(bytes: number): void {
-    if (this.manifest.currentSegmentIndex === null) return;
-    this.manifest.currentSegmentBytes += bytes;
-  }
-
-  markUploadedSegment(index: number, bytes: number): void {
-    const rest = this.manifest.uploadedSegments.filter((s) => s.index !== index);
-    this.manifest.uploadedSegments = [
-      ...rest,
-      { index, bytes, closedAtMs: now(), uploadedAtMs: now() },
-    ].sort((a, b) => a.index - b.index);
-    this.flush();
   }
 
   markDrop(count = 1): void {

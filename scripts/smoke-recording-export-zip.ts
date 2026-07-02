@@ -11,7 +11,7 @@ function u32(bytes: Uint8Array, offset: number): number {
 
 const zip = buildStoredZip([
   { path: 'session/meta.json', bytes: new Uint8Array(Buffer.from('{"ok":true}', 'utf8')) },
-  { path: 'session/segments/eeg/seg0000.bin', bytes: new Uint8Array([1, 2, 3, 4]) },
+  { path: 'session/RAW.BIN', bytes: new Uint8Array([1, 2, 3, 4]) },
 ]);
 
 if (u32(zip, 0) !== 0x04034b50) throw new Error('missing local file header');

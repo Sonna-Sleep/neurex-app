@@ -2,9 +2,8 @@
 // active, otherwise renders a richer "start recording" surface when paired.
 // Owns the start/stop orchestration via streamController.
 //
-// On stop, local recording data is handed to Supabase Storage for staging. New
-// recordings are segments-first; the old EEG.BIN local file remains a fallback.
-// In dev, the local debug file/segment can still be shared manually.
+// On stop, RAW.BIN is handed to Supabase Storage for staging. In dev, the local
+// raw file can still be shared manually.
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
@@ -23,16 +22,12 @@ import { EEG_SAMPLE_RATE_HZ } from '../../../lib/ble/constants';
 import { transmitSession } from '../../../lib/cloud/cloudSync';
 import { MIN_STAGING_MIN, MIN_STAGING_SEC } from '../../../lib/cloud/recoveryMath';
 import { exportRecordingBundle } from '../../../lib/files/recordingBundleExport';
-import { TesterLogSheet } from './TesterLogSheet';
-import { useDiagnostics } from '../../../state/diagnostics';
-import { shouldCaptureRaw } from '../../../lib/ble/diagnosticCapture';
-import { isTesterLogComplete } from '../../../lib/cloud/sessionMetadata';
 import type { RootStackParamList } from '../../../navigation/types';
 
 // Holds the just-finished local recording so the UI can offer a share button.
 type SavedRecording = {
   sessionId: string;
-  eegUri: string;
+  rawUri: string;
   samples: number;
   durationSec: number;
   startedAtMs: number;
@@ -49,13 +44,6 @@ export function RecordingCard({ idleFooter }: { idleFooter?: React.ReactNode }) 
   const [busy, setBusy] = useState<'idle' | 'starting' | 'stopping'>('idle');
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState<SavedRecording | null>(null);
-  // Diagnostic raw capture: when on, the tester log must be complete before Start
-  // (so a night is never recorded with un-comparable, unlogged conditions).
-  const diagnosticCapture = useDiagnostics((s) => s.diagnosticCapture);
-  const lastTesterLog = useDiagnostics((s) => s.lastTesterLog);
-  const captureRaw = shouldCaptureRaw(diagnosticCapture);
-  const logComplete = isTesterLogComplete(lastTesterLog);
-  const [logOpen, setLogOpen] = useState(false);
   // Cloud sync of the just-finished recording. This screen only reflects the
   // phone handoff (upload + sessions row finalize), not backend QC outcome.
   const [sync, setSync] = useState<'idle' | 'uploading' | 'done' | 'error'>('idle');
@@ -88,13 +76,6 @@ export function RecordingCard({ idleFooter }: { idleFooter?: React.ReactNode }) 
       setError('Pair your Neurex device first.');
       return;
     }
-    // A diagnostic capture must have its conditions logged — otherwise the night
-    // is un-comparable. Block Start and open the log instead of recording blind.
-    if (captureRaw && !logComplete) {
-      setError('Log the recording conditions before starting a diagnostic capture.');
-      setLogOpen(true);
-      return;
-    }
     setError(null);
     setBusy('starting');
     try {
@@ -104,7 +85,7 @@ export function RecordingCard({ idleFooter }: { idleFooter?: React.ReactNode }) 
     } finally {
       setBusy('idle');
     }
-  }, [pairedDeviceId, pairedSerial, captureRaw, logComplete]);
+  }, [pairedDeviceId, pairedSerial]);
 
   const onStop = useCallback(async () => {
     setBusy('stopping');
@@ -129,7 +110,7 @@ export function RecordingCard({ idleFooter }: { idleFooter?: React.ReactNode }) 
       const endedEarly = wallClockSec - sampleDurationSec > 10 * 60;
       setSaved({
         sessionId: result.sessionId,
-        eegUri: result.eegUri,
+        rawUri: result.rawUri,
         samples: result.stats.samples,
         durationSec: Math.floor(sampleDurationSec),
         startedAtMs,
@@ -342,7 +323,7 @@ export function RecordingCard({ idleFooter }: { idleFooter?: React.ReactNode }) 
           ) : null}
 
           {__DEV__ ? (
-            <Button label="Share debug file" variant="ghost" onPress={() => onShare(saved.eegUri)} />
+            <Button label="Share raw file" variant="ghost" onPress={() => onShare(saved.rawUri)} />
           ) : null}
           <Button
             label="Done"
@@ -387,15 +368,7 @@ export function RecordingCard({ idleFooter }: { idleFooter?: React.ReactNode }) 
         <Text style={styles.windDownLabel}>Wind down</Text>
       </Pressable>
       {error ? <Text style={styles.error}>{error}</Text> : null}
-      {captureRaw ? (
-        <Pressable onPress={() => setLogOpen(true)} hitSlop={8} accessibilityRole="button">
-          <Text style={[styles.diagRow, { color: logComplete ? colors.textTertiary : colors.warning }]}>
-            {logComplete ? '✓ conditions logged · edit' : '⚠ log recording conditions'}
-          </Text>
-        </Pressable>
-      ) : null}
       {idleFooter ? <View style={styles.idleFooter}>{idleFooter}</View> : null}
-      <TesterLogSheet visible={logOpen} onClose={() => setLogOpen(false)} />
     </View>
   );
 }

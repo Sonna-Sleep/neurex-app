@@ -5,8 +5,6 @@ import appConfig from '../../../app.json';
 
 import { getSupabase } from '../auth/supabase';
 import type { StreamStats } from '../ble/types';
-import { CHUNK_SECONDS, CHUNKED_UPLOAD_ENABLED } from '../config';
-import { fileQueueStore } from './chunkUploadStore';
 import {
   buildStreamStatsPayload,
   type StreamStatsStopReason,
@@ -43,18 +41,11 @@ function appBuild(): number | null {
   return appConfig.expo.android?.versionCode ?? null;
 }
 
-function queuedChunkCount(sessionId: string): number {
-  return fileQueueStore.load().filter((task) => task.sessionId === sessionId).length;
-}
-
-async function confirmedChunkCount(
-  prefix?: string | null,
-  stream: 'eeg' | 'raw' = 'eeg',
-): Promise<number | null> {
+async function confirmedRawSegmentCount(prefix?: string | null): Promise<number | null> {
   if (!prefix) return null;
   const supabase = getSupabase();
   if (!supabase) return null;
-  const dir = `${prefix}/segments/${stream}`;
+  const dir = `${prefix}/segments/raw`;
   let total = 0;
   const pageSize = 100;
   for (let offset = 0; ; offset += pageSize) {
@@ -92,11 +83,7 @@ export async function writeStreamStatsSidecar(input: WriteStreamStatsInput): Pro
     endMs: input.endMs,
     stopReason: input.stopReason,
     stats: input.stats,
-    chunkedUploadEnabled: CHUNKED_UPLOAD_ENABLED,
-    chunkSeconds: CHUNK_SECONDS,
-    queuedChunkCount: queuedChunkCount(input.sessionId),
-    confirmedChunkCount: await confirmedChunkCount(input.prefix),
-    confirmedRawChunkCount: await confirmedChunkCount(input.prefix, 'raw'),
+    confirmedRawSegmentCount: await confirmedRawSegmentCount(input.prefix),
     appVersion: appConfig.expo.version,
     appBuild: appBuild(),
   });
@@ -119,9 +106,7 @@ export async function refreshStreamStatsSidecarUploadCounts(
   if (!existing) return;
   writeJson(sessionId, file, {
     ...existing,
-    queuedChunkCount: queuedChunkCount(sessionId),
-    confirmedChunkCount: await confirmedChunkCount(prefix),
-    confirmedRawChunkCount: await confirmedChunkCount(prefix, 'raw'),
+    confirmedRawSegmentCount: await confirmedRawSegmentCount(prefix),
     ...(raw?.rawUploaded !== undefined ? { rawUploaded: raw.rawUploaded } : {}),
     ...(raw?.rawSha256 ? { rawSha256: raw.rawSha256 } : {}),
   });

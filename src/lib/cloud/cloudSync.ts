@@ -1,12 +1,12 @@
 // Cloud sync client for the "phone = transmitter" pipeline.
 //
-// Ships a recording to Supabase Storage as ordered segment chunks, finalizes
+// Ships RAW.BIN to Supabase Storage as ordered segment chunks, finalizes
 // the session (which the backend webhook turns into the unified QC report and
 // beta sleep staging), deletes the local copy once the cloud confirms it, and
 // exposes artifact download-on-demand + live result delivery.
 //
 // Storage layout for normal QC:
-//   {uid}/{readable-label}/segments/eeg/segNNNN.bin
+//   {uid}/{readable-label}/segments/raw/segNNNN.bin
 // The backend concatenates these in memory; storage stays segment-shaped.
 
 import { File, Directory, Paths } from 'expo-file-system';
@@ -15,6 +15,7 @@ import { AppState, Platform } from 'react-native';
 import appConfig from '../../../app.json';
 
 import { getSupabase } from '../auth/supabase';
+import { RAW_RECORD_BYTES } from '../ble/rawRecord';
 import type { DeviceScaleInfo } from '../ble/scale';
 import { manifestFile } from '../ble/recordingManifest';
 import { supabaseSessionRepo } from '../repos/supabase';
@@ -36,10 +37,8 @@ export { uploadLockStats } from './uploadLock';
 
 export const RECORDINGS_BUCKET = 'recordings';
 
-// On-disk bytes per sample (must match real.ts encoders + backend decoders).
-//   eeg = 8  (uint32 ms + float32 fp1_uV)
-//   raw = 40 (uint32 ms + uint8 seq + 3 status + 8×int32 counts) — RAW_RECORD_BYTES
-const SAMPLE_BYTES = { eeg: 8, raw: 40 } as const;
+// On-disk bytes per sample (must match rawRecord.ts + backend decoders).
+const SAMPLE_BYTES = { raw: RAW_RECORD_BYTES } as const;
 export type Stream = keyof typeof SAMPLE_BYTES;
 
 // ~5 minutes per segment at 250 Hz — fine-grained crash protection without
@@ -123,10 +122,9 @@ export function readableLabel(
 /**
  * Length-free storage label for a recording whose end isn't known yet:
  *   2026-06-27_4-27PM_White_d679e2   (date _ local time _ device _ short-id)
- * Segments-first upload ships chunks DURING the night — before endMs exists —
- * so the prefix must be derivable at session start and stay STABLE for every
- * chunk + the eventual finalize. The DB row carries start_ms/end_ms; the Storage
- * folder carries a readable local start time, device tag, and short session id.
+ * Kept for callers that need a stable label before endMs exists. The DB row
+ * carries start_ms/end_ms; the Storage folder carries a readable local start
+ * time, device tag, and short session id.
  */
 export function readableLabelStable(sessionId: string, startMs: number, serial?: string): string {
   const d = new Date(startMs);
@@ -274,8 +272,8 @@ export async function uploadFileAsSegments(
   if (!file.exists) return { stream, uploaded: 0, sha256: '' };
 
   return withUploadLock(async () => {
-    // Resume: don't re-send segments already in Storage (a 9.6h night is ~115
-    // EEG objects — a retry should pick up where it left off).
+    // Resume: don't re-send segments already in Storage; a retry should pick up
+    // where it left off.
     const already = await existingSegments(prefix, stream);
 
     // Memory-safe: read one segment-sized chunk at a time through a file handle
@@ -346,8 +344,6 @@ export type FinalizeInput = {
   rawSha256?: string | null;
   /** Storage prefix of the raw stream (provenance only). */
   rawStoragePath?: string | null;
-  /** Old imported EEG.BIN nights may be finalized without raw; new recordings may not. */
-  allowMissingRawForLegacy?: boolean;
 };
 
 function recordingLabel(startMs: number): string {
@@ -418,7 +414,7 @@ function isMissingColumnError(error: { code?: string; message?: string }): boole
 export async function finalizeSession(input: FinalizeInput, prefix: string): Promise<void> {
   const supabase = getSupabase();
   if (!supabase) throw new NotAuthedError();
-  if (!hasRawProvenance(input) && !input.allowMissingRawForLegacy) {
+  if (!hasRawProvenance(input)) {
     throw new Error('finalize blocked: RAW.BIN upload/hash is required');
   }
   const uid = await currentUserId();
@@ -434,8 +430,8 @@ export async function finalizeSession(input: FinalizeInput, prefix: string): Pro
   const readable = {
     recording_label: recordingLabel(input.startMs),
   };
-  // raw_sha256/raw_storage_path ride every non-legacy insert. The additive
-  // fallback may drop optional metadata columns, but it must not drop raw_sha256.
+  // raw_sha256/raw_storage_path ride every insert. The additive fallback may
+  // drop optional metadata columns, but it must not drop raw_sha256.
   const full = sessionRowWithRaw(
     { ...core, ...readable, ...readFinalizeMetadata(input.sessionId) },
     { rawSha256: input.rawSha256, rawStoragePath: input.rawStoragePath },
@@ -473,49 +469,25 @@ export function deleteLocalSession(sessionId: string): void {
 }
 
 /**
- * One-shot: upload a session's local recording artifacts, finalize, then delete
- * the local copy. New recordings require RAW.BIN + raw_sha256; legacy EEG.BIN
- * imports may still finalize without raw.
+ * One-shot: upload a session's RAW.BIN, finalize, then delete the local copy.
  */
 export async function transmitSession(input: FinalizeInput): Promise<string> {
   const dir = new Directory(Paths.document, 'sessions', input.sessionId);
   if (!dir.exists) throw new Error(`no local session ${input.sessionId}`);
-
-  // Segments-first recording (segments/eeg, no local EEG.BIN): route through the
-  // chunk pipeline, which uploads any unconfirmed segments and finalizes ONLY
-  // when the local tail is fully in the cloud — so it never finalizes + deletes
-  // unconfirmed data the way the legacy EEG.BIN fallback would.
-  // Dynamic import avoids a static cloudSync ↔ chunkRecovery cycle.
-  const segEeg = new Directory(new Directory(dir, 'segments'), 'eeg');
-  if (segEeg.exists) {
-    const { transmitChunkedSession } = await import('./chunkRecovery');
-    return transmitChunkedSession(input);
-  }
 
   // {user_id}/{readable label} — account folder stays the opaque uid; the
   // session folder is human-readable date_time_device_shortid.
   const uid = await currentUserId();
   const prefix = `${uid}/${readableLabel(input.sessionId, input.startMs, input.endMs)}`;
 
-  // Legacy fallback: upload the completed local EEG.BIN as ordered cloud
-  // segments. New normal recordings use chunked sessions above and require raw;
-  // this path remains for old imported nights and emergency EEG.BIN captures.
-  const eeg = new File(dir, 'EEG.BIN');
-  await uploadFileAsSegments(prefix, 'eeg', eeg);
-  // Required raw ground truth, uploaded as a parallel 'raw' segment stream
-  // ({prefix}/segments/raw/segNNNN.bin → backend reads it in order). NOTE: this
-  // post-session path (and the eeg upload above) writes directly to Supabase
-  // Storage with conflict-safe segment paths:
-  // a retry may accept identical existing bytes, but never overwrites different
-  // bytes at the same segNNNN.bin. The live chunked-recording eeg stream still has
-  // the stronger /ingest sha256 confirmation before local delete.
-  let rawSha256: string | null = null;
+  // Required raw stream ({prefix}/segments/raw/segNNNN.bin → backend reads it in
+  // order). A retry may accept identical existing bytes, but never overwrites
+  // different bytes at the same segNNNN.bin.
   const rawBin = new File(dir, 'RAW.BIN');
-  if (rawBin.exists) {
-    const res = await uploadFileAsSegments(prefix, 'raw', rawBin);
-    rawSha256 = res.sha256 || null;
-    if (!rawSha256) throw new Error('raw upload produced no sha256');
-  }
+  if (!rawBin.exists || rawBin.size <= 0) throw new Error('raw upload required: missing RAW.BIN');
+  const res = await uploadFileAsSegments(prefix, 'raw', rawBin);
+  const rawSha256 = res.sha256 || null;
+  if (!rawSha256) throw new Error('raw upload produced no sha256');
   // Self-describing scale/provenance sidecar (scale.json — separate from the
   // recovery meta.json) uploaded BEFORE finalize so the backend sees it when
   // staging. Best-effort: a missing/failed sidecar must not lose the night
@@ -552,8 +524,7 @@ export async function transmitSession(input: FinalizeInput): Promise<string> {
     {
       ...input,
       rawSha256,
-      rawStoragePath: rawSha256 ? `${prefix}/segments/raw` : null,
-      allowMissingRawForLegacy: !rawBin.exists,
+      rawStoragePath: `${prefix}/segments/raw`,
     },
     prefix,
   );
@@ -564,8 +535,8 @@ export async function transmitSession(input: FinalizeInput): Promise<string> {
 /**
  * Download a whole-file artifact back to the phone, on demand.
  * `prefix` is the session's storage_prefix ({user_id}/{readable label}).
- * Normal segment-first QC sessions may not have this root file unless it was a
- * legacy upload or a raw-derived reprocess artifact.
+ * Root files are usually generated artifacts; uploaded recordings live under
+ * segments/raw.
  */
 export async function downloadRaw(prefix: string, stream: Stream): Promise<string> {
   const supabase = getSupabase();

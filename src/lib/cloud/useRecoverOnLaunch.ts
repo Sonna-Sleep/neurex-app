@@ -1,7 +1,6 @@
 import { useEffect, useRef } from 'react';
 
 import { useSession } from '../../state/session';
-import { recoverChunkedSessions } from './chunkRecovery';
 import { recoverAll } from './recovery';
 
 /**
@@ -25,9 +24,6 @@ export function useRecoverOnLaunch(): void {
     if (!authReady || !signedIn) return;
     if (streaming) return; // never touch the live session's file mid-recording
     ran.current = true;
-    // Legacy single-file nights (EEG.BIN) + crashed segments-first nights (segments/eeg).
-    // Disjoint layouts, so both run; each is independently idempotent.
     recoverAll(null).catch(() => undefined);
-    recoverChunkedSessions(null).catch(() => undefined);
   }, [authReady, signedIn, streaming]);
 }

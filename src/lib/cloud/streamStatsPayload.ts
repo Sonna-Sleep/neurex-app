@@ -14,11 +14,7 @@ export type StreamStatsPayloadInput = {
   endMs: number;
   stopReason: StreamStatsStopReason;
   stats?: Partial<StreamStats> | null;
-  chunkedUploadEnabled: boolean;
-  chunkSeconds: number;
-  queuedChunkCount: number;
-  confirmedChunkCount: number | null;
-  confirmedRawChunkCount: number | null;
+  confirmedRawSegmentCount: number | null;
   appVersion: string;
   appBuild: number | null;
   createdAtMs?: number;
@@ -50,11 +46,7 @@ export function buildStreamStatsPayload(input: StreamStatsPayloadInput) {
     lastSeq: stats.lastSeq == null ? null : num(stats.lastSeq),
     generation: num(stats.generation),
     lastBaseMs: stats.lastBaseMs == null ? null : num(stats.lastBaseMs),
-    chunkedUploadEnabled: input.chunkedUploadEnabled,
-    chunkSeconds: input.chunkSeconds,
-    queuedChunkCount: input.queuedChunkCount,
-    confirmedChunkCount: input.confirmedChunkCount,
-    confirmedRawChunkCount: input.confirmedRawChunkCount,
+    confirmedRawSegmentCount: input.confirmedRawSegmentCount,
     rawRequired: stats.rawRequired ?? null,
     rawOpened: stats.rawOpened ?? null,
     rawBytesWritten: num(stats.rawBytesWritten),

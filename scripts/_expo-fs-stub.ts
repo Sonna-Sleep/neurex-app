@@ -4,13 +4,8 @@
 // These stubs all exist for the same reason — they resolve to React-Native
 // source (or pull the whole RN graph) that node cannot parse:
 //   - `expo-file-system`: package main is RN TS source with no node build.
-//   - `expo-file-system/legacy`: imported by the chunk-upload driver for
-//     uploadAsync; profile/recovery smokes only need the module to load.
 //   - `@react-native-async-storage/async-storage`: session/recovery state
 //     persists through AsyncStorage in the app, but smokes use in-memory state.
-//   - `expo-crypto`: chunkUploadStore imports it for hashing; tests that need
-//     the hash can use the node-backed digest below without loading Expo native
-//     modules.
 //   - `react-native` / `expo-notifications`: pulled in transitively via
 //     session.ts's signOut -> clearPushTokenRegistration (registerPushToken.ts). Their
 //     package main is RN/ESM TS source node can't parse. The smokes never call

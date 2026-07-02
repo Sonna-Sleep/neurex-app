@@ -3,13 +3,9 @@
 // Flow:
 //   1. scan(): scoped by NEUREX_SERVICE_UUID (Apple-compliant for background BLE).
 //   2. connect(deviceId, { autoConnect: true }): MTU bump to fit a 226 B packet.
-//   3. startStream(sessionId, cb): subscribe to the notify characteristic,
-//      decode each 226-byte packet, append FP1 samples to rolling segments under
+//   3. startStream(sessionId, cb): subscribe to the notify characteristic and
+//      append the all-channel raw integer stream to RAW.BIN under
 //      FileSystem.documentDirectory/sessions/<sessionId>/.
-//
-// On-disk sample format is byte-identical to tools/capture/ble_stream_recv.py in
-// the algorithms repo, so existing Neurex QC/staging tooling can consume ordered
-// segment concatenation without changes.
 //
 // Best-effort, lossy by design: BLE drops are unavoidable. Drops surface as
 // onDrop callbacks + StreamStats counters; reconnect resumes the same files
@@ -33,10 +29,9 @@ import {
   TIME_GAP_REPORT_THRESHOLD_MS,
 } from './constants';
 import { classifyResume, parsePacket } from './packet';
-import { encodeRawPacket, rawHeader } from './rawRecord';
+import { encodeRawPacket, rawHeader, RAW_RECORD_BYTES } from './rawRecord';
 import { activeChannels, FALLBACK_SCALE, parseScaleInfo, scaleProvenance } from './scale';
 import type { ActiveChannel, DeviceScaleInfo } from './scale';
-import { segObjectName, segThresholdBytes, shouldRollSeg } from './segRoll';
 import { RecordingManifestTracker, readRecordingManifest } from './recordingManifest';
 import type {
   BleClient,
@@ -44,12 +39,10 @@ import type {
   ConnectOpts,
   FoundDevice,
   ParsedPacket,
-  SegmentClosed,
   StreamCallbacks,
   StreamHandle,
   StreamStats,
 } from './types';
-import { CHUNK_SECONDS, CHUNKED_UPLOAD_ENABLED } from '../config';
 
 // ── helpers ────────────────────────────────────────────────────────────────
 
@@ -174,22 +167,6 @@ class ContigTracker {
 
 // ── packet parser ──────────────────────────────────────────────────────────
 
-// ── on-disk encoder (matches Python struct '<If') ─────────────────────────
-
-const EEG_RECORD_BYTES = 8; // uint32 ms + float32 fp1_uV
-
-function encodePacketEeg(packet: ParsedPacket): Uint8Array {
-  const n = packet.samples.length; // 8 or 18 — derived per packet, never hardcoded
-  const buf = new ArrayBuffer(n * EEG_RECORD_BYTES);
-  const view = new DataView(buf);
-  for (let i = 0; i < n; i++) {
-    const s = packet.samples[i];
-    view.setUint32(i * EEG_RECORD_BYTES + 0, s.ms, true);
-    view.setFloat32(i * EEG_RECORD_BYTES + 4, s.fp1_uV, true);
-  }
-  return new Uint8Array(buf);
-}
-
 // ── append-only file wrapper ───────────────────────────────────────────────
 //
 // Wraps the SDK-54 modular FileHandle. We buffer ~1 second's worth of bytes
@@ -267,135 +244,7 @@ class AppendingFile {
   }
 }
 
-// ── sample sink (rolling segments, or legacy EEG.BIN fallback) ─────────────
-//
-// startStream writes through this interface so the hot path (onValue) is
-// identical whether we're writing rolling segNNNN.bin chunks (default) or
-// appending to a single EEG.BIN fallback.
-interface SampleSink {
-  /** URI of the file currently being written (the open segment, in roll mode). */
-  readonly uri: string;
-  appendChunk(chunk: Uint8Array): void;
-  flush(): void;
-  /** Flush + close. In roll mode, also emits the final (partial) segment. */
-  close(): void;
-}
-
-/** Next unused segment index in a session's segments/eeg dir, so a resume after
- * a crash/restore continues past existing chunks instead of overwriting them. */
-function nextSegIndex(eegDir: Directory): number {
-  let max = -1;
-  try {
-    for (const item of eegDir.list()) {
-      const name = item.uri.replace(/\/+$/, '').split('/').pop() ?? '';
-      const m = /^seg(\d{4})\.bin$/.exec(name);
-      if (m) max = Math.max(max, parseInt(m[1], 10));
-    }
-  } catch {
-    /* empty / unreadable dir → start at 0 */
-  }
-  return max + 1;
-}
-
-// Rolling-segment writer for segments-first upload. Writes whole packets into
-// the current segNNNN.bin and, once it reaches the byte threshold, closes it (on
-// the whole-packet boundary — lossless) and opens the next one, firing
-// onSegmentClosed so the driver can hash + upload + delete-after-confirm. Each
-// segment it creates is fresh (starts at 0 bytes), so the reported byteLength
-// equals the file size.
-class RollingSegWriter implements SampleSink {
-  private readonly eegDir: Directory;
-  private readonly thresholdBytes: number;
-  private readonly flushBytes: number;
-  private readonly onSegmentClosed?: (seg: SegmentClosed) => void;
-  private readonly onSegmentOpened?: (index: number) => void;
-  private readonly onSegmentBytes?: (bytes: number) => void;
-  private current: AppendingFile;
-  private index: number;
-  private curBytes = 0;
-
-  private constructor(
-    eegDir: Directory,
-    startIndex: number,
-    thresholdBytes: number,
-    flushBytes: number,
-    onSegmentClosed?: (seg: SegmentClosed) => void,
-    onSegmentOpened?: (index: number) => void,
-    onSegmentBytes?: (bytes: number) => void,
-  ) {
-    this.eegDir = eegDir;
-    this.index = startIndex;
-    this.thresholdBytes = thresholdBytes;
-    this.flushBytes = flushBytes;
-    this.onSegmentClosed = onSegmentClosed;
-    this.onSegmentOpened = onSegmentOpened;
-    this.onSegmentBytes = onSegmentBytes;
-    this.current = AppendingFile.open(eegDir, segObjectName(startIndex), flushBytes);
-    this.onSegmentOpened?.(startIndex);
-  }
-
-  static open(
-    sessionDir: Directory,
-    thresholdBytes: number,
-    onSegmentClosed?: (seg: SegmentClosed) => void,
-    startIndex?: number,
-    onSegmentOpened?: (index: number) => void,
-    onSegmentBytes?: (bytes: number) => void,
-    flushBytes = 2048,
-  ): RollingSegWriter {
-    // Mirror the cloud layout (<prefix>/segments/eeg/segNNNN.bin) on disk so
-    // recovery + assembly are symmetric.
-    const segDir = new Directory(sessionDir, 'segments');
-    const eegDir = new Directory(segDir, 'eeg');
-    if (!eegDir.exists) eegDir.create({ intermediates: true });
-    return new RollingSegWriter(
-      eegDir,
-      Math.max(startIndex ?? 0, nextSegIndex(eegDir)),
-      thresholdBytes,
-      flushBytes,
-      onSegmentClosed,
-      onSegmentOpened,
-      onSegmentBytes,
-    );
-  }
-
-  get uri(): string {
-    return this.current.uri;
-  }
-
-  appendChunk(chunk: Uint8Array): void {
-    this.current.appendChunk(chunk);
-    this.curBytes += chunk.length;
-    this.onSegmentBytes?.(chunk.length);
-    // Roll AFTER a whole packet so the boundary lands between samples (lossless).
-    if (shouldRollSeg(this.curBytes, this.thresholdBytes)) this.roll();
-  }
-
-  private roll(): void {
-    const closedUri = this.current.uri;
-    const closedBytes = this.curBytes;
-    const closedIndex = this.index;
-    this.current.close(); // flush + close the finished segment
-    this.index += 1;
-    this.curBytes = 0;
-    this.current = AppendingFile.open(this.eegDir, segObjectName(this.index), this.flushBytes);
-    this.onSegmentClosed?.({ index: closedIndex, uri: closedUri, byteLength: closedBytes });
-    this.onSegmentOpened?.(this.index);
-  }
-
-  flush(): void {
-    this.current.flush();
-  }
-
-  close(): void {
-    const uri = this.current.uri;
-    const bytes = this.curBytes;
-    const index = this.index;
-    this.current.close();
-    // Emit the final partial segment so the night's tail uploads too.
-    if (bytes > 0) this.onSegmentClosed?.({ index, uri, byteLength: bytes });
-  }
-}
+// startStream writes exactly one sample file: RAW.BIN.
 
 // ── BleClient implementation ───────────────────────────────────────────────
 
@@ -403,16 +252,6 @@ class NotReadyError extends Error {
   constructor(stage: string) {
     super(`BLE ${stage} unavailable — native module not loaded (Expo Go?)`);
     this.name = 'NotReadyError';
-  }
-}
-
-/** Thrown when appending decoded samples to disk fails (storage full / I/O
- * error). FATAL — the recording stops; whatever was already flushed stays on
- * disk and is still uploadable. */
-export class StorageWriteError extends Error {
-  constructor(detail?: string) {
-    super(`Storage full — recording stopped${detail ? ` (${detail})` : ''}.`);
-    this.name = 'StorageWriteError';
   }
 }
 
@@ -523,8 +362,7 @@ export const realBleClient: BleClient = {
 
     // Resolve the device montage once: which physical channel carries which role
     // (schema v3 channel_role[] → Fp1/Fp2/EOG-L/EOG-R). Passed to parsePacket so
-    // every sample carries the full montage in sample.channels. On pre-v3
-    // firmware this is just the single Fp1 channel at fp1Index (back-compat).
+    // every sample carries the full montage in sample.channels.
     const montage: ActiveChannel[] = activeChannels(deviceScale);
     if (__DEV__)
       console.log(
@@ -585,30 +423,10 @@ export const realBleClient: BleClient = {
           sessionId,
           startedAtMs: manifestStartedAtMs,
           sampleRateHz: deviceScale.sampleRateHz,
-          eegRecordBytes: EEG_RECORD_BYTES,
+          rawRecordBytes: RAW_RECORD_BYTES,
         });
 
-        // Segments-first upload: roll segNNNN.bin chunks that upload +
-        // delete-after-confirm DURING the night. EXPO_PUBLIC_CHUNKED_UPLOAD=0
-        // falls back to one local EEG.BIN. Either way the hot path writes via
-        // SampleSink.
-        if (__DEV__)
-          console.log(
-            `[F2C] writer=${CHUNKED_UPLOAD_ENABLED ? 'rolling-seg' : 'EEG.BIN'} chunkSec=${CHUNK_SECONDS} sr=${deviceScale.sampleRateHz} thr=${segThresholdBytes(CHUNK_SECONDS, deviceScale.sampleRateHz)}B`,
-          );
-        const eeg: SampleSink = CHUNKED_UPLOAD_ENABLED
-          ? RollingSegWriter.open(
-              sessionDir,
-              segThresholdBytes(CHUNK_SECONDS, deviceScale.sampleRateHz),
-              (seg) => {
-                manifest.markSegmentClosed(seg.index, seg.byteLength);
-                cb.onSegmentClosed?.(seg);
-              },
-              manifest.nextSegmentIndex(),
-              (index) => manifest.markSegmentOpened(index),
-              (bytes) => manifest.addCurrentSegmentBytes(bytes),
-            )
-          : AppendingFile.open(sessionDir, 'EEG.BIN');
+        if (__DEV__) console.log(`[ble/real] writer=RAW.BIN sr=${deviceScale.sampleRateHz}`);
 
         // Self-describing SCALE sidecar — scale.json, DELIBERATELY distinct from
         // recovery.ts's meta.json (which owns startedAtMs/serial for crash
@@ -622,7 +440,7 @@ export const realBleClient: BleClient = {
             sessionId,
             sampleRateHz: deviceScale.sampleRateHz,
             sampleIntervalMs: EEG_SAMPLE_INTERVAL_MS,
-            eegRecordBytes: EEG_RECORD_BYTES,
+            rawRecordBytes: RAW_RECORD_BYTES,
             scale: scaleProvenance(deviceScale),
           };
           const scaleFile = new File(sessionDir, 'scale.json');
@@ -633,11 +451,9 @@ export const realBleClient: BleClient = {
           if (__DEV__) console.warn('[ble/real] scale.json write failed (non-fatal):', e);
         }
 
-        // RAW.BIN — the immutable ALL-channel integer ground truth, written
-        // lockstep with accepted packets. This is the required sleep biosignal
-        // source the backend stages from; the FP1 eeg stream is only a legacy
-        // compatibility artifact. Raw open/write failure is fatal because a new
-        // successful recording must contain Fp1/Fp2/EOG-L/EOG-R recoverable data.
+        // RAW.BIN — the immutable all-channel integer stream, written lockstep
+        // with accepted packets. Raw open/write failure is fatal because every
+        // successful recording must contain recoverable Fp1/Fp2/EOG-L/EOG-R data.
         const rawBinFile = new File(sessionDir, 'RAW.BIN');
         const rawFresh = !rawBinFile.exists || (rawBinFile.size ?? 0) === 0;
         const stats: StreamStats = manifest.stats();
@@ -648,7 +464,7 @@ export const realBleClient: BleClient = {
         stats.rawUploaded = false;
         stats.rawSha256 = null;
         stats.rawFailureReason = null;
-        let raw: SampleSink;
+        let raw: AppendingFile;
         try {
           raw = AppendingFile.open(sessionDir, 'RAW.BIN');
           if (rawFresh) {
@@ -758,22 +574,9 @@ export const realBleClient: BleClient = {
             return;
           }
 
-          // Persist FIRST. Only count a sample once its bytes are handed to the
-          // file buffer — the old order bumped packets/samples BEFORE writing,
-          // so a storage-full failure looked like a healthy, climbing sample
-          // count while nothing reached disk (silent loss + misleading "green").
-          try {
-            eeg.appendChunk(encodePacketEeg(pkt));
-          } catch (e) {
-            // Fatal: storage full / I/O error. Stop processing further packets
-            // and surface it. Do NOT advance lastBaseMs (so a resume can retry
-            // this packet) and do NOT keep ticking the counters.
-            fatal = true;
-            cb.onError?.(new StorageWriteError((e as Error)?.message));
-            return;
-          }
-          // Raw ground truth, LOCKSTEP with eeg. Raw is required: a failed append
-          // stops the stream instead of silently degrading the night to FP1-only.
+          // Persist FIRST. Only count a sample once the all-channel raw bytes are
+          // handed to the file buffer. Raw is required: a failed append stops the
+          // stream instead of silently degrading the night.
           try {
             const rawChunk = encodeRawPacket(bytes, pkt.baseMs, pkt.seq);
             raw.appendChunk(rawChunk);
@@ -822,7 +625,7 @@ export const realBleClient: BleClient = {
             generation: stats.generation,
             lastBaseMs: pkt.baseMs,
             samples: pkt.samples.length,
-            bytesWritten: pkt.samples.length * EEG_RECORD_BYTES,
+            bytesWritten: pkt.samples.length * RAW_RECORD_BYTES,
           });
 
           // Advance the ACK frontier only over in-order packets. The tracker
@@ -841,7 +644,7 @@ export const realBleClient: BleClient = {
 
         return {
           sessionDir: sessionDir.uri,
-          eegUri: eeg.uri,
+          rawUri: raw.uri,
           async stop(): Promise<StreamStats> {
             if (stopped) return stats;
             stopped = true;
@@ -852,18 +655,17 @@ export const realBleClient: BleClient = {
               /* ignore */
             }
             try {
-              eeg.close();
-              manifest.flush();
-            } catch (e) {
-              if (__DEV__) console.warn('[ble/real] EEG close failed:', e);
-            }
-            try {
               raw?.close();
               stats.rawClosed = true;
             } catch (e) {
               const detail = (e as Error)?.message ?? String(e);
               stats.rawFailureReason = `raw close failed: ${detail}`;
               if (__DEV__) console.warn('[ble/real] RAW close failed:', e);
+            }
+            try {
+              manifest.flush();
+            } catch (e) {
+              if (__DEV__) console.warn('[ble/real] manifest flush failed:', e);
             }
             return stats;
           },
