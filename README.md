@@ -53,7 +53,6 @@ src/
 modules/
   neurex-foreground-service/   native Android module (keep recording alive)
 scripts/          smoke tests (BLE, segment upload, recovery, profile, support)
-docs/             Supabase, app review, listing, and legal notes
 ```
 
 ## Prerequisites

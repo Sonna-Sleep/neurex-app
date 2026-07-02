@@ -1,9 +1,8 @@
 // In-app legal/info content, rendered natively by LegalScreen (NOT opened in a
 // browser). Plain data so it's dependency-free and unit-testable in Node.
 //
-// The privacy text here MUST stay consistent with the hosted policy
-// (docs/legal/privacy-policy.md + the GitHub Pages copy that the App Store
-// listing links to). This module is the source for what users read inside the app.
+// This module is the source for what users read inside the app. Keep the hosted
+// policy and App Store listing aligned with this copy.
 
 export type LegalDocKey = 'privacy' | 'about';
 
