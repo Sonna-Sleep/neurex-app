@@ -26,6 +26,7 @@ import {
   RECOVERY_RESTORE_GRACE_MS,
 } from './recoveryMath';
 import { EEG_SAMPLE_RATE_HZ } from '../ble/constants';
+import { IMU_BIN_NAME, IMU_HEADER_BYTES, IMU_META_NAME } from '../ble/imuRecord';
 import { readRecordingManifest } from '../ble/recordingManifest';
 
 const ACTIVE_KEY = 'neurex-active-recording';
@@ -46,6 +47,16 @@ export type RecoverableRecording = {
   endMs: number;
   sizeBytes: number;
   serial?: string | null;
+};
+
+export type LocalRecordingInspection = RecoverableRecording & {
+  durationMs: number;
+  stageable: boolean;
+  hasScale: boolean;
+  hasManifest: boolean;
+  hasStreamStats: boolean;
+  hasImu: boolean;
+  hasImuMeta: boolean;
 };
 
 function sessionsDir(): Directory {
@@ -118,7 +129,85 @@ function readMeta(dir: Directory): RecordingMeta | null {
   }
 }
 
+function fileExists(dir: Directory, name: string): boolean {
+  try {
+    return new File(dir, name).exists;
+  } catch {
+    return false;
+  }
+}
+
+function fileSizeIfPresent(dir: Directory, name: string): number {
+  try {
+    const f = new File(dir, name);
+    return f.exists ? f.size : 0;
+  } catch {
+    return 0;
+  }
+}
+
 // ── scan + recover orphaned recordings ─────────────────────────────────────
+
+/** Inspect every local recording folder with a non-empty RAW.BIN. Unlike
+ * scanRecoverable(), this includes short/debug captures so the UI can always
+ * show what is still on the phone and export it if needed. */
+export function inspectLocalRecordings(activeSessionId?: string | null): LocalRecordingInspection[] {
+  const out: LocalRecordingInspection[] = [];
+  let items: (Directory | File)[];
+  try {
+    const dir = sessionsDir();
+    if (!dir.exists) return out;
+    items = dir.list();
+  } catch {
+    return out;
+  }
+
+  for (const item of items) {
+    if (!(item instanceof Directory)) continue;
+    const sessionId = item.uri.replace(/\/+$/, '').split('/').pop() ?? '';
+    if (!sessionId || sessionId === activeSessionId || sessionId.startsWith('__')) continue;
+
+    let raw: File;
+    try {
+      raw = new File(item, RAW_NAME);
+      if (!raw.exists || raw.size <= 0) continue;
+    } catch {
+      continue;
+    }
+
+    const sizeBytes = raw.size;
+    const meta = readMeta(item);
+    const manifest = readRecordingManifest(sessionId);
+    const sampleRateHz = manifest?.sampleRateHz ?? EEG_SAMPLE_RATE_HZ;
+    const rawBytesPerSample = manifest?.rawRecordBytes ?? null;
+    const durationMs = durationMsFromBytes(sizeBytes, sampleRateHz, rawBytesPerSample ?? undefined);
+    const timing = reconstructTiming({
+      sizeBytes,
+      sampleRateHz,
+      rawBytesPerSample,
+      modificationTimeMs: raw.modificationTime,
+      metaStartedAtMs: meta?.startedAtMs ?? (manifest?.startedAtMs || null),
+      nowMs: Date.now(),
+    });
+
+    out.push({
+      sessionId,
+      startedAtMs: timing.startedAtMs,
+      endMs: timing.endMs,
+      durationMs,
+      sizeBytes,
+      serial: meta?.serial ?? null,
+      stageable: isStageableDurationMs(durationMs),
+      hasScale: fileExists(item, 'scale.json'),
+      hasManifest: fileExists(item, 'recording_manifest.json'),
+      hasStreamStats: fileExists(item, 'stream_stats.json'),
+      hasImu: fileSizeIfPresent(item, IMU_BIN_NAME) > IMU_HEADER_BYTES,
+      hasImuMeta: fileExists(item, IMU_META_NAME),
+    });
+  }
+
+  return out.sort((a, b) => b.startedAtMs - a.startedAtMs);
+}
 
 /**
  * Find recordings on disk that were never uploaded: every session dir with a

@@ -2,12 +2,16 @@ import React, { useCallback, useMemo, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
+import * as Sharing from 'expo-sharing';
 
 import { colors, layout, radii, spacing, systemFontFamily } from '../../theme/tokens';
 import { Avatar } from '../../components/Avatar';
 import { useSession } from '../../state/session';
 import { ageFromDob } from '../../lib/profile';
 import { sessionRepo, type Session } from '../../lib/repos';
+import { transmitSession } from '../../lib/cloud/cloudSync';
+import { inspectLocalRecordings, type LocalRecordingInspection } from '../../lib/cloud/recovery';
+import { exportRecordingBundle } from '../../lib/files/recordingBundleExport';
 import type { LegalDocKey } from '../../lib/legalContent';
 import appConfig from '../../../app.json';
 import { DeleteAccountSection } from './DeleteAccountSection';
@@ -30,6 +34,29 @@ function fmtDur(min: number | null): string {
   const h = Math.floor(rounded / 60);
   const m = rounded % 60;
   return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
+
+function fmtBytes(bytes: number): string {
+  if (bytes >= 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`;
+  if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${bytes} B`;
+}
+
+function fmtDurationMs(ms: number): string {
+  const totalMin = Math.max(0, Math.round(ms / 60000));
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
+
+function fmtStarted(ms: number): string {
+  return new Date(ms).toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
 }
 
 function profileStats(sessions: Session[]) {
@@ -55,6 +82,9 @@ export function AccountScreen() {
   const [editing, setEditing] = useState(false);
   const [legalDoc, setLegalDoc] = useState<LegalDocKey | null>(null);
   const [support, setSupport] = useState(false);
+  const [localRecordings, setLocalRecordings] = useState<LocalRecordingInspection[]>([]);
+  const [localBusy, setLocalBusy] = useState<string | null>(null);
+  const [localError, setLocalError] = useState<string | null>(null);
 
   const loadStats = useCallback(async () => {
     try {
@@ -64,10 +94,15 @@ export function AccountScreen() {
     }
   }, []);
 
+  const loadLocalRecordings = useCallback(() => {
+    setLocalRecordings(inspectLocalRecordings(streaming?.sessionId ?? null));
+  }, [streaming?.sessionId]);
+
   useFocusEffect(
     useCallback(() => {
       void loadStats();
-    }, [loadStats]),
+      loadLocalRecordings();
+    }, [loadStats, loadLocalRecordings]),
   );
 
   const firstName = user?.firstName?.trim();
@@ -86,6 +121,57 @@ export function AccountScreen() {
     }
     signOut();
   }, [signOut, streaming]);
+
+  const onExportLocal = useCallback(
+    async (recording: LocalRecordingInspection) => {
+      const key = `export:${recording.sessionId}`;
+      setLocalBusy(key);
+      setLocalError(null);
+      try {
+        if (!(await Sharing.isAvailableAsync())) {
+          throw new Error('Sharing is not available on this device.');
+        }
+        const bundle = await exportRecordingBundle(recording.sessionId);
+        await Sharing.shareAsync(bundle.uri, {
+          mimeType: 'application/zip',
+          UTI: 'com.pkware.zip-archive',
+          dialogTitle: 'Export recording bundle',
+        });
+        loadLocalRecordings();
+      } catch (e) {
+        setLocalError((e as Error).message);
+      } finally {
+        setLocalBusy(null);
+      }
+    },
+    [loadLocalRecordings],
+  );
+
+  const onRetryLocal = useCallback(
+    async (recording: LocalRecordingInspection) => {
+      if (!recording.stageable) {
+        Alert.alert('Recording is short', 'Export is available, but cloud analysis starts at 10 minutes.');
+        return;
+      }
+      const key = `sync:${recording.sessionId}`;
+      setLocalBusy(key);
+      setLocalError(null);
+      try {
+        await transmitSession({
+          sessionId: recording.sessionId,
+          startMs: recording.startedAtMs,
+          endMs: recording.endMs,
+        });
+        loadLocalRecordings();
+        await loadStats();
+      } catch (e) {
+        setLocalError((e as Error).message);
+      } finally {
+        setLocalBusy(null);
+      }
+    },
+    [loadLocalRecordings, loadStats],
+  );
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -119,6 +205,16 @@ export function AccountScreen() {
           <ProfileStat value={stats.avgAsleep} label="Avg. asleep" />
           <ProfileStat value={stats.avgScore} label="Avg. score" />
         </View>
+
+        {localRecordings.length > 0 ? (
+          <SavedRecordingsPanel
+            recordings={localRecordings}
+            busyKey={localBusy}
+            error={localError}
+            onRetry={onRetryLocal}
+            onExport={onExportLocal}
+          />
+        ) : null}
 
         <View style={styles.card}>
           <Row label="Contact support" onPress={() => setSupport(true)} first />
@@ -166,6 +262,95 @@ function Row({ label, onPress, first }: { label: string; onPress: () => void; fi
     >
       <Text style={styles.rowLabel}>{label}</Text>
       <Text style={styles.chevron}>›</Text>
+    </Pressable>
+  );
+}
+
+function SavedRecordingsPanel({
+  recordings,
+  busyKey,
+  error,
+  onRetry,
+  onExport,
+}: {
+  recordings: LocalRecordingInspection[];
+  busyKey: string | null;
+  error: string | null;
+  onRetry: (recording: LocalRecordingInspection) => void;
+  onExport: (recording: LocalRecordingInspection) => void;
+}) {
+  return (
+    <View style={styles.localPanel}>
+      <View style={styles.localHeader}>
+        <Text style={styles.localTitle}>Saved recordings</Text>
+        <Text style={styles.localCount}>{recordings.length}</Text>
+      </View>
+      {error ? <Text style={styles.localError}>{error}</Text> : null}
+      {recordings.map((recording, index) => {
+        const syncKey = `sync:${recording.sessionId}`;
+        const exportKey = `export:${recording.sessionId}`;
+        const busy = busyKey === syncKey || busyKey === exportKey;
+        const flags = [
+          recording.hasScale ? 'scale' : null,
+          recording.hasManifest ? 'manifest' : null,
+          recording.hasStreamStats ? 'stats' : null,
+          recording.hasImu ? 'IMU' : null,
+        ].filter(Boolean);
+        return (
+          <View key={recording.sessionId} style={[styles.localItem, index > 0 && styles.localDivider]}>
+            <View style={styles.localItemTop}>
+              <View style={styles.localItemText}>
+                <Text style={styles.localName} numberOfLines={1}>
+                  {fmtStarted(recording.startedAtMs)}
+                </Text>
+                <Text style={styles.localMeta} numberOfLines={2}>
+                  {fmtDurationMs(recording.durationMs)} · {fmtBytes(recording.sizeBytes)}
+                  {flags.length ? ` · ${flags.join(', ')}` : ''}
+                </Text>
+              </View>
+              <Text style={[styles.localStatus, !recording.stageable && styles.localStatusMuted]}>
+                {recording.stageable ? 'Ready' : 'Short'}
+              </Text>
+            </View>
+            <View style={styles.localActions}>
+              <SmallAction
+                label={busyKey === syncKey ? 'Syncing' : 'Retry'}
+                disabled={busy}
+                onPress={() => onRetry(recording)}
+              />
+              <SmallAction
+                label={busyKey === exportKey ? 'Exporting' : 'Export'}
+                disabled={busy}
+                onPress={() => onExport(recording)}
+              />
+            </View>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+function SmallAction({
+  label,
+  disabled,
+  onPress,
+}: {
+  label: string;
+  disabled: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      style={({ pressed }) => [
+        styles.smallAction,
+        pressed && !disabled && styles.rowPressed,
+        disabled && styles.disabled,
+      ]}
+    >
+      <Text style={styles.smallActionText}>{label}</Text>
     </Pressable>
   );
 }
@@ -264,6 +449,106 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bgSurface,
     borderRadius: radii.card,
     paddingHorizontal: spacing.md,
+  },
+  localPanel: {
+    backgroundColor: colors.bgSurface,
+    borderRadius: radii.card,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    gap: spacing.sm,
+  },
+  localHeader: {
+    minHeight: 24,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  localTitle: {
+    fontFamily: systemFontFamily,
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: '600',
+    color: colors.textPrimary,
+  },
+  localCount: {
+    fontFamily: systemFontFamily,
+    fontSize: 13,
+    lineHeight: 18,
+    color: colors.textTertiary,
+  },
+  localError: {
+    fontFamily: systemFontFamily,
+    fontSize: 13,
+    lineHeight: 18,
+    color: colors.warning,
+  },
+  localItem: {
+    gap: spacing.sm,
+    paddingTop: spacing.sm,
+  },
+  localDivider: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.borderSubtle,
+    marginTop: spacing.xs,
+  },
+  localItemTop: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+  },
+  localItemText: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
+  },
+  localName: {
+    fontFamily: systemFontFamily,
+    fontSize: 14,
+    lineHeight: 19,
+    fontWeight: '600',
+    color: colors.textPrimary,
+  },
+  localMeta: {
+    fontFamily: systemFontFamily,
+    fontSize: 12,
+    lineHeight: 17,
+    color: colors.textSecondary,
+  },
+  localStatus: {
+    fontFamily: systemFontFamily,
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: '600',
+    color: colors.positive,
+  },
+  localStatusMuted: {
+    color: colors.textTertiary,
+  },
+  localActions: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  smallAction: {
+    minHeight: 36,
+    minWidth: 92,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radii.small,
+    borderWidth: 1,
+    borderColor: colors.borderDivider,
+    paddingHorizontal: spacing.md,
+  },
+  smallActionText: {
+    fontFamily: systemFontFamily,
+    fontSize: 13,
+    lineHeight: 17,
+    fontWeight: '600',
+    color: colors.textPrimary,
+  },
+  disabled: {
+    opacity: 0.45,
   },
   row: {
     flexDirection: 'row',
