@@ -17,7 +17,7 @@ import { AppState, Platform } from 'react-native';
 import appConfig from '../../../app.json';
 
 import { getSupabase } from '../auth/supabase';
-import { IMU_BIN_NAME, IMU_META_NAME } from '../ble/imuRecord';
+import { IMU_BIN_NAME, IMU_HEADER_BYTES, IMU_META_NAME } from '../ble/imuRecord';
 import type { DeviceScaleInfo } from '../ble/scale';
 import { manifestFile } from '../ble/recordingManifest';
 import { supabaseSessionRepo } from '../repos/supabase';
@@ -493,7 +493,8 @@ export async function transmitSession(input: FinalizeInput): Promise<string> {
   const imuBin = new File(dir, IMU_BIN_NAME);
   let imuSha256: string | null = null;
   let imuUploaded = false;
-  if (imuBin.exists && imuBin.size > 0) {
+  const hasImuSamples = imuBin.exists && imuBin.size > IMU_HEADER_BYTES;
+  if (hasImuSamples) {
     const imuRes = await uploadFileAsSegments(prefix, 'imu', imuBin);
     imuSha256 = imuRes.sha256 || null;
     if (!imuSha256) throw new Error('IMU upload produced no sha256');
@@ -513,10 +514,12 @@ export async function transmitSession(input: FinalizeInput): Promise<string> {
   } catch (e) {
     if (__DEV__) console.warn('[cloudSync] recording_manifest.json upload failed (non-fatal):', e);
   }
-  try {
-    await uploadSidecarIfPresent(prefix, new File(dir, IMU_META_NAME), IMU_META_NAME);
-  } catch (e) {
-    if (__DEV__) console.warn('[cloudSync] imu.json upload failed (non-fatal):', e);
+  if (hasImuSamples) {
+    try {
+      await uploadSidecarIfPresent(prefix, new File(dir, IMU_META_NAME), IMU_META_NAME);
+    } catch (e) {
+      if (__DEV__) console.warn('[cloudSync] imu.json upload failed (non-fatal):', e);
+    }
   }
   // App-side BLE/upload forensic sidecar. Best-effort, but written/uploaded
   // before finalize so the backend can include it in the one QC report.
