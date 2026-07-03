@@ -48,6 +48,16 @@ export const NEUREX_SCALE_INFO_BYTES_V4 = 30;
 // it when present as a separate IMU.BIN stream so RAW.BIN stays EEG/EOG only.
 export const NEUREX_IMU_NOTIFY_UUID = '6e6b0000-1000-8000-0078-65726e6b0005';
 
+// Alarm/control characteristic (write + write-no-response, same 6e6b… family;
+// firmware UUID 6e6b0006). The phone arms an ON-DEVICE sunrise countdown here
+// so the mask LEDs fire even if BLE drops overnight. Payload encoders and the
+// timing policy live in src/lib/ble/smartAlarm.ts. The characteristic exists
+// on every board running the new shared firmware but only boards with an LED
+// controller (WHITE) accept the write — everyone else rejects at the ATT
+// layer, which is why the app writes WITH response and treats failures as
+// best-effort.
+export const NEUREX_ALARM_CONTROL_UUID = '6e6b0000-1000-8000-0078-65726e6b0006';
+
 // How often the ACK loop writes the contiguous frontier. Firmware just needs
 // SOMETHING periodic to drain the ring, not a per-packet ACK.
 export const NEUREX_ACK_INTERVAL_MS = 250;
