@@ -45,6 +45,14 @@ import {
   readRecordingManifest,
   statsFromManifest,
 } from './recordingManifest';
+import {
+  encodeSetAlarm,
+  encodeCancel,
+  secondsUntilSunrise,
+  SUNRISE_RAMP_S,
+  SUNRISE_MAX_BRIGHTNESS,
+  SUNRISE_COLOR,
+} from './smartAlarm';
 
 // User-initiated session start: time-bounded so a device that's off or out of
 // range fails fast with an error instead of an infinite spinner. The background
@@ -256,6 +264,59 @@ function startWatchdog(): ReturnType<typeof setInterval> {
   }, WATCHDOG_INTERVAL_MS);
 }
 
+// Wake-light arming.
+// The device runs the sunrise countdown itself (survives BLE drops), so the
+// app's only job is to (re)arm with a freshly computed delay whenever it has a
+// live link: session start, every reconnect (also covers a device reboot,
+// which clears the RAM-only alarm), and iOS restore. All writes are
+// best-effort - the recording NEVER fails because of the wake light. The retry
+// schedule exists because the firmware's LED command queue comes up SECONDS
+// after BLE is connectable (~2-10 s normally, ~20 s worst case with chip
+// recovery), and the device reboots itself on faults - an arm sent too early
+// is rejected at the ATT layer and must be re-sent.
+const WAKE_ARM_RETRY_MS = [5_000, 15_000, 30_000];
+
+async function armWakeLight(device: ConnectedDevice, attempt = 0): Promise<void> {
+  const alarm = useSession.getState().wakeAlarm;
+  if (!alarm?.enabled || !device.alarmControlAvailable || !device.writeAlarmControl) return;
+  const delayS = secondsUntilSunrise(Date.now(), alarm);
+  try {
+    await device.writeAlarmControl(
+      encodeSetAlarm(delayS, SUNRISE_RAMP_S, SUNRISE_MAX_BRIGHTNESS, SUNRISE_COLOR),
+    );
+    if (__DEV__) console.log(`[stream] wake light armed - sunrise in ${delayS}s`);
+  } catch (e) {
+    if (__DEV__) console.warn(`[stream] wake-light arm failed (attempt ${attempt})`, e);
+    if (attempt < WAKE_ARM_RETRY_MS.length) {
+      setTimeout(() => {
+        // Only retry while THIS device is still the live session's link.
+        if (active?.device === device && !active.userStopped) {
+          void armWakeLight(device, attempt + 1);
+        }
+      }, WAKE_ARM_RETRY_MS[attempt]);
+    }
+  }
+}
+
+async function cancelWakeLight(device: ConnectedDevice): Promise<void> {
+  if (!device.alarmControlAvailable || !device.writeAlarmControl) return;
+  try {
+    await device.writeAlarmControl(encodeCancel());
+  } catch {
+    // Best-effort: at stop time the device may already be unreachable.
+  }
+}
+
+/** Re-sync the device to the CURRENT alarm while a session is live - called
+ * by the UI when the user edits or toggles the alarm mid-recording. SET
+ * replaces the pending countdown on the device; disabling sends CANCEL. */
+export async function syncWakeLightForActiveSession(): Promise<void> {
+  if (!active) return;
+  const alarm = useSession.getState().wakeAlarm;
+  if (alarm?.enabled) await armWakeLight(active.device);
+  else await cancelWakeLight(active.device);
+}
+
 export async function startSession(
   deviceId: string,
   serial?: string | null,
@@ -345,6 +406,7 @@ export async function startSession(
   };
 
   registerDisconnectWatch();
+  void armWakeLight(device);
 
   // Auto-end on a dead battery (Feature 3). The battery level (0x2A19) flows to
   // the store from a BLE callback even backgrounded, so this stays live with the
@@ -432,6 +494,7 @@ export async function resumeSessionAfterRestore(meta: RecordingMeta): Promise<vo
       terminalReason: null,
     };
     registerDisconnectWatch();
+    void armWakeLight(device);
     if (__DEV__) console.log('[stream] resumed session after iOS restore', sessionId);
   } catch (e) {
     if (__DEV__) console.warn('[stream] resume after restore failed', e);
@@ -533,7 +596,8 @@ async function reconnectLoop(): Promise<void> {
         active.abandonTimer = null;
       }
       useSession.getState().patchStreaming({ connection: 'connected' });
-      registerDisconnectWatch(); // re-arm for the new connection
+      registerDisconnectWatch(); // re-sync the current wake-light state for the new connection
+      void syncWakeLightForActiveSession();
       if (__DEV__) console.log(`[stream] reconnected after ${attempt} attempt(s)`);
       return;
     } catch (e) {
@@ -627,6 +691,9 @@ async function endSessionAuto(reason: 'battery' | 'device-lost'): Promise<void> 
     stopReason: reason,
     stats,
   }).catch(() => undefined);
+  // Deliberately no cancelWakeLight here: the recording ended (battery /
+  // device lost) but the user is still asleep - if the board is alive, the
+  // armed sunrise should still fire at wake time.
   await session.device.disconnect().catch(() => undefined);
   stopForegroundService();
   // No longer the active session to resume. If cloud handoff below fails, launch-
@@ -667,6 +734,7 @@ export async function stopSession(): Promise<StopResult | null> {
     stopReason: session.terminalReason ?? 'manual',
     stats,
   }).catch(() => undefined);
+  await cancelWakeLight(session.device);
   await session.device.disconnect().catch(() => undefined);
 
   stopForegroundService();
