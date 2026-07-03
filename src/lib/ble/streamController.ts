@@ -279,15 +279,15 @@ const WAKE_ARM_RETRY_MS = [5_000, 15_000, 30_000];
 async function armWakeLight(device: ConnectedDevice, attempt = 0): Promise<void> {
   const alarm = useSession.getState().wakeAlarm;
   if (!alarm?.enabled || !device.alarmControlAvailable || !device.writeAlarmControl) return;
-  const delayS = secondsUntilSunrise(Date.now(), alarm);
   try {
+    const delayS = secondsUntilSunrise(Date.now(), alarm);
     await device.writeAlarmControl(
       encodeSetAlarm(delayS, SUNRISE_RAMP_S, SUNRISE_MAX_BRIGHTNESS, SUNRISE_COLOR),
     );
     if (__DEV__) console.log(`[stream] wake light armed - sunrise in ${delayS}s`);
   } catch (e) {
     if (__DEV__) console.warn(`[stream] wake-light arm failed (attempt ${attempt})`, e);
-    if (attempt < WAKE_ARM_RETRY_MS.length) {
+    if (!(e instanceof RangeError) && attempt < WAKE_ARM_RETRY_MS.length) {
       setTimeout(() => {
         // Only retry while THIS device is still the live session's link.
         if (active?.device === device && !active.userStopped) {

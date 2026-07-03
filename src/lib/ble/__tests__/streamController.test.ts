@@ -1,4 +1,10 @@
-import { encodeCancel } from '../smartAlarm';
+import {
+  encodeCancel,
+  encodeSetAlarm,
+  SUNRISE_COLOR,
+  SUNRISE_MAX_BRIGHTNESS,
+  SUNRISE_RAMP_S,
+} from '../smartAlarm';
 
 const mockBleClient = {
   connect: jest.fn(),
@@ -50,6 +56,7 @@ const mockNotifyRecordingStopped = jest.fn();
 const mockWriteStreamStatsSidecar = jest.fn().mockResolvedValue(undefined);
 const mockTransmitSession = jest.fn().mockResolvedValue(undefined);
 const mockCheckDiskSpace = jest.fn(() => ({ ok: true }));
+const mockBatteryShouldStop = jest.fn(() => false);
 
 jest.mock('../index', () => ({
   bleClient: mockBleClient,
@@ -71,7 +78,7 @@ jest.mock('../foregroundService', () => ({
 
 jest.mock('../autoStop', () => ({
   DEVICE_ABANDONED_MS: 120_000,
-  batteryShouldStop: jest.fn(() => false),
+  batteryShouldStop: mockBatteryShouldStop,
 }));
 
 jest.mock('../backoff', () => ({
@@ -224,6 +231,10 @@ function flushPromises(): Promise<void> {
   return new Promise((resolve) => setImmediate(resolve));
 }
 
+function at(h: number, m: number): number {
+  return new Date(2026, 6, 2, h, m, 0, 0).getTime();
+}
+
 describe('streamController wake-light reconnect sync', () => {
   beforeEach(() => {
     (globalThis as typeof globalThis & { __DEV__?: boolean }).__DEV__ = false;
@@ -233,6 +244,133 @@ describe('streamController wake-light reconnect sync', () => {
     mockSessionState.deviceBattery = null;
     mockUseSession.subscribe.mockReturnValue(jest.fn());
     mockBleManager.cancelDeviceConnection.mockResolvedValue(undefined);
+    mockBatteryShouldStop.mockReturnValue(false);
+  });
+
+  it('arms the device with the reviewed SET_ALARM_RELATIVE payload on session start', async () => {
+    jest.spyOn(Date, 'now').mockReturnValue(at(22, 0));
+    const device: MockConnectedDevice = {
+      deviceId: 'device-1',
+      scale: { variantKnown: 1, sampleRateHz: 250 },
+      alarmControlAvailable: true,
+      writeAlarmControl: jest.fn().mockResolvedValue(undefined),
+      startStream: jest.fn().mockResolvedValue(makeHandle()),
+      disconnect: jest.fn().mockResolvedValue(undefined),
+    };
+    mockBleClient.connect.mockResolvedValueOnce(device);
+
+    const { startSession, stopSession } = await import('../streamController');
+
+    try {
+      await startSession('device-1');
+      await flushPromises();
+
+      expect(device.writeAlarmControl).toHaveBeenCalledWith(
+        encodeSetAlarm(9.5 * 3600 - 1800, SUNRISE_RAMP_S, SUNRISE_MAX_BRIGHTNESS, SUNRISE_COLOR),
+      );
+    } finally {
+      await stopSession();
+      jest.restoreAllMocks();
+    }
+  });
+
+  it('retries a rejected wake-light arm without failing the recording', async () => {
+    jest.useFakeTimers({ now: at(22, 0) });
+    const device: MockConnectedDevice = {
+      deviceId: 'device-1',
+      scale: { variantKnown: 1, sampleRateHz: 250 },
+      alarmControlAvailable: true,
+      writeAlarmControl: jest
+        .fn()
+        .mockRejectedValueOnce(new Error('LED task not ready'))
+        .mockResolvedValue(undefined),
+      startStream: jest.fn().mockResolvedValue(makeHandle()),
+      disconnect: jest.fn().mockResolvedValue(undefined),
+    };
+    mockBleClient.connect.mockResolvedValueOnce(device);
+
+    const { startSession, stopSession } = await import('../streamController');
+
+    try {
+      await startSession('device-1');
+      await Promise.resolve();
+      expect(device.writeAlarmControl).toHaveBeenCalledTimes(1);
+
+      await jest.advanceTimersByTimeAsync(5_000);
+      await Promise.resolve();
+
+      expect(device.writeAlarmControl).toHaveBeenCalledTimes(2);
+    } finally {
+      await stopSession();
+      jest.useRealTimers();
+    }
+  });
+
+  it('sends CANCEL on manual stop while the link is still available', async () => {
+    const device: MockConnectedDevice = {
+      deviceId: 'device-1',
+      scale: { variantKnown: 1, sampleRateHz: 250 },
+      alarmControlAvailable: true,
+      writeAlarmControl: jest.fn().mockResolvedValue(undefined),
+      startStream: jest.fn().mockResolvedValue(makeHandle()),
+      disconnect: jest.fn().mockResolvedValue(undefined),
+    };
+    mockBleClient.connect.mockResolvedValueOnce(device);
+
+    const { startSession, stopSession } = await import('../streamController');
+
+    await startSession('device-1');
+    await flushPromises();
+    await stopSession();
+
+    expect(device.writeAlarmControl).toHaveBeenLastCalledWith(encodeCancel());
+    expect(device.disconnect).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not send CANCEL when battery auto-end stops the recording', async () => {
+    mockBatteryShouldStop.mockReturnValue(true);
+    mockSessionState.deviceBattery = 1;
+    const device: MockConnectedDevice = {
+      deviceId: 'device-1',
+      scale: { variantKnown: 1, sampleRateHz: 250 },
+      alarmControlAvailable: true,
+      writeAlarmControl: jest.fn().mockResolvedValue(undefined),
+      startStream: jest.fn().mockResolvedValue(makeHandle()),
+      disconnect: jest.fn().mockResolvedValue(undefined),
+    };
+    mockBleClient.connect.mockResolvedValueOnce(device);
+
+    const { startSession } = await import('../streamController');
+
+    await startSession('device-1');
+    await flushPromises();
+    await flushPromises();
+
+    const payloads = device.writeAlarmControl.mock.calls.map(([payload]) => Array.from(payload));
+    expect(payloads).not.toContainEqual(Array.from(encodeCancel()));
+  });
+
+  it('keeps invalid alarm settings best-effort during active-session sync', async () => {
+    const device: MockConnectedDevice = {
+      deviceId: 'device-1',
+      scale: { variantKnown: 1, sampleRateHz: 250 },
+      alarmControlAvailable: true,
+      writeAlarmControl: jest.fn().mockResolvedValue(undefined),
+      startStream: jest.fn().mockResolvedValue(makeHandle()),
+      disconnect: jest.fn().mockResolvedValue(undefined),
+    };
+    mockBleClient.connect.mockResolvedValueOnce(device);
+
+    const { startSession, stopSession, syncWakeLightForActiveSession } = await import('../streamController');
+
+    try {
+      await startSession('device-1');
+      mockSessionState.wakeAlarm = { hour: 99, minute: 30, enabled: true };
+
+      await expect(syncWakeLightForActiveSession()).resolves.toBeUndefined();
+    } finally {
+      await stopSession();
+    }
   });
 
   it('sends CANCEL to the fresh device when the alarm is disabled during reconnect', async () => {

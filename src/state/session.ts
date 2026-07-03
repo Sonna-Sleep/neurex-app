@@ -48,6 +48,26 @@ export type Streaming = {
 // alarm survives app restarts.
 export type WakeAlarmSetting = { hour: number; minute: number; enabled: boolean };
 
+function normalizeWakeAlarmSetting(value: unknown): WakeAlarmSetting | null {
+  if (!value || typeof value !== 'object') return null;
+  const alarm = value as Partial<WakeAlarmSetting>;
+  const { hour, minute, enabled } = alarm;
+  if (
+    !Number.isInteger(hour) ||
+    typeof hour !== 'number' ||
+    hour < 0 ||
+    hour > 23 ||
+    !Number.isInteger(minute) ||
+    typeof minute !== 'number' ||
+    minute < 0 ||
+    minute > 59 ||
+    typeof enabled !== 'boolean'
+  ) {
+    return null;
+  }
+  return { hour, minute, enabled };
+}
+
 type SessionState = {
   authStatus: AuthStatus;
   user: User | null;
@@ -177,6 +197,7 @@ export const useSession = create<SessionState>()(
           streaming: null,
           deviceBattery: null,
           unviewedNightIds: [],
+          wakeAlarm: null,
         });
         void Promise.all([localWipe(), clearActiveRecording()]);
       },
@@ -210,6 +231,7 @@ export const useSession = create<SessionState>()(
           ...current,
           ...p,
           authStatus: p.user ? 'signed-in' : current.authStatus,
+          wakeAlarm: normalizeWakeAlarmSetting(p.wakeAlarm),
         };
       },
       onRehydrateStorage: () => (state) => {

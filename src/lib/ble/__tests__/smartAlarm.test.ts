@@ -4,6 +4,9 @@ import {
   encodeStartNow,
   secondsUntilSunrise,
   SUNRISE_LEAD_S,
+  SUNRISE_RAMP_S,
+  SUNRISE_MAX_BRIGHTNESS,
+  SUNRISE_COLOR,
 } from '../smartAlarm';
 
 describe('alarm/control command encoders (fw 6a77ed5, little-endian)', () => {
@@ -112,5 +115,14 @@ describe('secondsUntilSunrise', () => {
     expect(() => secondsUntilSunrise(at(22, 0), { hour: 7, minute: 30 }, 1.5)).toThrow(
       new RangeError('leadS must be an integer between 0 and 4294967295'),
     );
+  });
+});
+
+describe('sunrise policy constants', () => {
+  it('keeps the firmware-reviewed conservative sunrise policy values', () => {
+    expect(SUNRISE_LEAD_S).toBe(1800);
+    expect(SUNRISE_RAMP_S).toBe(1800);
+    expect(SUNRISE_MAX_BRIGHTNESS).toBe(64);
+    expect(SUNRISE_COLOR).toEqual({ r: 255, g: 180, b: 80 });
   });
 });
