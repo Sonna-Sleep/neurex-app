@@ -17,7 +17,7 @@ import {
 
 import { Button } from '../../../components/Button';
 import { Card } from '../../../components/Card';
-import { Body, SerifHeadline } from '../../../theme/typography';
+import { Body } from '../../../theme/typography';
 import { colors, radii, spacing } from '../../../theme/tokens';
 import { useSession } from '../../../state/session';
 import { bleClient, type FoundDevice } from '../../../lib/ble';
@@ -29,7 +29,6 @@ import {
 } from '../../../lib/ble/permissions';
 
 type CardState =
-  | 'idle'
   | 'preflight'
   | 'permission-denied'
   | 'bluetooth-off'
@@ -56,9 +55,13 @@ function rssiBars(rssi: number): string {
   return '·';
 }
 
-export function ConnectDeviceCard() {
+export function ConnectDeviceCard({
+  onConnected,
+}: {
+  onConnected?: (device: FoundDevice) => void;
+}) {
   const setPaired = useSession((s) => s.setPaired);
-  const [state, setState] = useState<CardState>('idle');
+  const [state, setState] = useState<CardState>('preflight');
   const [devices, setDevices] = useState<Record<string, FoundDevice>>({});
   const [pairingId, setPairingId] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -71,8 +74,6 @@ export function ConnectDeviceCard() {
     if (stopScanRef.current) stopScanRef.current();
     stopScanRef.current = null;
   }, []);
-
-  useEffect(() => clearScan, [clearScan]);
 
   const beginScan = useCallback(async () => {
     clearScan();
@@ -118,7 +119,7 @@ export function ConnectDeviceCard() {
       const connection = await bleClient.connect(device.deviceId);
       await connection.disconnect();
       setPaired(device.serial, device.deviceId);
-      setState('idle');
+      onConnected?.(device);
       setDevices({});
       setPairingId(null);
     } catch (e) {
@@ -128,31 +129,16 @@ export function ConnectDeviceCard() {
     }
   };
 
-  const cancel = () => {
-    clearScan();
-    setState('idle');
-    setDevices({});
-    setErrorMsg(null);
-    setPairingId(null);
-  };
+  useEffect(() => {
+    void beginScan();
+    return clearScan;
+  }, [beginScan, clearScan]);
 
   // Sorted strongest-signal-first so the Neurex device in your hand sits on top.
   const sortedDevices = useMemo(
     () => Object.values(devices).sort((a, b) => b.rssi - a.rssi),
     [devices],
   );
-
-  if (state === 'idle') {
-    return (
-      <View style={styles.wrap}>
-        <Card style={styles.card}>
-          <SerifHeadline>Connect device</SerifHeadline>
-          <Body style={styles.subtext}>Turn on your Neurex device before recording.</Body>
-          <Button label="Connect device" onPress={beginScan} />
-        </Card>
-      </View>
-    );
-  }
 
   return (
     <View style={styles.wrap}>
@@ -247,8 +233,6 @@ export function ConnectDeviceCard() {
           state === 'permission-denied' ? (
             <Button label="Re-scan" variant="ghost" onPress={beginScan} />
           ) : null}
-
-          <Button label="Cancel" variant="ghost" onPress={cancel} />
         </View>
       </Card>
     </View>
