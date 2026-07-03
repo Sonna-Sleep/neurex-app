@@ -352,7 +352,7 @@ export function RecordingCard({ idleFooter }: { idleFooter?: React.ReactNode }) 
         accessibilityLabel="Start session"
       >
         {busy === 'starting' ? <ActivityIndicator color={colors.textPrimary} /> : null}
-        <Text style={styles.startLabel}>{busy === 'starting' ? 'Connecting' : 'Connect\n& Start'}</Text>
+        <Text style={styles.startLabel}>{busy === 'starting' ? 'Connecting' : 'Start'}</Text>
       </Pressable>
       {error ? <Text style={styles.error}>{error}</Text> : null}
       {idleFooter ? <View style={styles.idleFooter}>{idleFooter}</View> : null}
