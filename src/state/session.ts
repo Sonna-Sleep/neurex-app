@@ -43,6 +43,11 @@ export type Streaming = {
   error?: string | null;
 };
 
+// User's wake-up alarm for the mask's LED sunrise. Wall-clock time; the BLE
+// arming math resolves it to "next occurrence" at arm time. Persisted so the
+// alarm survives app restarts.
+export type WakeAlarmSetting = { hour: number; minute: number; enabled: boolean };
+
 type SessionState = {
   authStatus: AuthStatus;
   user: User | null;
@@ -68,6 +73,7 @@ type SessionState = {
   // Session ids that became "ready" but the user hasn't opened yet. Drives the
   // "new" dot on the Journal tab. Persisted so the dot survives an app restart.
   unviewedNightIds: string[];
+  wakeAlarm: WakeAlarmSetting | null;
   setAuth: (user: User | null) => void;
   patchUser: (patch: Partial<User>) => void;
   setAvatar: (uri: string | null) => void;
@@ -79,6 +85,7 @@ type SessionState = {
   setStreaming: (s: Streaming | null) => void;
   patchStreaming: (patch: Partial<Streaming>) => void;
   setDeviceBattery: (pct: number | null) => void;
+  setWakeAlarm: (a: WakeAlarmSetting | null) => void;
 };
 
 export const useSession = create<SessionState>()(
@@ -95,6 +102,7 @@ export const useSession = create<SessionState>()(
       streaming: null,
       deviceBattery: null,
       unviewedNightIds: [],
+      wakeAlarm: null,
 
       setAuth: (user) =>
         set(() => ({
@@ -181,6 +189,8 @@ export const useSession = create<SessionState>()(
         ),
 
       setDeviceBattery: (pct) => set({ deviceBattery: pct }),
+
+      setWakeAlarm: (a) => set({ wakeAlarm: a }),
     }),
     {
       name: 'neurex-session',
@@ -192,6 +202,7 @@ export const useSession = create<SessionState>()(
         pairedSerial: s.pairedSerial,
         pairedDeviceId: s.pairedDeviceId,
         onboardingComplete: s.onboardingComplete,
+        wakeAlarm: s.wakeAlarm,
       }),
       merge: (persisted, current) => {
         const p = (persisted ?? {}) as Partial<SessionState>;
