@@ -1,5 +1,5 @@
 // In-app "connect a device" card on the Sleep screen for when no Neurex device
-// is paired yet. Mirrors the permission/scan flow from Pair.tsx but renders
+// has been selected yet. Mirrors the permission/scan flow from Pair.tsx but renders
 // inline so the user never leaves Sleep.
 //
 // Supports multiple Cerelogs in range — shows a live list sorted by signal
@@ -146,9 +146,9 @@ export function ConnectDeviceCard() {
     return (
       <View style={styles.wrap}>
         <Card style={styles.card}>
-          <SerifHeadline>No device paired</SerifHeadline>
-          <Body style={styles.subtext}>Pair a Neurex device before recording.</Body>
-          <Button label="Pair device" onPress={beginScan} />
+          <SerifHeadline>Connect device</SerifHeadline>
+          <Body style={styles.subtext}>Turn on your Neurex device before recording.</Body>
+          <Button label="Connect device" onPress={beginScan} />
         </Card>
       </View>
     );
