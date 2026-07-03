@@ -23,6 +23,7 @@ import {
   EEG_SAMPLE_INTERVAL_MS,
   NEUREX_ACK_INTERVAL_MS,
   NEUREX_ACK_WRITE_UUID,
+  NEUREX_ALARM_CONTROL_UUID,
   NEUREX_IMU_NOTIFY_UUID,
   NEUREX_RAW_NOTIFY_UUID,
   NEUREX_SCALE_INFO_UUID,
@@ -369,6 +370,15 @@ export const realBleClient: BleClient = {
     );
     if (__DEV__)
       console.log(`[ble/real] IMU stream ${imuAvailable ? 'available' : 'not present'}`);
+    const alarmControlAvailable = await hasCharacteristic(
+      device,
+      NEUREX_SERVICE_UUID,
+      NEUREX_ALARM_CONTROL_UUID,
+    );
+    if (__DEV__)
+      console.log(
+        `[ble/real] alarm control ${alarmControlAvailable ? 'available' : 'not present'}`,
+      );
 
     // Read the device's self-describing amplitude scale ONCE: µV-per-LSB, gain,
     // VREF, firmware build id, montage, and stream channel count. The app
@@ -455,9 +465,24 @@ export const realBleClient: BleClient = {
     return {
       deviceId,
       imuAvailable,
+      alarmControlAvailable,
       // Expose the scale read above so the session controller can refuse to
       // record on an unconfigured board (deviceScale.variantKnown === 0).
       scale,
+      async writeAlarmControl(payload: Uint8Array): Promise<void> {
+        if (!alarmControlAvailable) {
+          throw new Error('alarm/control characteristic not exposed by this firmware');
+        }
+        // WITH response on purpose: the firmware rejects commands it can't
+        // serve (non-LED board, LED task still booting) at the ATT layer, and
+        // only a write-with-response propagates that back to us.
+        await manager.writeCharacteristicWithResponseForDevice(
+          deviceId,
+          NEUREX_SERVICE_UUID,
+          NEUREX_ALARM_CONTROL_UUID,
+          bytesToB64(payload),
+        );
+      },
 
       async startStream(
         sessionId: string,
