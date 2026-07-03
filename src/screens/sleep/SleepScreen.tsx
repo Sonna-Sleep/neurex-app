@@ -13,7 +13,6 @@ import { TAB_BAR_SPACE } from '../../navigation/FloatingTabBar';
 
 export function SleepScreen() {
   const pairedDeviceId = useSession((s) => s.pairedDeviceId);
-  const pairedSerial = useSession((s) => s.pairedSerial);
   const setPaired = useSession((s) => s.setPaired);
   const deviceBattery = useSession((s) => s.deviceBattery);
 
@@ -30,13 +29,7 @@ export function SleepScreen() {
         <View style={styles.body}>
           {pairedDeviceId ? (
             <RecordingCard
-              idleFooter={
-                <DeviceIdentity
-                  serial={pairedSerial}
-                  deviceId={pairedDeviceId}
-                  onChange={() => setPaired(null)}
-                />
-              }
+              idleFooter={<DeviceConnectionStatus onChange={() => setPaired(null)} />}
             />
           ) : (
             <ConnectDeviceCard />
@@ -47,40 +40,21 @@ export function SleepScreen() {
   );
 }
 
-function shortDeviceId(deviceId: string | null): string | null {
-  if (!deviceId) return null;
-  const clean = deviceId.replace(/[^A-Za-z0-9]/g, '');
-  return clean.slice(-5).toUpperCase() || null;
-}
-
-function DeviceIdentity({
-  serial,
-  deviceId,
-  onChange,
-}: {
-  serial: string | null;
-  deviceId: string | null;
-  onChange: () => void;
-}) {
-  const id = shortDeviceId(deviceId);
+function DeviceConnectionStatus({ onChange }: { onChange: () => void }) {
   return (
     <View style={styles.deviceIdentity}>
       <View style={styles.deviceRow}>
         <View style={styles.deviceText}>
-          <Text style={styles.deviceStatus}>Selected device</Text>
-          <Text style={styles.deviceName} numberOfLines={1} adjustsFontSizeToFit>
-            {serial ?? 'Neurex device'}
-          </Text>
-          {id ? <Text style={styles.deviceMeta}>id …{id}</Text> : null}
+          <Text style={styles.deviceStatus}>Not connected</Text>
         </View>
         <Pressable
           onPress={onChange}
           accessibilityRole="button"
-          accessibilityLabel="Change paired device"
+          accessibilityLabel="Pair device"
           hitSlop={10}
           style={styles.changeButton}
         >
-          <Text style={styles.changeText}>Change</Text>
+          <Text style={styles.changeText}>Pair</Text>
         </Pressable>
       </View>
     </View>
@@ -142,13 +116,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 2,
   },
-  deviceName: {
-    color: colors.textPrimary,
-    fontSize: 16,
-    lineHeight: 20,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
   deviceStatus: {
     color: colors.textTertiary,
     fontSize: 11,
@@ -156,12 +123,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textAlign: 'center',
     textTransform: 'uppercase',
-  },
-  deviceMeta: {
-    color: colors.textTertiary,
-    fontSize: 12,
-    lineHeight: 16,
-    textAlign: 'center',
   },
   changeButton: {
     minWidth: 72,
