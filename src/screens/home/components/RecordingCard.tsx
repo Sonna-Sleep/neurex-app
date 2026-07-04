@@ -15,11 +15,14 @@ import { Card } from '../../../components/Card';
 import { Body, SerifHeadline, Secondary } from '../../../theme/typography';
 import { colors, spacing } from '../../../theme/tokens';
 import { useSession } from '../../../state/session';
+import { DEVICE_ABANDONED_MS } from '../../../lib/ble/autoStop';
 import { startSession, stopSession } from '../../../lib/ble/streamController';
 import { EEG_SAMPLE_RATE_HZ } from '../../../lib/ble/constants';
+import { formatElapsed, noticeLines } from '../../../lib/ble/sessionNotice';
 import { transmitSession } from '../../../lib/cloud/cloudSync';
 import { MIN_STAGING_MIN, MIN_STAGING_SEC } from '../../../lib/cloud/recoveryMath';
 import { exportRecordingBundle } from '../../../lib/files/recordingBundleExport';
+import { openNight } from '../../../navigation/navigationRef';
 
 // Holds the just-finished local recording so the UI can offer a share button.
 type SavedRecording = {
@@ -36,6 +39,8 @@ export function RecordingCard({ idleFooter }: { idleFooter?: React.ReactNode }) 
   const streaming = useSession((s) => s.streaming);
   const pairedDeviceId = useSession((s) => s.pairedDeviceId);
   const pairedSerial = useSession((s) => s.pairedSerial);
+  const sessionNotice = useSession((s) => s.sessionNotice);
+  const setSessionNotice = useSession((s) => s.setSessionNotice);
 
   const [busy, setBusy] = useState<'idle' | 'starting' | 'stopping'>('idle');
   const [error, setError] = useState<string | null>(null);
@@ -239,12 +244,12 @@ export function RecordingCard({ idleFooter }: { idleFooter?: React.ReactNode }) 
           {busy === 'stopping' || waitingForDevice ? (
             <ActivityIndicator color={colors.textPrimary} />
           ) : null}
-          <Text style={styles.elapsedValue}>{formatElapsed(elapsedSec)}</Text>
+          <Text style={styles.elapsedValue}>{formatElapsed(elapsedSec * 1000)}</Text>
           <Text style={styles.elapsedLabel}>{bubbleLabel}</Text>
         </Pressable>
 
         <View style={styles.recordingStatus}>
-          <Text style={styles.savedValue}>Saved on phone: {formatElapsed(recordedSec)}</Text>
+          <Text style={styles.savedValue}>Saved on phone: {formatElapsed(recordedSec * 1000)}</Text>
           <View style={styles.connectionRow}>
             <View
               style={[
@@ -337,36 +342,75 @@ export function RecordingCard({ idleFooter }: { idleFooter?: React.ReactNode }) 
   }
 
   // ── Idle (paired but not streaming) — quiet bedtime control surface ───────
-  if (!pairedDeviceId) return null;
+  if (!pairedDeviceId) {
+    // Unpairing intentionally hides any persisted notice until the device is paired again.
+    return null;
+  }
+
+  const blockingNotice =
+    sessionNotice != null
+      ? noticeLines(sessionNotice, {
+          abandonedMs: DEVICE_ABANDONED_MS,
+          nowMs,
+        })
+      : null;
+
   return (
     <View style={styles.controlScreen}>
-      <Pressable
-        onPress={onStart}
-        disabled={busy === 'starting'}
-        style={({ pressed }) => [
-          styles.sessionBubble,
-          pressed && styles.bubblePressed,
-          busy === 'starting' && styles.bubbleDisabled,
-        ]}
-        accessibilityRole="button"
-        accessibilityLabel="Start session"
-      >
-        {busy === 'starting' ? <ActivityIndicator color={colors.textPrimary} /> : null}
-        <Text style={styles.startLabel}>{busy === 'starting' ? 'Connecting' : 'Start'}</Text>
-      </Pressable>
+      <View style={styles.idleBubbleStack}>
+        <Pressable
+          onPress={onStart}
+          disabled={busy === 'starting' || sessionNotice != null}
+          pointerEvents={sessionNotice ? 'none' : 'auto'}
+          style={({ pressed }) => [
+            styles.sessionBubble,
+            pressed && !sessionNotice && styles.bubblePressed,
+            busy === 'starting' && styles.bubbleDisabled,
+            sessionNotice && styles.bubbleBlocked,
+          ]}
+          accessibilityRole="button"
+          accessibilityLabel="Start session"
+        >
+          {busy === 'starting' ? <ActivityIndicator color={colors.textPrimary} /> : null}
+          <Text style={styles.startLabel}>{busy === 'starting' ? 'Connecting' : 'Start'}</Text>
+        </Pressable>
+        {sessionNotice && blockingNotice ? (
+          <Card style={styles.noticeCard} accessibilityRole="alert">
+            <View style={styles.noticeHeader}>
+              <View style={[styles.connectionDot, styles.connectionDotWarning]} />
+              <SerifHeadline style={styles.noticeTitle}>{blockingNotice.title}</SerifHeadline>
+            </View>
+            <View style={styles.noticeLineGroup}>
+              <Body style={styles.noticeBody}>{blockingNotice.lines[0]}</Body>
+              {blockingNotice.lines.slice(1).map((line) => (
+                <Secondary key={line} style={styles.noticeSecondary}>
+                  {line}
+                </Secondary>
+              ))}
+            </View>
+            <View style={styles.noticeActions}>
+              <Button
+                label="Got it"
+                accessibilityLabel="Dismiss night ended early notice"
+                onPress={() => setSessionNotice(null)}
+              />
+              <Button
+                label="View night"
+                variant="ghost"
+                onPress={() => {
+                  const sessionId = sessionNotice.sessionId;
+                  setSessionNotice(null);
+                  openNight(sessionId);
+                }}
+              />
+            </View>
+          </Card>
+        ) : null}
+      </View>
       {error ? <Text style={styles.error}>{error}</Text> : null}
       {idleFooter ? <View style={styles.idleFooter}>{idleFooter}</View> : null}
     </View>
   );
-}
-
-function formatElapsed(sec: number): string {
-  const h = Math.floor(sec / 3600);
-  const m = Math.floor((sec % 3600) / 60);
-  const s = sec % 60;
-  if (h > 0) return `${h}h ${m}m ${s}s`;
-  if (m > 0) return `${m}m ${s}s`;
-  return `${s}s`;
 }
 
 const styles = StyleSheet.create({
@@ -391,6 +435,11 @@ const styles = StyleSheet.create({
   idleFooter: {
     width: '100%',
     alignItems: 'center',
+  },
+  idleBubbleStack: {
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   sessionBubble: {
     width: 218,
@@ -417,6 +466,9 @@ const styles = StyleSheet.create({
   },
   bubbleDisabled: {
     opacity: 0.7,
+  },
+  bubbleBlocked: {
+    opacity: 0.3,
   },
   startLabel: {
     fontSize: 26,
@@ -469,6 +521,37 @@ const styles = StyleSheet.create({
   },
   connectionDotWarning: {
     backgroundColor: colors.warning,
+  },
+  noticeCard: {
+    position: 'absolute',
+    width: '100%',
+    maxWidth: 330,
+    gap: spacing.md,
+    alignItems: 'center',
+  },
+  noticeHeader: {
+    width: '100%',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  noticeTitle: {
+    textAlign: 'center',
+  },
+  noticeLineGroup: {
+    width: '100%',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  noticeBody: {
+    textAlign: 'center',
+  },
+  noticeSecondary: {
+    textAlign: 'center',
+    color: colors.textSecondary,
+  },
+  noticeActions: {
+    width: '100%',
+    gap: spacing.sm,
   },
   connectionTitle: {
     fontSize: 14,

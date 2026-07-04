@@ -14,6 +14,7 @@ type Props = {
   loading?: boolean;
   fullWidth?: boolean;
   iconLeft?: React.ReactNode;
+  accessibilityLabel?: string;
 };
 
 export function Button({
@@ -24,6 +25,7 @@ export function Button({
   loading,
   fullWidth = true,
   iconLeft,
+  accessibilityLabel,
 }: Props) {
   const isDisabled = disabled || loading;
 
@@ -42,6 +44,7 @@ export function Button({
     <Pressable
       onPress={handlePress}
       disabled={isDisabled}
+      accessibilityLabel={accessibilityLabel}
       style={({ pressed }) => [
         styles.base,
         fullWidth && styles.fullWidth,
