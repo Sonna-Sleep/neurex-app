@@ -6,6 +6,7 @@ import { getSupabase } from '../lib/auth/supabase';
 import { localWipe } from '../lib/accountDeletion';
 import { clearActiveRecording } from '../lib/cloud/recovery';
 import { clearPushTokenRegistration } from '../lib/push/registerPushToken';
+import type { SessionEndNotice } from '../lib/ble/sessionNotice';
 
 export type AuthStatus = 'unknown' | 'signed-out' | 'signed-in';
 
@@ -68,11 +69,13 @@ type SessionState = {
   // Session ids that became "ready" but the user hasn't opened yet. Drives the
   // "new" dot on the Journal tab. Persisted so the dot survives an app restart.
   unviewedNightIds: string[];
+  sessionNotice: SessionEndNotice | null;
   setAuth: (user: User | null) => void;
   patchUser: (patch: Partial<User>) => void;
   setAvatar: (uri: string | null) => void;
   markNightUnviewed: (id: string) => void;
   markNightViewed: (id: string) => void;
+  setSessionNotice: (n: SessionEndNotice | null) => void;
   setPaired: (serial: string | null, deviceId?: string | null) => void;
   completeOnboarding: () => void;
   signOut: () => void;
@@ -95,6 +98,7 @@ export const useSession = create<SessionState>()(
       streaming: null,
       deviceBattery: null,
       unviewedNightIds: [],
+      sessionNotice: null,
 
       setAuth: (user) =>
         set(() => ({
@@ -120,6 +124,8 @@ export const useSession = create<SessionState>()(
             ? { unviewedNightIds: s.unviewedNightIds.filter((x) => x !== id) }
             : {},
         ),
+
+      setSessionNotice: (n) => set({ sessionNotice: n }),
 
       setPaired: (serial, deviceId) => {
         if (serial) deviceRepo.pair(serial);
@@ -169,6 +175,7 @@ export const useSession = create<SessionState>()(
           streaming: null,
           deviceBattery: null,
           unviewedNightIds: [],
+          sessionNotice: null,
         });
         void Promise.all([localWipe(), clearActiveRecording()]);
       },
@@ -189,6 +196,7 @@ export const useSession = create<SessionState>()(
         user: s.user,
         avatarUri: s.avatarUri,
         unviewedNightIds: s.unviewedNightIds,
+        sessionNotice: s.sessionNotice,
         pairedSerial: s.pairedSerial,
         pairedDeviceId: s.pairedDeviceId,
         onboardingComplete: s.onboardingComplete,
