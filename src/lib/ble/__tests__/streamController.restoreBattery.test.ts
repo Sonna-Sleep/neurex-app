@@ -23,10 +23,15 @@ jest.mock('../../push/registerPushToken', () => ({
 }));
 
 const connectMock = jest.fn();
+const mockRandomUUID = jest.fn(() => 'session-under-test');
 jest.mock('../index', () => ({
   bleClient: {
     connect: connectMock,
   },
+}));
+
+jest.mock('expo-crypto', () => ({
+  randomUUID: () => mockRandomUUID(),
 }));
 
 const onDeviceDisconnectedMock = jest.fn();
@@ -110,13 +115,18 @@ jest.mock('../../cloud/streamStatsSidecar', () => ({
   writeStreamStatsSidecar: jest.fn().mockResolvedValue(undefined),
 }));
 
+const notifyDeviceDisconnectedMock = jest.fn();
+const notifyRecordingStoppedMock = jest.fn();
 jest.mock('../../notifications/local', () => ({
-  notifyDeviceDisconnected: jest.fn(),
-  notifyRecordingStopped: jest.fn(),
+  notifyDeviceDisconnected: notifyDeviceDisconnectedMock,
+  notifyRecordingStopped: notifyRecordingStoppedMock,
 }));
 
 import { useSession } from '../../../state/session';
+import { DEVICE_ABANDONED_MS } from '../autoStop';
+import { buildAutoEndNotice } from '../sessionNotice';
 import {
+  startSession,
   resumeSessionAfterRestore,
   stopSession,
 } from '../streamController';
@@ -177,10 +187,14 @@ describe('resumeSessionAfterRestore battery tracking', () => {
     jest.setSystemTime(10_000);
     (globalThis as typeof globalThis & { __DEV__?: boolean }).__DEV__ = false;
     connectMock.mockReset();
+    mockRandomUUID.mockReset();
+    mockRandomUUID.mockReturnValue('session-under-test');
     onDeviceDisconnectedMock.mockReset();
     setActiveRecordingMock.mockClear();
     stampRecordingDisconnectMock.mockClear();
-    useSession.setState({ streaming: null, deviceBattery: null });
+    notifyDeviceDisconnectedMock.mockClear();
+    notifyRecordingStoppedMock.mockClear();
+    useSession.setState({ streaming: null, deviceBattery: null, sessionNotice: null });
   });
 
   afterEach(async () => {
@@ -217,5 +231,80 @@ describe('resumeSessionAfterRestore battery tracking', () => {
       10_000,
       42,
     );
+  });
+
+  test('startSession clears stale notices and auto-finalize persists a device-lost notice', async () => {
+    const device = makeDevice();
+    connectMock
+      .mockResolvedValueOnce(device)
+      .mockImplementationOnce(() => new Promise(() => undefined));
+    mockRandomUUID.mockReturnValue('session-auto');
+
+    let disconnectListener: (() => void) | null = null;
+    onDeviceDisconnectedMock.mockImplementation((_deviceId, listener) => {
+      disconnectListener = listener;
+      return { remove: jest.fn() };
+    });
+
+    useSession.getState().setSessionNotice(
+      buildAutoEndNotice({
+        sessionId: 'stale-session',
+        reason: 'battery',
+        sessionStartMs: 1,
+        dataEndMs: 2,
+        disconnectAtMs: null,
+        lastBatteryPct: 5,
+        nowMs: 3,
+      }),
+    );
+
+    await startSession('device-1', 'serial-1');
+
+    expect(useSession.getState().sessionNotice).toBeNull();
+
+    useSession.getState().setDeviceBattery(42);
+    expect(disconnectListener).not.toBeNull();
+    (disconnectListener as unknown as () => void)();
+
+    await jest.advanceTimersByTimeAsync(DEVICE_ABANDONED_MS);
+
+    expect(useSession.getState().sessionNotice).toEqual(
+      buildAutoEndNotice({
+        sessionId: 'session-auto',
+        reason: 'device-lost',
+        sessionStartMs: 10_000,
+        dataEndMs: 10_000,
+        disconnectAtMs: 10_000,
+        lastBatteryPct: 42,
+        nowMs: 10_000 + DEVICE_ABANDONED_MS,
+      }),
+    );
+    expect(notifyRecordingStoppedMock).toHaveBeenCalledWith('device-lost', 'session-auto');
+  });
+
+  test('resumeSessionAfterRestore clears stale notices when it reclaims a live night', async () => {
+    const device = makeDevice();
+    connectMock.mockResolvedValueOnce(device);
+
+    useSession.getState().setSessionNotice(
+      buildAutoEndNotice({
+        sessionId: 'stale-session',
+        reason: 'device-lost',
+        sessionStartMs: 1,
+        dataEndMs: 2,
+        disconnectAtMs: 2,
+        lastBatteryPct: null,
+        nowMs: 3,
+      }),
+    );
+
+    await resumeSessionAfterRestore({
+      sessionId: 'session-restore',
+      startedAtMs: 1_000,
+      deviceId: 'device-1',
+      serial: 'serial-1',
+    });
+
+    expect(useSession.getState().sessionNotice).toBeNull();
   });
 });

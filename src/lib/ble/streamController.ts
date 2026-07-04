@@ -47,6 +47,7 @@ import {
   readRecordingManifest,
   statsFromManifest,
 } from './recordingManifest';
+import { buildAutoEndNotice } from './sessionNotice';
 
 // User-initiated session start: time-bounded so a device that's off or out of
 // range fails fast with an error instead of an infinite spinner. The background
@@ -318,6 +319,7 @@ export async function startSession(
   const meta: RecordingMeta = { sessionId, startedAtMs, deviceId, serial: serial ?? null };
   writeSessionMeta(meta);
   void setActiveRecording(meta);
+  useSession.getState().setSessionNotice(null);
 
   useSession.getState().setStreaming({
     sessionId,
@@ -450,6 +452,7 @@ export async function resumeSessionAfterRestore(meta: RecordingMeta): Promise<vo
       terminalReason: null,
     };
     void setActiveRecording(cleanMeta);
+    useSession.getState().setSessionNotice(null);
     registerDisconnectWatch();
     installBatteryWatcher();
     if (__DEV__) console.log('[stream] resumed session after iOS restore', sessionId);
@@ -658,6 +661,17 @@ async function endSessionAuto(reason: 'battery' | 'device-lost'): Promise<void> 
   // No longer the active session to resume. If cloud handoff below fails, launch-
   // time recovery still sees meta.endMs and finalizes with the real data length.
   await clearActiveRecording();
+  useSession.getState().setSessionNotice(
+    buildAutoEndNotice({
+      sessionId: session.sessionId,
+      reason,
+      sessionStartMs: session.startedAtMs,
+      dataEndMs: endMs,
+      disconnectAtMs: session.disconnectAtMs ?? null,
+      lastBatteryPct: session.lastBatteryPct ?? null,
+      nowMs: Date.now(),
+    }),
+  );
   useSession.getState().setStreaming(null);
   try {
     await transmitSession({ sessionId: session.sessionId, startMs: session.startedAtMs, endMs });
@@ -666,7 +680,7 @@ async function endSessionAuto(reason: 'battery' | 'device-lost'): Promise<void> 
   }
   // Tell the user it stopped (and why) — they may have walked away assuming it
   // was still recording.
-  notifyRecordingStopped(reason);
+  notifyRecordingStopped(reason, session.sessionId);
   if (__DEV__) console.log(`[stream] auto-ended recording (${reason})`);
 }
 

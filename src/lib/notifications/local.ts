@@ -49,12 +49,16 @@ async function ensureRecordingAlertChannel(): Promise<void> {
   });
 }
 
-async function fireRecordingAlert(title: string, body: string): Promise<void> {
+async function fireRecordingAlert(
+  title: string,
+  body: string,
+  data?: Record<string, unknown>,
+): Promise<void> {
   const { status } = await Notifications.getPermissionsAsync();
   if (status !== 'granted') return;
   await ensureRecordingAlertChannel();
   await Notifications.scheduleNotificationAsync({
-    content: { title, body },
+    content: { title, body, data },
     trigger: Platform.OS === 'android' ? { channelId: RECORDING_ALERT_CHANNEL_ID, seconds: 1 } : null,
   });
 }
@@ -67,10 +71,13 @@ export function notifyDeviceDisconnected(): void {
 
 /** Fired when a recording is auto-stopped (device didn't reconnect, or battery
  * died) so the user isn't left thinking it's still recording. */
-export function notifyRecordingStopped(reason: 'device-lost' | 'battery'): void {
+export function notifyRecordingStopped(
+  reason: 'device-lost' | 'battery',
+  sessionId: string,
+): void {
   const body =
     reason === 'battery'
       ? 'Your device battery ran out — recording saved.'
       : 'Your device disconnected and didn’t reconnect — recording saved.';
-  void fireRecordingAlert('Recording stopped', body);
+  void fireRecordingAlert('Recording stopped', body, { sessionId });
 }
