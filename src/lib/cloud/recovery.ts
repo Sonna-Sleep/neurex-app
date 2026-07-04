@@ -10,10 +10,10 @@
 //   - At a clean stop, the marker is cleared.
 //   - On app launch, scanRecoverable() finds every session dir with a non-empty
 //     EEG/EOG RAW.BIN that isn't the live session and isn't yet uploaded. An
-//     uploaded night's dir is removed by deleteLocalSession; recoverAll() ships them
-//     through the same transmitSession path. transmitSession deletes the local
-//     copy only after the cloud upload + finalize succeed, so a failed recovery
-//     keeps the bytes for next launch.
+//     uploaded night's dir receives upload_receipt.json; recoverAll() ships
+//     only directories without that receipt. transmitSession writes the receipt
+//     only after cloud upload + finalize succeed, so a failed recovery keeps the
+//     bytes retryable for next launch.
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { File, Directory, Paths } from 'expo-file-system';
@@ -28,6 +28,7 @@ import {
 import { EEG_SAMPLE_RATE_HZ } from '../ble/constants';
 import { IMU_BIN_NAME, IMU_HEADER_BYTES, IMU_META_NAME } from '../ble/imuRecord';
 import { readRecordingManifest } from '../ble/recordingManifest';
+import { hasUploadReceiptInDir, readUploadReceiptFromDir } from './uploadReceipt';
 
 const ACTIVE_KEY = 'neurex-active-recording';
 const META_NAME = 'meta.json';
@@ -52,6 +53,9 @@ export type RecoverableRecording = {
 export type LocalRecordingInspection = RecoverableRecording & {
   durationMs: number;
   stageable: boolean;
+  uploaded: boolean;
+  uploadedAtMs?: number | null;
+  storagePrefix?: string | null;
   hasScale: boolean;
   hasManifest: boolean;
   hasStreamStats: boolean;
@@ -177,6 +181,7 @@ export function inspectLocalRecordings(activeSessionId?: string | null): LocalRe
 
     const sizeBytes = raw.size;
     const meta = readMeta(item);
+    const receipt = readUploadReceiptFromDir(item);
     const manifest = readRecordingManifest(sessionId);
     const sampleRateHz = manifest?.sampleRateHz ?? EEG_SAMPLE_RATE_HZ;
     const rawBytesPerSample = manifest?.rawRecordBytes ?? null;
@@ -198,6 +203,9 @@ export function inspectLocalRecordings(activeSessionId?: string | null): LocalRe
       sizeBytes,
       serial: meta?.serial ?? null,
       stageable: isStageableDurationMs(durationMs),
+      uploaded: receipt !== null,
+      uploadedAtMs: receipt?.uploadedAtMs ?? null,
+      storagePrefix: receipt?.storagePrefix ?? null,
       hasScale: fileExists(item, 'scale.json'),
       hasManifest: fileExists(item, 'recording_manifest.json'),
       hasStreamStats: fileExists(item, 'stream_stats.json'),
@@ -240,6 +248,7 @@ export function scanRecoverable(activeSessionId?: string | null): RecoverableRec
       continue;
     }
     const sizeBytes = raw.size;
+    if (hasUploadReceiptInDir(item)) continue;
     const meta = readMeta(item);
     const manifest = readRecordingManifest(sessionId);
     const sampleRateHz = manifest?.sampleRateHz ?? EEG_SAMPLE_RATE_HZ;

@@ -149,6 +149,10 @@ export function AccountScreen() {
 
   const onRetryLocal = useCallback(
     async (recording: LocalRecordingInspection) => {
+      if (recording.uploaded) {
+        Alert.alert('Already uploaded', 'This recording is already stored in cloud. Export is still available.');
+        return;
+      }
       if (!recording.stageable) {
         Alert.alert('Recording is short', 'Export is available, but cloud analysis starts at 10 minutes.');
         return;
@@ -295,6 +299,7 @@ function SavedRecordingsPanel({
           recording.hasManifest ? 'manifest' : null,
           recording.hasStreamStats ? 'stats' : null,
           recording.hasImu ? 'IMU' : null,
+          recording.uploaded ? 'uploaded' : null,
         ].filter(Boolean);
         return (
           <View key={recording.sessionId} style={[styles.localItem, index > 0 && styles.localDivider]}>
@@ -309,15 +314,17 @@ function SavedRecordingsPanel({
                 </Text>
               </View>
               <Text style={[styles.localStatus, !recording.stageable && styles.localStatusMuted]}>
-                {recording.stageable ? 'Ready' : 'Short'}
+                {recording.uploaded ? 'Uploaded' : recording.stageable ? 'Ready' : 'Short'}
               </Text>
             </View>
             <View style={styles.localActions}>
-              <SmallAction
-                label={busyKey === syncKey ? 'Syncing' : 'Retry'}
-                disabled={busy}
-                onPress={() => onRetry(recording)}
-              />
+              {!recording.uploaded ? (
+                <SmallAction
+                  label={busyKey === syncKey ? 'Syncing' : 'Retry'}
+                  disabled={busy}
+                  onPress={() => onRetry(recording)}
+                />
+              ) : null}
               <SmallAction
                 label={busyKey === exportKey ? 'Exporting' : 'Export'}
                 disabled={busy}

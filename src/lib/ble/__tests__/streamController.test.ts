@@ -327,6 +327,37 @@ describe('streamController wake-light reconnect sync', () => {
     expect(device.disconnect).toHaveBeenCalledTimes(1);
   });
 
+  it('does not let a hung wake-light CANCEL block the saved recording handoff', async () => {
+    const handle = makeHandle();
+    const cancel = encodeCancel();
+    const device: MockConnectedDevice = {
+      deviceId: 'device-1',
+      scale: { variantKnown: 1, sampleRateHz: 250 },
+      alarmControlAvailable: true,
+      writeAlarmControl: jest.fn((payload: Uint8Array) => {
+        if (payload[0] === cancel[0]) return new Promise<void>(() => undefined);
+        return Promise.resolve();
+      }),
+      startStream: jest.fn().mockResolvedValue(handle),
+      disconnect: jest.fn().mockResolvedValue(undefined),
+    };
+    mockBleClient.connect.mockResolvedValueOnce(device);
+
+    const { startSession, stopSession } = await import('../streamController');
+
+    await startSession('device-1');
+    await flushPromises();
+
+    const stop = stopSession();
+    const outcome = await Promise.race([
+      stop.then((result) => (result?.sessionId === 'session-1' ? 'saved' : 'missing')),
+      new Promise<'timeout'>((resolve) => setTimeout(() => resolve('timeout'), 0)),
+    ]);
+
+    expect(outcome).toBe('saved');
+    expect(handle.stop).toHaveBeenCalledTimes(1);
+  });
+
   it('does not send CANCEL when battery auto-end stops the recording', async () => {
     mockBatteryShouldStop.mockReturnValue(true);
     mockSessionState.deviceBattery = 1;

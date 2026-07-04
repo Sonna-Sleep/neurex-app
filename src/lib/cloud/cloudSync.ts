@@ -30,6 +30,7 @@ import {
   refreshStreamStatsSidecarUploadCounts,
   streamStatsFile,
 } from './streamStatsSidecar';
+import { writeUploadReceipt } from './uploadReceipt';
 import { withUploadLock as runWithUploadLock, UPLOAD_LOCK_TIMEOUT_MS } from './uploadLock';
 import { useDiagnostics } from '../../state/diagnostics';
 
@@ -667,15 +668,22 @@ export async function transmitSession(input: FinalizeInput): Promise<string> {
   } catch (e) {
     if (__DEV__) console.warn('[cloudSync] stream_stats.json upload failed (non-fatal):', e);
   }
+  const rawStoragePath = `${prefix}/segments/raw`;
   await finalizeSession(
     {
       ...input,
       rawSha256,
-      rawStoragePath: `${prefix}/segments/raw`,
+      rawStoragePath,
     },
     prefix,
   );
-  deleteLocalSession(input.sessionId); // nothing stays on the phone
+  writeUploadReceipt({
+    sessionId: input.sessionId,
+    storagePrefix: prefix,
+    rawStoragePath,
+    rawSha256,
+    imuSha256,
+  });
   return prefix;
 }
 

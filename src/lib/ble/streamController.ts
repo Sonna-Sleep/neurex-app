@@ -734,7 +734,7 @@ export async function stopSession(): Promise<StopResult | null> {
     stopReason: session.terminalReason ?? 'manual',
     stats,
   }).catch(() => undefined);
-  await cancelWakeLight(session.device);
+  void cancelWakeLight(session.device);
   await session.device.disconnect().catch(() => undefined);
 
   stopForegroundService();

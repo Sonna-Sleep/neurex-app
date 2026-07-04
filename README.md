@@ -154,9 +154,13 @@ Install with `adb install -r <apk>` (in-place `-r` preserves app data).
    computes whole-file SHA-256 hashes, uploads `scale.json`,
    `recording_manifest.json`, optional `imu.json`, and `stream_stats.json`, then
    inserts one `public.sessions` row.
-4. The Modal backend reads the raw segments, verifies integrity, writes
+4. After a confirmed cloud finalize, the phone keeps the local session directory
+   and writes `upload_receipt.json` beside `RAW.BIN`. Recovery skips sessions
+   with that receipt, while Account still lets the user export the original
+   phone-side bundle.
+5. The Modal backend reads the raw segments, verifies integrity, writes
    `signal_quality_report`, and preserves beta sleep staging.
-5. The app reads the finished row and renders it in Journal.
+6. The app reads the finished row and renders it in Journal.
 
 IMU is intentionally separate from the EEG/EOG raw path. Firmware owns the IMU
 payload schema; the app stores exact BLE notification payloads with receive

@@ -31,6 +31,16 @@
       "extends": "production",
       "distribution": "internal",
       "android": { "buildType": "apk" }
+    },
+    "forensic-debug-apk": {
+      "extends": "android-apk",
+      "channel": "forensic-debug",
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://uunerbrscbswbzyxtdpg.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_g7T0SDF7LgJ3kjhRCQ7ToQ_ofPwMVOt",
+        "EXPO_PUBLIC_MODAL_ENDPOINT_URL": "https://goda-smulk--neurex-backend-fastapi-app.modal.run",
+        "NEUREX_FORENSIC_DEBUGGABLE": "true"
+      }
     }
   },
   "submit": {

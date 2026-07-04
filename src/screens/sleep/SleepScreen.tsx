@@ -3,6 +3,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { Button } from '../../components/Button';
+import { Card } from '../../components/Card';
 import { Logo } from '../../components/Logo';
 import { StatusPill } from '../../components/StatusPill';
 import { bleClient } from '../../lib/ble';
@@ -12,6 +14,7 @@ import {
   requestAndroidBlePermissions,
 } from '../../lib/ble/permissions';
 import { colors, layout, spacing } from '../../theme/tokens';
+import { Body, SerifHeadline } from '../../theme/typography';
 import { useSession } from '../../state/session';
 import { RecordingCard } from '../home/components/RecordingCard';
 import { ConnectDeviceCard } from '../home/components/ConnectDeviceCard';
@@ -28,22 +31,8 @@ export function SleepScreen() {
   const setPaired = useSession((s) => s.setPaired);
   const deviceBattery = useSession((s) => s.deviceBattery);
   const streaming = useSession((s) => s.streaming);
-  const [connectedDeviceId, setConnectedDeviceId] = useState<string | null>(null);
   const devicePresence = usePairedDevicePresence(pairedDeviceId, streaming !== null);
-  const deviceReady =
-    streaming !== null ||
-    devicePresence === 'nearby' ||
-    (connectedDeviceId !== null && connectedDeviceId === pairedDeviceId);
-
-  useEffect(() => {
-    if (connectedDeviceId && connectedDeviceId !== pairedDeviceId) {
-      setConnectedDeviceId(null);
-    }
-  }, [connectedDeviceId, pairedDeviceId]);
-
-  useEffect(() => {
-    if (devicePresence === 'missing') setConnectedDeviceId(null);
-  }, [devicePresence]);
+  const deviceReady = streaming !== null || devicePresence === 'nearby';
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -65,8 +54,13 @@ export function SleepScreen() {
                 />
               }
             />
+          ) : pairedDeviceId ? (
+            <ConnectPairedDeviceCard
+              checking={devicePresence === 'checking'}
+              onChange={() => setPaired(null)}
+            />
           ) : (
-            <ConnectDeviceCard onConnected={(device) => setConnectedDeviceId(device.deviceId)} />
+            <ConnectDeviceCard />
           )}
           <WakeAlarmCard />
         </View>
@@ -140,6 +134,28 @@ function usePairedDevicePresence(
   return presence;
 }
 
+function ConnectPairedDeviceCard({
+  checking,
+  onChange,
+}: {
+  checking: boolean;
+  onChange: () => void;
+}) {
+  return (
+    <View style={styles.connectWrap}>
+      <Card style={styles.connectCard}>
+        <SerifHeadline>Connect device</SerifHeadline>
+        <Body style={styles.connectText}>
+          {checking
+            ? 'Looking for your Neurex device.'
+            : 'Turn on your Neurex device and keep it near this phone.'}
+        </Body>
+        <Button label="Change device" variant="ghost" onPress={onChange} />
+      </Card>
+    </View>
+  );
+}
+
 function DeviceConnectionStatus({
   label,
   onChange,
@@ -199,6 +215,15 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     gap: spacing.md,
+  },
+  connectWrap: {
+    paddingTop: spacing.md,
+  },
+  connectCard: {
+    gap: spacing.lg,
+  },
+  connectText: {
+    color: colors.textSecondary,
   },
   deviceIdentity: {
     width: '100%',

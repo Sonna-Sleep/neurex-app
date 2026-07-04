@@ -46,6 +46,13 @@ yarn-error.*
 .env*.local
 .env
 
+# local forensic/debug artifacts (recording data, APK downloads, transient logs)
+neurex-private-*/
+neurex-private-*.tar
+neurex-forensic-debug-*.apk
+_eas_*
+_last_*
+
 # typescript
 *.tsbuildinfo
 
