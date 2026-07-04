@@ -35,6 +35,9 @@ type SavedRecording = {
   endedEarly?: boolean;
 };
 
+const IDLE_BUBBLE_SIZE = 218;
+const IDLE_NOTICE_STACK_MIN_HEIGHT = 360;
+
 export function RecordingCard({ idleFooter }: { idleFooter?: React.ReactNode }) {
   const streaming = useSession((s) => s.streaming);
   const pairedDeviceId = useSession((s) => s.pairedDeviceId);
@@ -357,7 +360,9 @@ export function RecordingCard({ idleFooter }: { idleFooter?: React.ReactNode }) 
 
   return (
     <View style={styles.controlScreen}>
-      <View style={styles.idleBubbleStack}>
+      <View
+        style={[styles.idleBubbleStack, sessionNotice && blockingNotice && styles.idleBubbleStackNotice]}
+      >
         <Pressable
           onPress={onStart}
           disabled={busy === 'starting' || sessionNotice != null}
@@ -375,36 +380,38 @@ export function RecordingCard({ idleFooter }: { idleFooter?: React.ReactNode }) 
           <Text style={styles.startLabel}>{busy === 'starting' ? 'Connecting' : 'Start'}</Text>
         </Pressable>
         {sessionNotice && blockingNotice ? (
-          <Card style={styles.noticeCard} accessibilityRole="alert">
-            <View style={styles.noticeHeader}>
-              <View style={[styles.connectionDot, styles.connectionDotWarning]} />
-              <SerifHeadline style={styles.noticeTitle}>{blockingNotice.title}</SerifHeadline>
-            </View>
-            <View style={styles.noticeLineGroup}>
-              <Body style={styles.noticeBody}>{blockingNotice.lines[0]}</Body>
-              {blockingNotice.lines.slice(1).map((line) => (
-                <Secondary key={line} style={styles.noticeSecondary}>
-                  {line}
-                </Secondary>
-              ))}
-            </View>
-            <View style={styles.noticeActions}>
-              <Button
-                label="Got it"
-                accessibilityLabel="Dismiss night ended early notice"
-                onPress={() => setSessionNotice(null)}
-              />
-              <Button
-                label="View night"
-                variant="ghost"
-                onPress={() => {
-                  const sessionId = sessionNotice.sessionId;
-                  setSessionNotice(null);
-                  openNight(sessionId);
-                }}
-              />
-            </View>
-          </Card>
+          <View style={styles.noticeOverlay}>
+            <Card style={styles.noticeCard} accessibilityRole="alert">
+              <View style={styles.noticeHeader}>
+                <View style={[styles.connectionDot, styles.connectionDotWarning]} />
+                <SerifHeadline style={styles.noticeTitle}>{blockingNotice.title}</SerifHeadline>
+              </View>
+              <View style={styles.noticeLineGroup}>
+                <Body style={styles.noticeBody}>{blockingNotice.lines[0]}</Body>
+                {blockingNotice.lines.slice(1).map((line) => (
+                  <Secondary key={line} style={styles.noticeSecondary}>
+                    {line}
+                  </Secondary>
+                ))}
+              </View>
+              <View style={styles.noticeActions}>
+                <Button
+                  label="Got it"
+                  accessibilityLabel="Dismiss night ended early notice"
+                  onPress={() => setSessionNotice(null)}
+                />
+                <Button
+                  label="View night"
+                  variant="ghost"
+                  onPress={() => {
+                    const sessionId = sessionNotice.sessionId;
+                    setSessionNotice(null);
+                    openNight(sessionId);
+                  }}
+                />
+              </View>
+            </Card>
+          </View>
         ) : null}
       </View>
       {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -440,11 +447,15 @@ const styles = StyleSheet.create({
     width: '100%',
     alignItems: 'center',
     justifyContent: 'center',
+    position: 'relative',
+  },
+  idleBubbleStackNotice: {
+    minHeight: IDLE_NOTICE_STACK_MIN_HEIGHT,
   },
   sessionBubble: {
-    width: 218,
-    height: 218,
-    borderRadius: 109,
+    width: IDLE_BUBBLE_SIZE,
+    height: IDLE_BUBBLE_SIZE,
+    borderRadius: IDLE_BUBBLE_SIZE / 2,
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.sm,
@@ -522,8 +533,16 @@ const styles = StyleSheet.create({
   connectionDotWarning: {
     backgroundColor: colors.warning,
   },
-  noticeCard: {
+  noticeOverlay: {
     position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  noticeCard: {
     width: '100%',
     maxWidth: 330,
     gap: spacing.md,

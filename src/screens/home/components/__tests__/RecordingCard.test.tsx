@@ -1,5 +1,5 @@
 import React from 'react';
-import { Text } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
 import { DEVICE_ABANDONED_MS } from '../../../../lib/ble/autoStop';
 import { noticeLines, type SessionEndNotice } from '../../../../lib/ble/sessionNotice';
@@ -97,6 +97,43 @@ describe('RecordingCard blocking notice overlay', () => {
       expect(
         tree.root.findByProps({ accessibilityLabel: 'Dismiss night ended early notice' }),
       ).toBeTruthy();
+
+      const startBubble = tree.root.findByProps({ accessibilityLabel: 'Start session' });
+      const idleBubbleStack = startBubble.parent;
+      expect(StyleSheet.flatten(idleBubbleStack.props.style)).toMatchObject({
+        width: '100%',
+        alignItems: 'center',
+        justifyContent: 'center',
+      });
+      expect(StyleSheet.flatten(idleBubbleStack.props.style).minHeight).toBeGreaterThan(218);
+      expect(startBubble.props.disabled).toBe(true);
+      expect(startBubble.props.pointerEvents).toBe('none');
+      expect(StyleSheet.flatten(startBubble.props.style({ pressed: false }))).toMatchObject({
+        opacity: 0.3,
+      });
+
+      const noticeCard = tree.root.findByProps({ accessibilityRole: 'alert' });
+      expect(StyleSheet.flatten(noticeCard.props.style)).toMatchObject({
+        width: '100%',
+        maxWidth: 330,
+        alignItems: 'center',
+      });
+      expect(StyleSheet.flatten(noticeCard.parent.props.style)).toMatchObject({
+        position: 'absolute',
+        top: 0,
+        right: 0,
+        bottom: 0,
+        left: 0,
+      });
+
+      const footerText = tree.root.findByProps({ children: 'Footer' });
+      const footerWrapper = footerText.parent;
+      expect(StyleSheet.flatten(footerWrapper.props.style)).toMatchObject({
+        width: '100%',
+        alignItems: 'center',
+      });
+      expect(footerWrapper.parent).not.toBe(idleBubbleStack);
+      expect(() => idleBubbleStack.findByProps({ children: 'Footer' })).toThrow();
 
       const gotIt = tree.root
         .findAllByType(Button)
