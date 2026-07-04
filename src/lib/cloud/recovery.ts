@@ -328,7 +328,7 @@ function delay(ms: number): Promise<void> {
  * being resumed from iOS state restoration. Read via dynamic import because
  * streamController.ts statically imports THIS module, so a static import would
  * be a cycle. Returns null if unavailable (e.g. unit tests). */
-async function liveOrRestoringSessionId(): Promise<string | null> {
+export async function getLiveOrRestoringSessionId(): Promise<string | null> {
   try {
     const { activeOrRestoringSessionId } = await import('../ble/streamController');
     return activeOrRestoringSessionId();
@@ -354,7 +354,7 @@ export async function recoverAll(activeSessionId?: string | null): Promise<Recov
   const marker = await getActiveRecording();
   if (marker) await delay(RECOVERY_RESTORE_GRACE_MS);
 
-  const liveId = (await liveOrRestoringSessionId()) ?? activeSessionId ?? null;
+  const liveId = (await getLiveOrRestoringSessionId()) ?? activeSessionId ?? null;
   const recs = scanRecoverable(activeSessionId).filter((r) => r.sessionId !== liveId);
   const results: RecoveryResult[] = [];
   for (const r of recs) {

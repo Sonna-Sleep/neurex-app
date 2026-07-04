@@ -1,10 +1,10 @@
 import { useEffect, useRef } from 'react';
 
 import { useSession } from '../../state/session';
-import { activeOrRestoringSessionId } from '../ble/streamController';
 import {
   clearActiveRecording,
   getActiveRecording,
+  getLiveOrRestoringSessionId,
   noticeFromRecovery,
   recoverAll,
 } from './recovery';
@@ -32,9 +32,10 @@ export function useRecoverOnLaunch(): void {
     ran.current = true;
     (async () => {
       const marker = await getActiveRecording();
-      const liveOrRestoringSessionIdNow = activeOrRestoringSessionId();
+      let liveOrRestoringSessionIdNow: string | null | undefined;
       try {
         const results = await recoverAll(null);
+        liveOrRestoringSessionIdNow = await getLiveOrRestoringSessionId();
         const notice = noticeFromRecovery({
           marker,
           results,
@@ -43,7 +44,11 @@ export function useRecoverOnLaunch(): void {
         });
         if (notice) useSession.getState().setSessionNotice(notice);
       } finally {
-        if (marker && marker.sessionId !== liveOrRestoringSessionIdNow) {
+        if (!marker) return;
+        if (liveOrRestoringSessionIdNow === undefined) {
+          liveOrRestoringSessionIdNow = await getLiveOrRestoringSessionId();
+        }
+        if (marker.sessionId !== liveOrRestoringSessionIdNow) {
           await clearActiveRecording();
         }
       }
