@@ -1,7 +1,13 @@
 import { useEffect, useRef } from 'react';
 
 import { useSession } from '../../state/session';
-import { recoverAll } from './recovery';
+import { activeOrRestoringSessionId } from '../ble/streamController';
+import {
+  clearActiveRecording,
+  getActiveRecording,
+  noticeFromRecovery,
+  recoverAll,
+} from './recovery';
 
 /**
  * On launch — once auth is ready + signed in, and nothing is currently
@@ -24,6 +30,23 @@ export function useRecoverOnLaunch(): void {
     if (!authReady || !signedIn) return;
     if (streaming) return; // never touch the live session's file mid-recording
     ran.current = true;
-    recoverAll(null).catch(() => undefined);
+    (async () => {
+      const marker = await getActiveRecording();
+      const liveOrRestoringSessionIdNow = activeOrRestoringSessionId();
+      try {
+        const results = await recoverAll(null);
+        const notice = noticeFromRecovery({
+          marker,
+          results,
+          liveOrRestoringSessionId: liveOrRestoringSessionIdNow,
+          nowMs: Date.now(),
+        });
+        if (notice) useSession.getState().setSessionNotice(notice);
+      } finally {
+        if (marker && marker.sessionId !== liveOrRestoringSessionIdNow) {
+          await clearActiveRecording();
+        }
+      }
+    })().catch(() => undefined);
   }, [authReady, signedIn, streaming]);
 }

@@ -19,6 +19,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { File, Directory, Paths } from 'expo-file-system';
 
 import { transmitSession } from './cloudSync';
+import { buildRecoveredNotice, type SessionEndNotice } from '../ble/sessionNotice';
 import {
   reconstructTiming,
   durationMsFromBytes,
@@ -286,7 +287,38 @@ export function scanRecoverable(activeSessionId?: string | null): RecoverableRec
   return out;
 }
 
-export type RecoveryResult = { sessionId: string; ok: boolean; error?: string };
+export type RecoveryResult = {
+  sessionId: string;
+  ok: boolean;
+  startedAtMs: number;
+  endMs: number;
+  error?: string;
+};
+
+export function noticeFromRecovery(input: {
+  marker: RecordingMeta | null;
+  results: RecoveryResult[];
+  liveOrRestoringSessionId: string | null;
+  nowMs: number;
+}): SessionEndNotice | null {
+  const { marker, results, liveOrRestoringSessionId, nowMs } = input;
+  if (!marker) return null;
+  if (marker.sessionId === liveOrRestoringSessionId) return null;
+
+  const result = results.find((entry) => entry.sessionId === marker.sessionId);
+  // No matching recovery result means there is nothing to warn about here:
+  // the session may already be uploaded/deleted or was too short to stage.
+  if (!result) return null;
+
+  return buildRecoveredNotice({
+    sessionId: marker.sessionId,
+    sessionStartMs: result.startedAtMs,
+    dataEndMs: result.endMs,
+    markerDisconnectAtMs: marker.disconnectAtMs ?? null,
+    markerLastBatteryPct: marker.lastBatteryPct ?? null,
+    nowMs,
+  });
+}
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -328,9 +360,15 @@ export async function recoverAll(activeSessionId?: string | null): Promise<Recov
   for (const r of recs) {
     try {
       await transmitSession({ sessionId: r.sessionId, startMs: r.startedAtMs, endMs: r.endMs });
-      results.push({ sessionId: r.sessionId, ok: true });
+      results.push({ sessionId: r.sessionId, ok: true, startedAtMs: r.startedAtMs, endMs: r.endMs });
     } catch (e) {
-      results.push({ sessionId: r.sessionId, ok: false, error: (e as Error).message });
+      results.push({
+        sessionId: r.sessionId,
+        ok: false,
+        startedAtMs: r.startedAtMs,
+        endMs: r.endMs,
+        error: (e as Error).message,
+      });
     }
   }
   return results;
