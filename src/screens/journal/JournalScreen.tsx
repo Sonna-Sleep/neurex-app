@@ -12,6 +12,7 @@ import { sessionRepo, type Session } from '../../lib/repos';
 import {
   betterJournalSession,
   isCompletedSession,
+  isFailedAnalysisSession,
   isJournalVisibleSession,
 } from '../../lib/repos/sessionStatus';
 import { useSession } from '../../state/session';
@@ -199,6 +200,7 @@ export function JournalScreen({ navigation }: Props) {
             const selectedDay = key === selectedKey;
             const isToday = key === today;
             const band = session && isCompletedSession(session) ? scoreBand(session.score) : null;
+            const failed = session ? isFailedAnalysisSession(session) : false;
             const weekdayIndex = (d.getDay() + 6) % 7;
             return (
               <Pressable
@@ -211,7 +213,9 @@ export function JournalScreen({ navigation }: Props) {
                   weekday: 'long',
                   month: 'long',
                   day: 'numeric',
-                })}${isToday ? ', today' : ''}${session ? ', sleep recorded' : ', no recording'}`}
+                })}${isToday ? ', today' : ''}${
+                  session ? (failed ? ', analysis failed' : ', sleep recorded') : ', no recording'
+                }`}
               >
                 <View
                   style={[

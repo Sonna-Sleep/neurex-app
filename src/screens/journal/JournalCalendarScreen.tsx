@@ -14,6 +14,7 @@ import { sessionRepo, type Session } from '../../lib/repos';
 import {
   betterJournalSession,
   isCompletedSession,
+  isFailedAnalysisSession,
   isJournalVisibleSession,
   isPendingAnalysisSession,
 } from '../../lib/repos/sessionStatus';
@@ -195,6 +196,7 @@ export function JournalCalendarScreen({ navigation }: Props) {
               const inMonth = d.getMonth() === visibleMonth.getMonth();
               const band = session && isCompletedSession(session) ? scoreBand(session.score) : null;
               const pending = session ? isPendingAnalysisSession(session) : false;
+              const failed = session ? isFailedAnalysisSession(session) : false;
               return (
                 <Pressable
                   key={key}
@@ -211,7 +213,13 @@ export function JournalCalendarScreen({ navigation }: Props) {
                     month: 'long',
                     day: 'numeric',
                   })}${isToday ? ', today' : ''}${
-                    session ? (pending ? ', analysis pending' : ', sleep recorded') : ', no recording'
+                    session
+                      ? pending
+                        ? ', analysis pending'
+                        : failed
+                          ? ', analysis failed'
+                          : ', sleep recorded'
+                      : ', no recording'
                   }`}
                 >
                   {isToday ? <View pointerEvents="none" style={styles.todayRingCal} /> : null}
@@ -244,7 +252,11 @@ export function JournalCalendarScreen({ navigation }: Props) {
           ) : selectedSession ? (
             <>
               <Text style={styles.footerTitle}>
-                {isPendingAnalysisSession(selectedSession) ? 'Analyzing' : 'Recorded'}
+                {isPendingAnalysisSession(selectedSession)
+                  ? 'Analyzing'
+                  : isFailedAnalysisSession(selectedSession)
+                    ? 'Analysis failed'
+                    : 'Recorded'}
               </Text>
               <Secondary style={styles.footerText}>{selectedDateLabel(selectedKey)}</Secondary>
             </>

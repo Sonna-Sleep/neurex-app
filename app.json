@@ -49,7 +49,7 @@
     },
     "android": {
       "package": "tech.neurex.app",
-      "versionCode": 6,
+      "versionCode": 26,
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
