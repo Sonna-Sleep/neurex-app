@@ -39,6 +39,8 @@ export type RecordingMeta = {
   endMs?: number;
   deviceId?: string | null;
   serial?: string | null;
+  disconnectAtMs?: number | null;
+  lastBatteryPct?: number | null;
 };
 
 export type RecoverableRecording = {
@@ -69,6 +71,27 @@ function isMeta(m: unknown): m is RecordingMeta {
     typeof (m as RecordingMeta).sessionId === 'string' &&
     typeof (m as RecordingMeta).startedAtMs === 'number'
   );
+}
+
+export function stampRecordingDisconnect(
+  meta: RecordingMeta,
+  disconnectAtMs: number,
+  lastBatteryPct: number | null,
+): RecordingMeta {
+  return {
+    ...clearRecordingDisconnect(meta),
+    disconnectAtMs,
+    lastBatteryPct,
+  };
+}
+
+export function clearRecordingDisconnect(meta: RecordingMeta): RecordingMeta {
+  const {
+    disconnectAtMs: _disconnectAtMs,
+    lastBatteryPct: _lastBatteryPct,
+    ...cleanMeta
+  } = meta;
+  return cleanMeta;
 }
 
 // ── durable active-recording marker (AsyncStorage) ─────────────────────────

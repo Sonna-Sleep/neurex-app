@@ -27,6 +27,8 @@ import {
 import {
   setActiveRecording,
   clearActiveRecording,
+  clearRecordingDisconnect,
+  stampRecordingDisconnect,
   writeSessionMeta,
   type RecordingMeta,
 } from '../cloud/recovery';
@@ -100,6 +102,8 @@ type ActiveSession = {
   abandonTimer: ReturnType<typeof setTimeout> | null;
   // Unsubscribe for the battery-level watcher that auto-ends on low battery.
   batteryUnsub: (() => void) | null;
+  lastBatteryPct: number | null;
+  disconnectAtMs: number | null;
   userStopped: boolean;
   reconnecting: boolean;
   terminalReason: StreamStatsStopReason | null;
@@ -339,6 +343,8 @@ export async function startSession(
     lostTimer: null,
     abandonTimer: null,
     batteryUnsub: null,
+    lastBatteryPct: null,
+    disconnectAtMs: null,
     userStopped: false,
     reconnecting: false,
     terminalReason: null,
@@ -350,7 +356,9 @@ export async function startSession(
   // the store from a BLE callback even backgrounded, so this stays live with the
   // screen off. Check the current value, then on every change.
   const checkBattery = (level: number | null): void => {
-    if (active && !active.userStopped && batteryShouldStop(level)) void endSessionAuto('battery');
+    if (!active) return;
+    if (level !== null) active.lastBatteryPct = level;
+    if (!active.userStopped && batteryShouldStop(level)) void endSessionAuto('battery');
   };
   active.batteryUnsub = useSession.subscribe((s) => checkBattery(s.deviceBattery));
   checkBattery(useSession.getState().deviceBattery);
@@ -412,11 +420,12 @@ export async function resumeSessionAfterRestore(meta: RecordingMeta): Promise<vo
     const statsTimer = startStatsTimer(statsRef);
     const watchdogTimer = startWatchdog();
     startForegroundService({ startMs: startedAtMs });
+    const cleanMeta = clearRecordingDisconnect(meta);
     active = {
       sessionId,
       startedAtMs,
       deviceId,
-      meta,
+      meta: cleanMeta,
       handle,
       device,
       statsTimer,
@@ -427,10 +436,13 @@ export async function resumeSessionAfterRestore(meta: RecordingMeta): Promise<vo
       lostTimer: null,
       abandonTimer: null,
       batteryUnsub: null,
+      lastBatteryPct: null,
+      disconnectAtMs: null,
       userStopped: false,
       reconnecting: false,
       terminalReason: null,
     };
+    void setActiveRecording(cleanMeta);
     registerDisconnectWatch();
     if (__DEV__) console.log('[stream] resumed session after iOS restore', sessionId);
   } catch (e) {
@@ -464,6 +476,10 @@ function registerDisconnectWatch(): void {
 async function reconnectLoop(): Promise<void> {
   if (!active || active.reconnecting || active.userStopped) return;
   active.reconnecting = true;
+  active.disconnectAtMs = Date.now();
+  void setActiveRecording(
+    stampRecordingDisconnect(active.meta, active.disconnectAtMs, active.lastBatteryPct),
+  );
   useSession.getState().patchStreaming({ connection: 'reconnecting' });
 
   // Escalate to 'lost' if we can't get back within LOST_AFTER_MS — while STILL
@@ -532,6 +548,8 @@ async function reconnectLoop(): Promise<void> {
         clearTimeout(active.abandonTimer);
         active.abandonTimer = null;
       }
+      active.disconnectAtMs = null;
+      void setActiveRecording(clearRecordingDisconnect(active.meta));
       useSession.getState().patchStreaming({ connection: 'connected' });
       registerDisconnectWatch(); // re-arm for the new connection
       if (__DEV__) console.log(`[stream] reconnected after ${attempt} attempt(s)`);
