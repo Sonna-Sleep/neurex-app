@@ -260,6 +260,19 @@ function startWatchdog(): ReturnType<typeof setInterval> {
   }, WATCHDOG_INTERVAL_MS);
 }
 
+function installBatteryWatcher(): void {
+  if (!active) return;
+  const session = active;
+  const checkBattery = (level: number | null): void => {
+    if (!active || active !== session) return;
+    if (level !== null) active.lastBatteryPct = level;
+    if (!active.userStopped && batteryShouldStop(level)) void endSessionAuto('battery');
+  };
+  session.batteryUnsub?.();
+  session.batteryUnsub = useSession.subscribe((s) => checkBattery(s.deviceBattery));
+  checkBattery(useSession.getState().deviceBattery);
+}
+
 export async function startSession(
   deviceId: string,
   serial?: string | null,
@@ -355,13 +368,7 @@ export async function startSession(
   // Auto-end on a dead battery (Feature 3). The battery level (0x2A19) flows to
   // the store from a BLE callback even backgrounded, so this stays live with the
   // screen off. Check the current value, then on every change.
-  const checkBattery = (level: number | null): void => {
-    if (!active) return;
-    if (level !== null) active.lastBatteryPct = level;
-    if (!active.userStopped && batteryShouldStop(level)) void endSessionAuto('battery');
-  };
-  active.batteryUnsub = useSession.subscribe((s) => checkBattery(s.deviceBattery));
-  checkBattery(useSession.getState().deviceBattery);
+  installBatteryWatcher();
 
   // If the Android keep-alive service didn't actually start, the recording can
   // die the moment the screen locks. Surface it instead of failing silently.
@@ -444,6 +451,7 @@ export async function resumeSessionAfterRestore(meta: RecordingMeta): Promise<vo
     };
     void setActiveRecording(cleanMeta);
     registerDisconnectWatch();
+    installBatteryWatcher();
     if (__DEV__) console.log('[stream] resumed session after iOS restore', sessionId);
   } catch (e) {
     if (__DEV__) console.warn('[stream] resume after restore failed', e);
