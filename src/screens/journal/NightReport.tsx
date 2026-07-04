@@ -8,10 +8,15 @@ import { StyleSheet, Text, View } from 'react-native';
 import { Eyebrow, Secondary } from '../../theme/typography';
 import { colors, spacing, systemFontFamily } from '../../theme/tokens';
 import type { Session } from '../../lib/repos';
-import { isCompletedSession, isPendingAnalysisSession } from '../../lib/repos/sessionStatus';
+import {
+  isCompletedSession,
+  isFailedAnalysisSession,
+  isPendingAnalysisSession,
+} from '../../lib/repos/sessionStatus';
 import { ScoreRing } from '../../components/ScoreRing';
 import { Hypnogram } from '../home/components/Hypnogram';
 import { StageBreakdown } from '../home/components/StageBreakdown';
+import { HeadMovement } from '../home/components/HeadMovement';
 
 function fmtDur(min: number | null): string {
   if (min == null) return '—';
@@ -30,6 +35,7 @@ function fmtTime(ms: number): string {
 export function NightReport({ session }: { session: Session }) {
   const completed = isCompletedSession(session);
   const pending = isPendingAnalysisSession(session);
+  const failed = isFailedAnalysisSession(session);
   return (
     <View style={styles.report}>
       {/* Score ring + in-bed / asleep */}
@@ -56,6 +62,14 @@ export function NightReport({ session }: { session: Session }) {
               </Secondary>
             ) : null}
           </View>
+          <View style={styles.section}>
+            <Eyebrow>head movement</Eyebrow>
+            <HeadMovement
+              headMovement={session.headMovement}
+              startMs={session.startMs}
+              endMs={session.endMs}
+            />
+          </View>
           <StageBreakdown stageMinutes={session.stageMinutes} />
 
           <View style={styles.section}>
@@ -74,10 +88,13 @@ export function NightReport({ session }: { session: Session }) {
             </View>
           </View>
         </>
-      ) : session.status === 'failed' ? (
-        <Secondary style={styles.processing}>
-          Analysis failed. Contact support at contact@neurex.tech.
-        </Secondary>
+      ) : failed ? (
+        <View style={styles.failureBox}>
+          <Text style={styles.failureTitle}>Saved to cloud. Analysis failed.</Text>
+          <Secondary style={styles.failureText}>
+            {session.error ?? 'The backend could not turn this recording into a sleep report.'}
+          </Secondary>
+        </View>
       ) : (
         <Secondary style={styles.processing}>
           {pending ? 'Analyzing this night…' : 'This recording could not be analyzed.'}
@@ -169,6 +186,25 @@ const styles = StyleSheet.create({
     color: colors.textTertiary,
   },
   processing: {
+    color: colors.textSecondary,
+  },
+  failureBox: {
+    gap: spacing.sm,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.warning,
+    backgroundColor: colors.bgSurface,
+  },
+  failureTitle: {
+    fontFamily: systemFontFamily,
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: '600',
+    color: colors.warning,
+  },
+  failureText: {
     color: colors.textSecondary,
   },
 });

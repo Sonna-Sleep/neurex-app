@@ -204,7 +204,7 @@ export function JournalCalendarScreen({ navigation }: Props) {
                     styles.dayCell,
                     !inMonth && styles.dayCellMuted,
                     selectedDay && styles.dayCellSelected,
-                    session ? { borderColor: band?.color ?? colors.textTertiary } : null,
+                    session ? { borderColor: failed ? colors.warning : band?.color ?? colors.textTertiary } : null,
                   ]}
                   onPress={() => selectDate(d)}
                   accessibilityRole="button"
@@ -214,10 +214,10 @@ export function JournalCalendarScreen({ navigation }: Props) {
                     day: 'numeric',
                   })}${isToday ? ', today' : ''}${
                     session
-                      ? pending
-                        ? ', analysis pending'
-                        : failed
-                          ? ', analysis failed'
+                      ? failed
+                        ? ', analysis failed'
+                        : pending
+                          ? ', analysis pending'
                           : ', sleep recorded'
                       : ', no recording'
                   }`}
@@ -233,7 +233,12 @@ export function JournalCalendarScreen({ navigation }: Props) {
                     {d.getDate()}
                   </Text>
                   {session ? (
-                    <View style={[styles.recordingDot, { backgroundColor: band?.color ?? colors.textTertiary }]} />
+                    <View
+                      style={[
+                        styles.recordingDot,
+                        { backgroundColor: failed ? colors.warning : band?.color ?? colors.textTertiary },
+                      ]}
+                    />
                   ) : null}
                 </Pressable>
               );
@@ -252,10 +257,10 @@ export function JournalCalendarScreen({ navigation }: Props) {
           ) : selectedSession ? (
             <>
               <Text style={styles.footerTitle}>
-                {isPendingAnalysisSession(selectedSession)
-                  ? 'Analyzing'
-                  : isFailedAnalysisSession(selectedSession)
-                    ? 'Analysis failed'
+                {isFailedAnalysisSession(selectedSession)
+                  ? 'Analysis failed'
+                  : isPendingAnalysisSession(selectedSession)
+                    ? 'Analyzing'
                     : 'Recorded'}
               </Text>
               <Secondary style={styles.footerText}>{selectedDateLabel(selectedKey)}</Secondary>

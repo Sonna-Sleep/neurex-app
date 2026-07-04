@@ -31,6 +31,8 @@ import {
   streamStatsFile,
 } from './streamStatsSidecar';
 import { withUploadLock as runWithUploadLock, UPLOAD_LOCK_TIMEOUT_MS } from './uploadLock';
+import { CLOUD_UPLOAD_TIMEOUT_MS, withCloudTimeout } from './cloudTimeout';
+import { blobToArrayBuffer } from './blobBytes';
 import { useDiagnostics } from '../../state/diagnostics';
 
 // Re-export the surfaced stuck-upload counter so callers (e.g. a future health
@@ -140,7 +142,7 @@ export class NotAuthedError extends Error {
 async function currentUserId(): Promise<string> {
   const supabase = getSupabase();
   if (!supabase) throw new NotAuthedError();
-  const { data, error } = await supabase.auth.getUser();
+  const { data, error } = await withCloudTimeout('auth user check', supabase.auth.getUser());
   if (error || !data.user?.id) throw new NotAuthedError();
   return data.user.id;
 }
@@ -165,9 +167,10 @@ async function existingSegments(prefix: string, stream: Stream): Promise<Set<str
   const names = new Set<string>();
   const pageSize = 100;
   for (let offset = 0; ; offset += pageSize) {
-    const { data, error } = await supabase.storage
-      .from(RECORDINGS_BUCKET)
-      .list(dir, { limit: pageSize, offset });
+    const { data, error } = await withCloudTimeout(
+      'storage segment list',
+      supabase.storage.from(RECORDINGS_BUCKET).list(dir, { limit: pageSize, offset }),
+    );
     if (error || !data || data.length === 0) break;
     for (const o of data) names.add(o.name);
     if (data.length < pageSize) break;
@@ -203,9 +206,13 @@ function storageUploadBody(bytes: Uint8Array): ArrayBuffer {
 async function existingObjectMatches(path: string, chunk: Uint8Array): Promise<boolean | null> {
   const supabase = getSupabase();
   if (!supabase) throw new NotAuthedError();
-  const { data, error } = await supabase.storage.from(RECORDINGS_BUCKET).download(path);
+  const { data, error } = await withCloudTimeout(
+    'storage segment verification',
+    supabase.storage.from(RECORDINGS_BUCKET).download(path),
+  );
   if (error || !data) return null;
-  return bytesEqual(new Uint8Array(await data.arrayBuffer()), chunk);
+  const buffer = await withCloudTimeout('storage segment read', blobToArrayBuffer(data));
+  return bytesEqual(new Uint8Array(buffer), chunk);
 }
 
 function looksLikeDuplicateObject(error: { status?: number; statusCode?: string | number; message: string }): boolean {
@@ -225,9 +232,13 @@ async function uploadObjectNoOverwrite(
   if (existing === true) return;
   if (existing === false) throw new Error(`object conflict (${path}): existing bytes differ`);
 
-  const { error } = await supabase.storage
-    .from(RECORDINGS_BUCKET)
-    .upload(path, storageUploadBody(chunk), { contentType, upsert: false });
+  const { error } = await withCloudTimeout(
+    'storage segment upload',
+    supabase.storage
+      .from(RECORDINGS_BUCKET)
+      .upload(path, storageUploadBody(chunk), { contentType, upsert: false }),
+    CLOUD_UPLOAD_TIMEOUT_MS,
+  );
   if (!error) return;
 
   const e = error as { status?: number; statusCode?: string | number; message: string };
@@ -246,9 +257,13 @@ async function uploadObjectWithOverwrite(
 ): Promise<void> {
   const supabase = getSupabase();
   if (!supabase) throw new NotAuthedError();
-  const { error } = await supabase.storage
-    .from(RECORDINGS_BUCKET)
-    .upload(path, storageUploadBody(chunk), { contentType, upsert: true });
+  const { error } = await withCloudTimeout(
+    'storage sidecar upload',
+    supabase.storage
+      .from(RECORDINGS_BUCKET)
+      .upload(path, storageUploadBody(chunk), { contentType, upsert: true }),
+    CLOUD_UPLOAD_TIMEOUT_MS,
+  );
   if (error) throw error;
 }
 
@@ -535,7 +550,7 @@ export async function finalizeSession(input: FinalizeInput, prefix: string): Pro
     { rawSha256: input.rawSha256, rawStoragePath: input.rawStoragePath },
   );
   let row = full;
-  let { error } = await supabase.from('sessions').insert(row);
+  let { error } = await withCloudTimeout('session finalize', supabase.from('sessions').insert(row));
   const droppedColumns: string[] = [];
   while (error && isMissingColumnError(error)) {
     const col = missingColumnName(error);
@@ -548,7 +563,7 @@ export async function finalizeSession(input: FinalizeInput, prefix: string): Pro
         `[cloudSync] optional sessions column missing (${col}) — retrying without it: ` +
           error.message,
       );
-    ({ error } = await supabase.from('sessions').insert(row));
+    ({ error } = await withCloudTimeout('session finalize', supabase.from('sessions').insert(row)));
   }
   if (!error && droppedColumns.length > 0 && __DEV__) {
     console.warn(`[cloudSync] finalized after dropping optional columns: ${droppedColumns.join(', ')}`);
@@ -689,9 +704,13 @@ export async function downloadRaw(prefix: string, stream: Stream): Promise<strin
   const supabase = getSupabase();
   if (!supabase) throw new NotAuthedError();
   const path = `${prefix}/${stream}.bin`;
-  const { data, error } = await supabase.storage.from(RECORDINGS_BUCKET).download(path);
+  const { data, error } = await withCloudTimeout(
+    'raw download',
+    supabase.storage.from(RECORDINGS_BUCKET).download(path),
+    CLOUD_UPLOAD_TIMEOUT_MS,
+  );
   if (error || !data) throw new Error(`download failed (${path}): ${error?.message ?? 'no data'}`);
-  const buf = new Uint8Array(await data.arrayBuffer());
+  const buf = new Uint8Array(await withCloudTimeout('raw download read', blobToArrayBuffer(data)));
 
   const label = prefix.split('/').pop() || 'recording';
   const outDir = new Directory(Paths.document, 'downloads');

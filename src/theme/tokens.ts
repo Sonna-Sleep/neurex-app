@@ -51,6 +51,12 @@ export const signalQualityColors = {
   noSignalText: '#8E98A6',
 } as const;
 
+export const headMovementColors = {
+  pitch: '#73A9E8',
+  roll: '#E0B560',
+  movementFill: '#5FB89C',
+} as const;
+
 // Single source of truth for stage order + labels across every visualization.
 // User-facing order follows the hypnogram from awake to progressively deeper sleep.
 export const STAGE_META: { key: CoreSleepStage; label: string }[] = [

@@ -7,4 +7,13 @@ import type { DeviceRepo, SessionRepo } from './types';
 export const sessionRepo: SessionRepo = supabaseSessionRepo;
 export const deviceRepo: DeviceRepo = mockDeviceRepo;
 
-export type { CoreSleepStage, Device, Session, SleepStage, Epoch } from './types';
+export type {
+  CoreSleepStage,
+  Device,
+  Epoch,
+  HeadMovement,
+  HeadMovementEpoch,
+  HeadMovementInsights,
+  Session,
+  SleepStage,
+} from './types';

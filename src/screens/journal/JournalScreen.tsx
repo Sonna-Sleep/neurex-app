@@ -221,7 +221,7 @@ export function JournalScreen({ navigation }: Props) {
                   style={[
                     styles.dayCircle,
                     session
-                      ? { borderColor: band?.color ?? colors.textTertiary, borderWidth: 2 }
+                      ? { borderColor: failed ? colors.warning : band?.color ?? colors.textTertiary, borderWidth: 2 }
                       : null,
                     selectedDay && styles.dayCircleSelected,
                   ]}

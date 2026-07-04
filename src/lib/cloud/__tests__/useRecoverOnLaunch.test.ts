@@ -41,7 +41,10 @@ const sessionState = {
   streaming: null,
 };
 
+// Jest hoists jest.mock factories above lexical declarations; these handles must be var.
+// eslint-disable-next-line no-var
 var mockSetSessionNotice: jest.Mock;
+// eslint-disable-next-line no-var
 var mockUseSession: jest.Mock & { getState: () => { setSessionNotice: jest.Mock } };
 
 jest.mock('../../../state/session', () => ({

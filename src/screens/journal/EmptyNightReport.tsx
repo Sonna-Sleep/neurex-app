@@ -1,7 +1,8 @@
 // Placeholder report shown when the selected day has no recording. Mirrors the
-// real NightReport layout (score ring, in-bed/asleep, sleep-stages chart, stage
-// breakdown, details) but blank — so tapping an empty day shows the familiar
-// structure instead of a jarring one-liner. The chart area says "No recording".
+// real NightReport layout (score ring, in-bed/asleep, sleep-stages chart, head
+// movement, stage breakdown, details) but blank so tapping an empty day shows
+// the familiar structure instead of a jarring one-liner. The chart area says
+// "No recording".
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
@@ -16,7 +17,7 @@ const DETAILS = ['Went to bed', 'Woke up', 'Asleep after', 'Confidence'];
 export function EmptyNightReport() {
   return (
     <View style={styles.report}>
-      {/* Score ring + in-bed / asleep — all blank. */}
+      {/* Score ring + in-bed / asleep - all blank. */}
       <View style={styles.scoreRow}>
         <ScoreRing score={null} size={150} showLabel={false} />
         <View style={styles.stats}>
@@ -42,10 +43,18 @@ export function EmptyNightReport() {
         </View>
       </View>
 
-      {/* Stage breakdown — empty data renders every stage at 0m / 0%. */}
+      {/* Head movement - empty chart footprint with the real no-data wording. */}
+      <View style={styles.section}>
+        <Eyebrow>head movement</Eyebrow>
+        <View style={styles.headMovementPlaceholder}>
+          <Text style={styles.headMovementEmpty}>No head-movement data for this night</Text>
+        </View>
+      </View>
+
+      {/* Stage breakdown - empty data renders every stage at 0m / 0%. */}
       <StageBreakdown stageMinutes={{}} />
 
-      {/* Details — all tiles blank. */}
+      {/* Details - all tiles blank. */}
       <View style={styles.section}>
         <Eyebrow>details</Eyebrow>
         <View style={styles.detailGrid}>
@@ -138,6 +147,23 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: signalQualityColors.noSignalText,
+  },
+  headMovementPlaceholder: {
+    height: 220,
+    borderRadius: radii.card,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    backgroundColor: colors.bgSurface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.lg,
+  },
+  headMovementEmpty: {
+    fontFamily: systemFontFamily,
+    fontSize: 14,
+    fontWeight: '600',
+    color: signalQualityColors.noSignalText,
+    textAlign: 'center',
   },
   detailGrid: {
     flexDirection: 'row',

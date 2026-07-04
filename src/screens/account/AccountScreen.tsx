@@ -9,6 +9,11 @@ import { Avatar } from '../../components/Avatar';
 import { useSession } from '../../state/session';
 import { ageFromDob } from '../../lib/profile';
 import { sessionRepo, type Session } from '../../lib/repos';
+import {
+  cloudUploadAttentionSessions,
+  isFailedAnalysisSession,
+  isPendingAnalysisSession,
+} from '../../lib/repos/sessionStatus';
 import { transmitSession } from '../../lib/cloud/cloudSync';
 import { inspectLocalRecordings, type LocalRecordingInspection } from '../../lib/cloud/recovery';
 import { exportRecordingBundle } from '../../lib/files/recordingBundleExport';
@@ -114,6 +119,7 @@ export function AccountScreen() {
   const memberSince = memberSinceLabel(user?.memberSinceMs);
   const profileMeta = [sub || null, memberSince].filter(Boolean).join(' · ');
   const stats = useMemo(() => profileStats(sessions), [sessions]);
+  const cloudUploads = useMemo(() => cloudUploadAttentionSessions(sessions), [sessions]);
   const onSignOut = useCallback(() => {
     if (streaming) {
       Alert.alert('Recording in progress', 'Stop the recording before logging out.');
@@ -206,6 +212,8 @@ export function AccountScreen() {
           <ProfileStat value={stats.avgScore} label="Avg. score" />
         </View>
 
+        {cloudUploads.length > 0 ? <CloudUploadsPanel sessions={cloudUploads} /> : null}
+
         {localRecordings.length > 0 ? (
           <SavedRecordingsPanel
             recordings={localRecordings}
@@ -263,6 +271,51 @@ function Row({ label, onPress, first }: { label: string; onPress: () => void; fi
       <Text style={styles.rowLabel}>{label}</Text>
       <Text style={styles.chevron}>›</Text>
     </Pressable>
+  );
+}
+
+function cloudUploadStatus(session: Session): string {
+  if (isFailedAnalysisSession(session)) return 'Failed';
+  if (isPendingAnalysisSession(session)) return 'Analyzing';
+  return 'Cloud';
+}
+
+function cloudUploadMeta(session: Session): string {
+  const base = `Saved to cloud · ${fmtDur(session.tib)}`;
+  if (isFailedAnalysisSession(session)) {
+    return session.error ? `${base} · ${session.error}` : `${base} · Analysis failed`;
+  }
+  return `${base} · Waiting for sleep analysis`;
+}
+
+function CloudUploadsPanel({ sessions }: { sessions: Session[] }) {
+  return (
+    <View style={styles.localPanel}>
+      <View style={styles.localHeader}>
+        <Text style={styles.localTitle}>Cloud uploads</Text>
+        <Text style={styles.localCount}>{sessions.length}</Text>
+      </View>
+      {sessions.map((session, index) => {
+        const failed = isFailedAnalysisSession(session);
+        return (
+          <View key={session.id} style={[styles.localItem, index > 0 && styles.localDivider]}>
+            <View style={styles.localItemTop}>
+              <View style={styles.localItemText}>
+                <Text style={styles.localName} numberOfLines={1}>
+                  {fmtStarted(session.startMs)}
+                </Text>
+                <Text style={styles.localMeta} numberOfLines={3}>
+                  {cloudUploadMeta(session)}
+                </Text>
+              </View>
+              <Text style={[styles.localStatus, failed && styles.cloudStatusFailed]}>
+                {cloudUploadStatus(session)}
+              </Text>
+            </View>
+          </View>
+        );
+      })}
+    </View>
   );
 }
 
@@ -525,6 +578,9 @@ const styles = StyleSheet.create({
   },
   localStatusMuted: {
     color: colors.textTertiary,
+  },
+  cloudStatusFailed: {
+    color: colors.warning,
   },
   localActions: {
     flexDirection: 'row',

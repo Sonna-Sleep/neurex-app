@@ -5,6 +5,7 @@ import Svg, { Line, Rect, Text as SvgText } from 'react-native-svg';
 import { colors, signalQualityColors, stageColors } from '../../../theme/tokens';
 import type { CoreSleepStage, Epoch } from '../../../lib/repos';
 import { collapseHypnogramRuns, isCoreSleepStage } from './hypnogramRuns';
+import { axisTicks, LABEL_W, makeXAt, stagedEndMs } from './timelineScale';
 
 type Props = {
   epochs: Epoch[];
@@ -15,7 +16,6 @@ type Props = {
 const HEIGHT = 220;
 const PADDING_TOP = 8;
 const PADDING_BOTTOM = 22; // space for the bottom time axis
-const LABEL_W = 36; // left gutter reserved for lane labels
 const LANES: CoreSleepStage[] = ['wake', 'light', 'rem', 'deep'];
 const LANE_LABEL: Record<CoreSleepStage, string> = {
   wake: 'WAKE',
@@ -32,13 +32,11 @@ export function Hypnogram({ epochs, startMs, endMs }: Props) {
   const [width, setWidth] = useState(0);
   const drawH = HEIGHT - PADDING_TOP - PADDING_BOTTOM;
   const chartEndMs = useMemo(() => stagedEndMs(epochs, startMs, endMs), [epochs, startMs, endMs]);
-  const totalMs = Math.max(chartEndMs - startMs, 1);
-
-  // Chart plots in [LABEL_W, width]; the left gutter holds lane labels.
+  const xAt = useMemo(
+    () => makeXAt(startMs, chartEndMs, width),
+    [startMs, chartEndMs, width],
+  );
   const chartLeft = LABEL_W;
-  const chartW = Math.max(width - LABEL_W, 1);
-  const xAt = (ms: number) =>
-    chartLeft + ((ms - startMs) / totalMs) * chartW;
 
   // Each stage occupies a horizontal band; awake on top, deep at the bottom.
   const SLOT_H = drawH / LANES.length;
@@ -197,31 +195,6 @@ export function Hypnogram({ epochs, startMs, endMs }: Props) {
       </View>
     </View>
   );
-}
-
-function stagedEndMs(epochs: Epoch[], startMs: number, fallbackEndMs: number) {
-  if (!epochs.length) return fallbackEndMs;
-  const lastOffsetMs = epochs.reduce(
-    (max, e) => Math.max(max, e.startMs + e.durationSec * 1000),
-    0,
-  );
-  return lastOffsetMs > 0 ? startMs + lastOffsetMs : fallbackEndMs;
-}
-
-function axisTicks(startMs: number, endMs: number) {
-  const ticks: { ms: number; label: string }[] = [];
-  const start = new Date(startMs);
-  const first = new Date(start);
-  first.setMinutes(0, 0, 0);
-  if (first.getHours() % 2 !== 0) first.setHours(first.getHours() + 1);
-  if (first.getTime() < startMs) first.setHours(first.getHours() + 2);
-  for (let t = first.getTime(); t <= endMs; t += 2 * 3600 * 1000) {
-    const d = new Date(t);
-    const h12 = ((d.getHours() + 11) % 12) + 1;
-    const ampm = d.getHours() < 12 ? 'AM' : 'PM';
-    ticks.push({ ms: t, label: `${h12} ${ampm}` });
-  }
-  return ticks;
 }
 
 function fmt(ms: number) {

@@ -1,13 +1,17 @@
 import { getSupabase } from '../auth/supabase';
-import type { Session, SessionRepo } from './types';
+import type { HeadMovement, Session, SessionRepo } from './types';
 
 // Columns on the public.sessions table. The nested jsonb columns
 // (stage_minutes, epochs) are stored already in the app's shape.
 const BASE_COLUMNS =
   'id,start_ms,end_ms,tib,tst,waso,efficiency,awakenings,' +
   'stage_minutes,epochs,score,confidence,sol,storage_prefix,status';
+const FAILURE_COLUMNS = 'error';
 const SIGNAL_COLUMNS = 'excluded_minutes,signal_end_ms';
-const COLUMNS = `${BASE_COLUMNS},${SIGNAL_COLUMNS}`;
+const IMU_COLUMNS = 'head_movement';
+const COLUMNS_WITH_FAILURE = `${BASE_COLUMNS},${FAILURE_COLUMNS}`;
+const COLUMNS_WITH_SIGNAL = `${COLUMNS_WITH_FAILURE},${SIGNAL_COLUMNS}`;
+const COLUMNS = `${COLUMNS_WITH_SIGNAL},${IMU_COLUMNS}`;
 
 type Row = {
   id: string;
@@ -25,13 +29,35 @@ type Row = {
   sol: number | null;
   excluded_minutes: number | null;
   signal_end_ms: number | null;
+  head_movement: HeadMovement | null;
   storage_prefix: string | null;
   status: string;
+  error: string | null;
 };
+
+function missingHeadMovementColumn(error: { message?: string } | null | undefined): boolean {
+  const msg = (error?.message ?? '').toLowerCase();
+  return msg.includes('column') && msg.includes('head_movement');
+}
 
 function missingOptionalSignalColumns(error: { message?: string } | null | undefined): boolean {
   const msg = (error?.message ?? '').toLowerCase();
-  return msg.includes('column') && (msg.includes('excluded_minutes') || msg.includes('signal_end_ms'));
+  return (
+    msg.includes('column') &&
+    (msg.includes('excluded_minutes') || msg.includes('signal_end_ms'))
+  );
+}
+
+function missingFailureColumn(error: { message?: string } | null | undefined): boolean {
+  const msg = (error?.message ?? '').toLowerCase();
+  return msg.includes('column') && msg.includes('error');
+}
+
+function fallbackColumnsFor(error: { message?: string } | null | undefined) {
+  if (missingHeadMovementColumn(error)) return COLUMNS_WITH_SIGNAL;
+  if (missingOptionalSignalColumns(error)) return COLUMNS_WITH_FAILURE;
+  if (missingFailureColumn(error)) return BASE_COLUMNS;
+  return null;
 }
 
 function toSession(r: Row): Session {
@@ -53,9 +79,11 @@ function toSession(r: Row): Session {
     confidence: r.confidence,
     sol: r.sol,
     excludedMinutes: r.excluded_minutes ?? 0,
-    signalEndMs: r.signal_end_ms,
-    storagePrefix: r.storage_prefix,
+    headMovement: r.head_movement ?? null,
+    signalEndMs: r.signal_end_ms ?? null,
+    storagePrefix: r.storage_prefix ?? null,
     status: r.status,
+    error: r.error ?? null,
   };
 }
 
@@ -70,10 +98,11 @@ class SupabaseSessionRepo implements SessionRepo {
       .select(COLUMNS)
       .order('start_ms', { ascending: false });
     if (error) {
-      if (missingOptionalSignalColumns(error)) {
+      const fallbackColumns = fallbackColumnsFor(error);
+      if (fallbackColumns) {
         const fallback = await supabase
           .from('sessions')
-          .select(BASE_COLUMNS)
+          .select(fallbackColumns)
           .order('start_ms', { ascending: false });
         if (!fallback.error) return ((fallback.data as unknown as Row[] | null) ?? []).map(toSession);
       }
@@ -96,10 +125,11 @@ class SupabaseSessionRepo implements SessionRepo {
       .limit(1)
       .maybeSingle();
     if (error) {
-      if (missingOptionalSignalColumns(error)) {
+      const fallbackColumns = fallbackColumnsFor(error);
+      if (fallbackColumns) {
         const fallback = await supabase
           .from('sessions')
-          .select(BASE_COLUMNS)
+          .select(fallbackColumns)
           .order('start_ms', { ascending: false })
           .limit(1)
           .maybeSingle();
@@ -120,10 +150,11 @@ class SupabaseSessionRepo implements SessionRepo {
       .eq('id', id)
       .maybeSingle();
     if (error) {
-      if (missingOptionalSignalColumns(error)) {
+      const fallbackColumns = fallbackColumnsFor(error);
+      if (fallbackColumns) {
         const fallback = await supabase
           .from('sessions')
-          .select(BASE_COLUMNS)
+          .select(fallbackColumns)
           .eq('id', id)
           .maybeSingle();
         if (!fallback.error) return fallback.data ? toSession(fallback.data as unknown as Row) : null;

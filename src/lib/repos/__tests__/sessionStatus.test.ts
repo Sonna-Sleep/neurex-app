@@ -1,5 +1,6 @@
 import type { Session } from '../types';
 import {
+  cloudUploadAttentionSessions,
   isFailedAnalysisSession,
   isJournalVisibleSession,
   isPendingAnalysisSession,
@@ -22,9 +23,11 @@ function session(overrides: Partial<Session>): Session {
     confidence: null,
     sol: null,
     excludedMinutes: 0,
+    headMovement: null,
     signalEndMs: null,
     storagePrefix: null,
     status: 'uploaded',
+    error: null,
     ...overrides,
   };
 }
@@ -43,5 +46,23 @@ describe('sessionStatus', () => {
     expect(isJournalVisibleSession(session({ status: 'uploaded', tib: 17.36 }))).toBe(false);
     expect(isJournalVisibleSession(session({ status: 'processing', tib: 19.99 }))).toBe(false);
     expect(isJournalVisibleSession(session({ status: 'processing', tib: 20 }))).toBe(true);
+  });
+
+  it('lists failed and pending cloud sessions newest first for Profile attention', () => {
+    const ready = session({
+      id: 'ready',
+      status: 'ready',
+      score: 80,
+      tst: 420,
+      endMs: 4_000,
+    });
+    const failed = session({ id: 'failed', status: 'failed', endMs: 6_000 });
+    const pending = session({ id: 'pending', status: 'uploaded', tib: 25, endMs: 5_000 });
+    const shortPending = session({ id: 'short', status: 'uploaded', tib: 10, endMs: 7_000 });
+
+    expect(cloudUploadAttentionSessions([ready, failed, pending, shortPending])).toEqual([
+      failed,
+      pending,
+    ]);
   });
 });

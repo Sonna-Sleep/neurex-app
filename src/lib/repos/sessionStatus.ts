@@ -38,3 +38,10 @@ export function betterJournalSession(a: Session, b: Session): Session {
   if (rankDelta < 0) return b;
   return a.endMs > b.endMs ? a : b;
 }
+
+export function cloudUploadAttentionSessions(sessions: Session[], limit = 5): Session[] {
+  return sessions
+    .filter((session) => isFailedAnalysisSession(session) || isPendingAnalysisSession(session))
+    .sort((a, b) => b.endMs - a.endMs)
+    .slice(0, limit);
+}
