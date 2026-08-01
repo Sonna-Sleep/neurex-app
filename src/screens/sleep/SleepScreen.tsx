@@ -16,6 +16,7 @@ import { useSession } from '../../state/session';
 import { RecordingCard } from '../home/components/RecordingCard';
 import { ConnectDeviceCard } from '../home/components/ConnectDeviceCard';
 import { TAB_BAR_SPACE } from '../../navigation/FloatingTabBar';
+import { WakeAlarmCard } from './components/WakeAlarmCard';
 
 type DevicePresence = 'checking' | 'nearby' | 'missing';
 const FIRST_SEEN_GRACE_MS = 3000;
@@ -67,6 +68,7 @@ export function SleepScreen() {
           ) : (
             <ConnectDeviceCard onConnected={(device) => setConnectedDeviceId(device.deviceId)} />
           )}
+          <WakeAlarmCard />
         </View>
       </ScrollView>
     </SafeAreaView>

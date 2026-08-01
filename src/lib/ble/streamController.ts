@@ -45,6 +45,14 @@ import {
   readRecordingManifest,
   statsFromManifest,
 } from './recordingManifest';
+import {
+  encodeSetAlarm,
+  encodeCancel,
+  SUNRISE_RAMP_S,
+  SUNRISE_MAX_BRIGHTNESS,
+  SUNRISE_COLOR,
+} from './smartAlarm';
+import { SmartWakeController } from './smartWakeController';
 
 // User-initiated session start: time-bounded so a device that's off or out of
 // range fails fast with an error instead of an infinite spinner. The background
@@ -103,6 +111,7 @@ type ActiveSession = {
   userStopped: boolean;
   reconnecting: boolean;
   terminalReason: StreamStatsStopReason | null;
+  smartWake: SmartWakeController;
 };
 
 let active: ActiveSession | null = null;
@@ -191,14 +200,17 @@ function endMsFromSession(sessionId: string, startedAtMs: number, fallback: Stre
   return endMsFromSamples(startedAtMs, fallback);
 }
 
-function makeCallbacks(statsRef: StatsRef): StreamCallbacks {
+function makeCallbacks(statsRef: StatsRef, smartWake: SmartWakeController): StreamCallbacks {
   return {
-    onPacket: (_pkt, stats) => {
+    onPacket: (pkt, stats) => {
       statsRef.current = stats;
+      smartWake.onPacket(pkt);
     },
     onDrop: (_reason, stats) => {
       statsRef.current = stats;
+      smartWake.onDrop();
     },
+    onImu: (sample) => smartWake.onImu(sample),
     onError: (err) => {
       handleStreamError(err);
     },
@@ -216,7 +228,10 @@ function handleStreamError(err: Error): void {
   if (__DEV__) console.warn('[stream] error:', err.message);
 }
 
-function startStatsTimer(statsRef: StatsRef): ReturnType<typeof setInterval> {
+function startStatsTimer(
+  statsRef: StatsRef,
+  smartWake: SmartWakeController,
+): ReturnType<typeof setInterval> {
   return setInterval(() => {
     const s = statsRef.current;
     useSession.getState().patchStreaming({
@@ -227,6 +242,7 @@ function startStatsTimer(statsRef: StatsRef): ReturnType<typeof setInterval> {
       generation: s.generation,
       deviceReboots: s.deviceReboots,
     });
+    smartWake.tick();
   }, 500);
 }
 
@@ -254,6 +270,71 @@ function startWatchdog(): ReturnType<typeof setInterval> {
     // listener is already subscribed to, which drives reconnectLoop.
     manager.cancelDeviceConnection(deviceId).catch(() => undefined);
   }, WATCHDOG_INTERVAL_MS);
+}
+
+// Wake-light arming.
+// The device runs the sunrise countdown itself (survives BLE drops), so the
+// app's only job is to (re)arm with a freshly computed delay whenever it has a
+// live link: session start, every reconnect (also covers a device reboot,
+// which clears the RAM-only alarm), and iOS restore. All writes are
+// best-effort - the recording NEVER fails because of the wake light. The retry
+// schedule exists because the firmware's LED command queue comes up SECONDS
+// after BLE is connectable (~2-10 s normally, ~20 s worst case with chip
+// recovery), and the device reboots itself on faults - an arm sent too early
+// is rejected at the ATT layer and must be re-sent.
+const WAKE_ARM_RETRY_MS = [5_000, 15_000, 30_000];
+
+async function armWakeLight(device: ConnectedDevice, attempt = 0): Promise<void> {
+  const alarm = useSession.getState().wakeAlarm;
+  if (!alarm?.enabled || !device.alarmControlAvailable || !device.writeAlarmControl) return;
+  const smartWake = active?.device === device ? active.smartWake : null;
+  try {
+    const delayS = smartWake?.fallbackDelaySeconds() ?? null;
+    if (delayS === null) return;
+    await device.writeAlarmControl(
+      encodeSetAlarm(delayS, SUNRISE_RAMP_S, SUNRISE_MAX_BRIGHTNESS, SUNRISE_COLOR),
+    );
+    smartWake?.markArmed(true);
+    if (__DEV__) console.log(`[stream] smart-wake fallback armed in ${delayS}s`);
+  } catch (e) {
+    smartWake?.markArmed(false);
+    if (__DEV__) console.warn(`[stream] wake-light arm failed (attempt ${attempt})`, e);
+    if (!(e instanceof RangeError) && attempt < WAKE_ARM_RETRY_MS.length) {
+      setTimeout(() => {
+        // Only retry while THIS device is still the live session's link.
+        if (active?.device === device && !active.userStopped) {
+          void armWakeLight(device, attempt + 1);
+        }
+      }, WAKE_ARM_RETRY_MS[attempt]);
+    }
+  }
+}
+
+async function cancelWakeLight(device: ConnectedDevice): Promise<void> {
+  if (!device.alarmControlAvailable || !device.writeAlarmControl) return;
+  try {
+    await device.writeAlarmControl(encodeCancel());
+  } catch {
+    // Best-effort: at stop time the device may already be unreachable.
+  }
+}
+
+/** Re-sync the device to the CURRENT alarm while a session is live - called
+ * by the UI when the user edits or toggles the alarm mid-recording. SET
+ * replaces the pending countdown on the device; disabling sends CANCEL. */
+export async function syncWakeLightForActiveSession(): Promise<void> {
+  if (!active) return;
+  const alarm = useSession.getState().wakeAlarm;
+  try {
+    active.smartWake.onAlarmChanged();
+  } catch (error) {
+    // Persisted/UI validation should prevent this; keep recording intact if a
+    // corrupt alarm nevertheless reaches the live sync path.
+    if (__DEV__) console.warn('[stream] invalid smart-wake alarm ignored', error);
+    return;
+  }
+  if (alarm?.enabled) await armWakeLight(active.device);
+  else await cancelWakeLight(active.device);
 }
 
 export async function startSession(
@@ -292,7 +373,8 @@ export async function startSession(
     sampleRateHz: device.scale.sampleRateHz,
   });
   const statsRef: StatsRef = { current: statsFromManifest(initialManifest) };
-  const cb = makeCallbacks(statsRef);
+  const smartWake = new SmartWakeController(sessionId, device, startedAtMs);
+  const cb = makeCallbacks(statsRef, smartWake);
   const handle = await device.startStream(sessionId, cb);
 
   // Durable recovery hooks (best-effort; recording proceeds regardless): a
@@ -314,7 +396,7 @@ export async function startSession(
     error: null,
   });
 
-  const statsTimer = startStatsTimer(statsRef);
+  const statsTimer = startStatsTimer(statsRef, smartWake);
   const watchdogTimer = startWatchdog();
 
   // Keep the process alive overnight (screen off / backgrounded).
@@ -342,9 +424,11 @@ export async function startSession(
     userStopped: false,
     reconnecting: false,
     terminalReason: null,
+    smartWake,
   };
 
   registerDisconnectWatch();
+  void armWakeLight(device);
 
   // Auto-end on a dead battery (Feature 3). The battery level (0x2A19) flows to
   // the store from a BLE callback even backgrounded, so this stays live with the
@@ -391,7 +475,8 @@ export async function resumeSessionAfterRestore(meta: RecordingMeta): Promise<vo
       sampleRateHz: device.scale.sampleRateHz,
     });
     const statsRef: StatsRef = { current: statsFromManifest(initialManifest) };
-    const cb = makeCallbacks(statsRef);
+    const smartWake = new SmartWakeController(sessionId, device);
+    const cb = makeCallbacks(statsRef, smartWake);
     const handle = await device.startStream(sessionId, cb);
     if (active) {
       await handle.stop().catch(() => undefined);
@@ -409,7 +494,7 @@ export async function resumeSessionAfterRestore(meta: RecordingMeta): Promise<vo
       connection: 'connected',
       error: null,
     });
-    const statsTimer = startStatsTimer(statsRef);
+    const statsTimer = startStatsTimer(statsRef, smartWake);
     const watchdogTimer = startWatchdog();
     startForegroundService({ startMs: startedAtMs });
     active = {
@@ -430,8 +515,10 @@ export async function resumeSessionAfterRestore(meta: RecordingMeta): Promise<vo
       userStopped: false,
       reconnecting: false,
       terminalReason: null,
+      smartWake,
     };
     registerDisconnectWatch();
+    void armWakeLight(device);
     if (__DEV__) console.log('[stream] resumed session after iOS restore', sessionId);
   } catch (e) {
     if (__DEV__) console.warn('[stream] resume after restore failed', e);
@@ -523,6 +610,7 @@ async function reconnectLoop(): Promise<void> {
 
       active.device = device;
       active.handle = handle;
+      active.smartWake.setDevice(device);
       active.reconnecting = false;
       if (active.lostTimer) {
         clearTimeout(active.lostTimer);
@@ -533,7 +621,8 @@ async function reconnectLoop(): Promise<void> {
         active.abandonTimer = null;
       }
       useSession.getState().patchStreaming({ connection: 'connected' });
-      registerDisconnectWatch(); // re-arm for the new connection
+      registerDisconnectWatch(); // re-sync the current wake-light state for the new connection
+      void syncWakeLightForActiveSession();
       if (__DEV__) console.log(`[stream] reconnected after ${attempt} attempt(s)`);
       return;
     } catch (e) {
@@ -627,6 +716,9 @@ async function endSessionAuto(reason: 'battery' | 'device-lost'): Promise<void> 
     stopReason: reason,
     stats,
   }).catch(() => undefined);
+  // Deliberately no cancelWakeLight here: the recording ended (battery /
+  // device lost) but the user is still asleep - if the board is alive, the
+  // armed sunrise should still fire at wake time.
   await session.device.disconnect().catch(() => undefined);
   stopForegroundService();
   // No longer the active session to resume. If cloud handoff below fails, launch-
@@ -667,6 +759,7 @@ export async function stopSession(): Promise<StopResult | null> {
     stopReason: session.terminalReason ?? 'manual',
     stats,
   }).catch(() => undefined);
+  await cancelWakeLight(session.device);
   await session.device.disconnect().catch(() => undefined);
 
   stopForegroundService();

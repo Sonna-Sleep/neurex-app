@@ -43,6 +43,71 @@ export type Streaming = {
   error?: string | null;
 };
 
+// User's wake-up alarm for the mask's LED sunrise. Wall-clock time; the BLE
+// arming math resolves it to "next occurrence" at arm time. Persisted so the
+// alarm survives app restarts.
+export type WakeAlarmSetting = { hour: number; minute: number; enabled: boolean };
+
+export type SmartWakePhase =
+  | 'idle'
+  | 'monitoring_pre_alarm'
+  | 'natural_ramping'
+  | 'fallback_ramping'
+  | 'manual_ramping'
+  | 'completed';
+
+export type SmartWakeTriggerReason =
+  | 'natural_orp_uptick'
+  | 'fallback_deadline'
+  | 'manual';
+
+/** Persistent intervention state. Raw chart history intentionally stays in
+ * the processor's bounded memory; the decision and trigger survive a process
+ * restart so restoration never starts the same ramp twice. */
+export type SmartWakeRuntime = {
+  sessionId: string;
+  state: SmartWakePhase;
+  alarmAtMs: number;
+  wakeWindowStartMs: number;
+  fallbackDeadlineMs: number;
+  rawScore: number | null;
+  smoothedScore: number | null;
+  confidence: number;
+  artifactBurden: number;
+  slopePerMinute: number | null;
+  imuMotionActive: boolean;
+  ledStatus: 'unavailable' | 'arming' | 'armed' | 'error';
+  triggerReason: SmartWakeTriggerReason | null;
+  triggeredAtMs: number | null;
+  updatedAtMs: number;
+};
+
+export type SmartWakeHistoryPoint = {
+  atMs: number;
+  raw: number | null;
+  smooth: number | null;
+};
+
+function normalizeWakeAlarmSetting(value: unknown): WakeAlarmSetting | null {
+  if (!value || typeof value !== 'object') return null;
+  const alarm = value as Partial<WakeAlarmSetting>;
+  const { hour, minute, enabled } = alarm;
+  if (
+    !Number.isInteger(hour) ||
+    typeof hour !== 'number' ||
+    hour < 0 ||
+    hour > 23 ||
+    !Number.isInteger(minute) ||
+    typeof minute !== 'number' ||
+    minute < 0 ||
+    minute > 59 ||
+    typeof enabled !== 'boolean'
+  ) {
+    return null;
+  }
+  return { hour, minute, enabled };
+}
+
 type SessionState = {
   authStatus: AuthStatus;
   user: User | null;
@@ -68,6 +133,9 @@ type SessionState = {
   // Session ids that became "ready" but the user hasn't opened yet. Drives the
   // "new" dot on the Journal tab. Persisted so the dot survives an app restart.
   unviewedNightIds: string[];
+  wakeAlarm: WakeAlarmSetting | null;
+  smartWakeRuntime: SmartWakeRuntime | null;
+  smartWakeHistory: SmartWakeHistoryPoint[];
   setAuth: (user: User | null) => void;
   patchUser: (patch: Partial<User>) => void;
   setAvatar: (uri: string | null) => void;
@@ -79,6 +147,10 @@ type SessionState = {
   setStreaming: (s: Streaming | null) => void;
   patchStreaming: (patch: Partial<Streaming>) => void;
   setDeviceBattery: (pct: number | null) => void;
+  setWakeAlarm: (a: WakeAlarmSetting | null) => void;
+  setSmartWakeRuntime: (runtime: SmartWakeRuntime | null) => void;
+  patchSmartWakeRuntime: (patch: Partial<SmartWakeRuntime>) => void;
+  appendSmartWakeHistory: (point: SmartWakeHistoryPoint) => void;
 };
 
 export const useSession = create<SessionState>()(
@@ -95,6 +167,9 @@ export const useSession = create<SessionState>()(
       streaming: null,
       deviceBattery: null,
       unviewedNightIds: [],
+      wakeAlarm: null,
+      smartWakeRuntime: null,
+      smartWakeHistory: [],
 
       setAuth: (user) =>
         set(() => ({
@@ -169,6 +244,9 @@ export const useSession = create<SessionState>()(
           streaming: null,
           deviceBattery: null,
           unviewedNightIds: [],
+          wakeAlarm: null,
+          smartWakeRuntime: null,
+          smartWakeHistory: [],
         });
         void Promise.all([localWipe(), clearActiveRecording()]);
       },
@@ -181,6 +259,30 @@ export const useSession = create<SessionState>()(
         ),
 
       setDeviceBattery: (pct) => set({ deviceBattery: pct }),
+
+      setWakeAlarm: (a) => set({ wakeAlarm: a }),
+
+      setSmartWakeRuntime: (smartWakeRuntime) =>
+        set((state) => ({
+          smartWakeRuntime,
+          smartWakeHistory:
+            state.smartWakeRuntime?.sessionId === smartWakeRuntime?.sessionId
+              ? state.smartWakeHistory
+              : [],
+        })),
+
+      patchSmartWakeRuntime: (patch) =>
+        set((state) =>
+          state.smartWakeRuntime
+            ? { smartWakeRuntime: { ...state.smartWakeRuntime, ...patch } }
+            : {},
+        ),
+
+      appendSmartWakeHistory: (point) =>
+        set((state) => ({
+          // 1,200 non-overlapping 3 s epochs = the most recent 60 minutes.
+          smartWakeHistory: [...state.smartWakeHistory.slice(-1199), point],
+        })),
     }),
     {
       name: 'neurex-session',
@@ -192,6 +294,8 @@ export const useSession = create<SessionState>()(
         pairedSerial: s.pairedSerial,
         pairedDeviceId: s.pairedDeviceId,
         onboardingComplete: s.onboardingComplete,
+        wakeAlarm: s.wakeAlarm,
+        smartWakeRuntime: s.smartWakeRuntime,
       }),
       merge: (persisted, current) => {
         const p = (persisted ?? {}) as Partial<SessionState>;
@@ -199,6 +303,10 @@ export const useSession = create<SessionState>()(
           ...current,
           ...p,
           authStatus: p.user ? 'signed-in' : current.authStatus,
+          wakeAlarm: normalizeWakeAlarmSetting(p.wakeAlarm),
+          // Chart samples are deliberately transient; a restored intervention
+          // retains its decision but starts a fresh bounded live chart.
+          smartWakeHistory: [],
         };
       },
       onRehydrateStorage: () => (state) => {

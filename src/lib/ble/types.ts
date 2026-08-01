@@ -7,6 +7,7 @@
 // separately as IMU.BIN when firmware exposes that characteristic.
 
 import type { DeviceScaleInfo } from './scale';
+import type { LiveImuSample } from './imuLive';
 
 export type FoundDevice = {
   /** Platform-stable identifier — UUID on iOS, MAC address on Android. */
@@ -99,6 +100,9 @@ export type StreamStats = {
 export type StreamCallbacks = {
   /** Fired for each well-formed packet — drives the live UI. */
   onPacket?: (packet: ParsedPacket, stats: StreamStats) => void;
+  /** Decoded copy of an IMU notification. The exact bytes are still written
+   * independently to IMU.BIN before this best-effort live callback runs. */
+  onImu?: (sample: LiveImuSample) => void;
   /** Fired when a packet fails validation (bad markers / checksum / etc.). */
   onDrop?: (reason: 'markers' | 'checksum' | 'size' | 'gap', stats: StreamStats) => void;
   /** Fired on a fatal stream error (connection lost mid-session, file I/O, etc.). */
@@ -127,6 +131,16 @@ export type ConnectedDevice = {
   scale: DeviceScaleInfo;
   /** True when this connection exposed the optional IMU notify characteristic. */
   imuAvailable?: boolean;
+  /** True when this connection exposed the alarm/control characteristic
+   * (6e6b...0006). Optional - absent on firmware that predates the smart
+   * alarm. Presence does NOT guarantee the board has an LED controller;
+   * writes on boards without one reject at the ATT layer. */
+  alarmControlAvailable?: boolean;
+  /** Write one alarm/control command payload (encoders in smartAlarm.ts)
+   * WITH response, so a firmware rejection (no LED controller, LED task not
+   * up yet) surfaces as a thrown error. Callers treat every failure as
+   * best-effort. */
+  writeAlarmControl?(payload: Uint8Array): Promise<void>;
   /** Subscribe to the notify characteristic and start writing samples to disk. */
   startStream(
     sessionId: string,
