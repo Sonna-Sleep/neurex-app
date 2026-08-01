@@ -1,5 +1,6 @@
 import { getSupabase } from '../auth/supabase';
 import type { Session, SessionRepo } from './types';
+import { normalizeSleepInsights } from './sleepInsights';
 
 // Columns on the public.sessions table. The nested jsonb columns
 // (stage_minutes, epochs) are stored already in the app's shape.
@@ -8,6 +9,8 @@ const BASE_COLUMNS =
   'stage_minutes,epochs,score,confidence,sol,storage_prefix,status';
 const SIGNAL_COLUMNS = 'excluded_minutes,signal_end_ms';
 const COLUMNS = `${BASE_COLUMNS},${SIGNAL_COLUMNS}`;
+const INSIGHTS_COLUMN = 'sleep_insights';
+const ENRICHED_COLUMNS = `${COLUMNS},${INSIGHTS_COLUMN}`;
 
 type Row = {
   id: string;
@@ -27,7 +30,13 @@ type Row = {
   signal_end_ms: number | null;
   storage_prefix: string | null;
   status: string;
+  sleep_insights?: unknown;
 };
+
+function missingInsightsColumn(error: { message?: string } | null | undefined): boolean {
+  const msg = (error?.message ?? '').toLowerCase();
+  return msg.includes('column') && msg.includes(INSIGHTS_COLUMN);
+}
 
 function missingOptionalSignalColumns(error: { message?: string } | null | undefined): boolean {
   const msg = (error?.message ?? '').toLowerCase();
@@ -56,6 +65,7 @@ function toSession(r: Row): Session {
     signalEndMs: r.signal_end_ms,
     storagePrefix: r.storage_prefix,
     status: r.status,
+    insights: normalizeSleepInsights(r.sleep_insights),
   };
 }
 
@@ -67,9 +77,25 @@ class SupabaseSessionRepo implements SessionRepo {
     if (!supabase) throw new Error('Supabase is not configured');
     const { data, error } = await supabase
       .from('sessions')
-      .select(COLUMNS)
+      .select(ENRICHED_COLUMNS)
       .order('start_ms', { ascending: false });
     if (error) {
+      if (missingInsightsColumn(error)) {
+        const withoutInsights = await supabase
+          .from('sessions')
+          .select(COLUMNS)
+          .order('start_ms', { ascending: false });
+        if (!withoutInsights.error) {
+          return ((withoutInsights.data as unknown as Row[] | null) ?? []).map(toSession);
+        }
+        if (missingOptionalSignalColumns(withoutInsights.error)) {
+          const legacy = await supabase
+            .from('sessions')
+            .select(BASE_COLUMNS)
+            .order('start_ms', { ascending: false });
+          if (!legacy.error) return ((legacy.data as unknown as Row[] | null) ?? []).map(toSession);
+        }
+      }
       if (missingOptionalSignalColumns(error)) {
         const fallback = await supabase
           .from('sessions')
@@ -91,11 +117,31 @@ class SupabaseSessionRepo implements SessionRepo {
     if (!supabase) return null;
     const { data, error } = await supabase
       .from('sessions')
-      .select(COLUMNS)
+      .select(ENRICHED_COLUMNS)
       .order('start_ms', { ascending: false })
       .limit(1)
       .maybeSingle();
     if (error) {
+      if (missingInsightsColumn(error)) {
+        const withoutInsights = await supabase
+          .from('sessions')
+          .select(COLUMNS)
+          .order('start_ms', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (!withoutInsights.error) {
+          return withoutInsights.data ? toSession(withoutInsights.data as unknown as Row) : null;
+        }
+        if (missingOptionalSignalColumns(withoutInsights.error)) {
+          const legacy = await supabase
+            .from('sessions')
+            .select(BASE_COLUMNS)
+            .order('start_ms', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          if (!legacy.error) return legacy.data ? toSession(legacy.data as unknown as Row) : null;
+        }
+      }
       if (missingOptionalSignalColumns(error)) {
         const fallback = await supabase
           .from('sessions')
@@ -116,10 +162,28 @@ class SupabaseSessionRepo implements SessionRepo {
     if (!supabase) return null;
     const { data, error } = await supabase
       .from('sessions')
-      .select(COLUMNS)
+      .select(ENRICHED_COLUMNS)
       .eq('id', id)
       .maybeSingle();
     if (error) {
+      if (missingInsightsColumn(error)) {
+        const withoutInsights = await supabase
+          .from('sessions')
+          .select(COLUMNS)
+          .eq('id', id)
+          .maybeSingle();
+        if (!withoutInsights.error) {
+          return withoutInsights.data ? toSession(withoutInsights.data as unknown as Row) : null;
+        }
+        if (missingOptionalSignalColumns(withoutInsights.error)) {
+          const legacy = await supabase
+            .from('sessions')
+            .select(BASE_COLUMNS)
+            .eq('id', id)
+            .maybeSingle();
+          if (!legacy.error) return legacy.data ? toSession(legacy.data as unknown as Row) : null;
+        }
+      }
       if (missingOptionalSignalColumns(error)) {
         const fallback = await supabase
           .from('sessions')

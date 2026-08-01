@@ -29,6 +29,7 @@ export function SessionDetailScreen({ route, navigation }: Props) {
   const { sessionId } = route.params;
   const markNightViewed = useSession((s) => s.markNightViewed);
   const [session, setSession] = useState<Session | null>(null);
+  const [history, setHistory] = useState<Session[]>([]);
   const [loaded, setLoaded] = useState(false);
 
   // Opening this night clears its "new" dot, even before the fetch resolves.
@@ -38,11 +39,11 @@ export function SessionDetailScreen({ route, navigation }: Props) {
 
   useEffect(() => {
     let active = true;
-    sessionRepo
-      .byId(sessionId)
-      .then((s) => {
+    Promise.all([sessionRepo.byId(sessionId), sessionRepo.list().catch(() => [])])
+      .then(([s, list]) => {
         if (!active) return;
         setSession(s);
+        setHistory(list);
         setLoaded(true);
       })
       .catch(() => active && setLoaded(true));
@@ -70,7 +71,7 @@ export function SessionDetailScreen({ route, navigation }: Props) {
         </View>
 
         {session ? (
-          <NightReport session={session} />
+          <NightReport session={session} history={history} />
         ) : (
           <View style={styles.center}>
             {loaded ? (

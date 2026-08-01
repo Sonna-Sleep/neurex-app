@@ -1,0 +1,69 @@
+import React from 'react';
+import { fireEvent, render, screen } from '@testing-library/react-native';
+
+import type { Session } from '../../../../lib/repos';
+import { SleepAnalysis } from '../SleepAnalysis';
+
+function session(overrides: Partial<Session> = {}): Session {
+  return {
+    id: 'night-1',
+    startMs: Date.UTC(2026, 6, 30, 6),
+    endMs: Date.UTC(2026, 6, 30, 14),
+    tib: 480,
+    tst: 430,
+    waso: 23,
+    efficiency: 89.6,
+    awakenings: 4,
+    stageMinutes: { wake: 50, light: 230, rem: 110, deep: 90 },
+    epochs: [],
+    score: 84,
+    confidence: 0.89,
+    sol: 17,
+    excludedMinutes: 0,
+    signalEndMs: null,
+    storagePrefix: null,
+    status: 'ready',
+    insights: null,
+    ...overrides,
+  };
+}
+
+describe('SleepAnalysis', () => {
+  it('uses calculated staging metrics and honest sensor empty states', async () => {
+    await render(<SleepAnalysis session={session()} history={[]} />);
+
+    expect(screen.getByText('7h 10m')).toBeTruthy();
+    expect(screen.getByText('17 min')).toBeTruthy();
+    expect(screen.getByText('Waiting for PPG data')).toBeTruthy();
+    expect(screen.getByText('Waiting for IMU analysis')).toBeTruthy();
+    expect(screen.getByText('Waiting for eye-movement analysis')).toBeTruthy();
+    expect(screen.getByText('No sound analysis for this night')).toBeTruthy();
+  });
+
+  it('renders available sensor metrics and switches interactive signal tabs', async () => {
+    await render(
+      <SleepAnalysis
+        session={session({
+          insights: {
+            schemaVersion: 1,
+            cardio: {
+              heartRateBpm: { average: 58, series: [{ offsetSec: 0, value: 58 }] },
+              respirationRate: { average: 13.8, series: [{ offsetSec: 0, value: 13.8 }] },
+            },
+            motion: { turns: 8, restlessMinutes: 12 },
+            eyeMovements: { events: 105, eventsPerHour: 14.7, remDensity: 23 },
+            sound: { snoringMinutes: 8, snoringEpisodes: 4 },
+          },
+        })}
+        history={[]}
+      />,
+    );
+
+    expect(screen.getByText('58')).toBeTruthy();
+    expect(screen.getByText('105')).toBeTruthy();
+    expect(screen.getByText('Tosses and turns')).toBeTruthy();
+
+    await fireEvent.press(screen.getByText('Breathing'));
+    expect(screen.getByText('13.8')).toBeTruthy();
+  });
+});

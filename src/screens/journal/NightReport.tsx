@@ -12,6 +12,7 @@ import { isCompletedSession, isPendingAnalysisSession } from '../../lib/repos/se
 import { ScoreRing } from '../../components/ScoreRing';
 import { Hypnogram } from '../home/components/Hypnogram';
 import { StageBreakdown } from '../home/components/StageBreakdown';
+import { SleepAnalysis } from './components/SleepAnalysis';
 
 function fmtDur(min: number | null): string {
   if (min == null) return '—';
@@ -27,7 +28,7 @@ function fmtTime(ms: number): string {
   return `${h}:${m}`;
 }
 
-export function NightReport({ session }: { session: Session }) {
+export function NightReport({ session, history = [] }: { session: Session; history?: Session[] }) {
   const completed = isCompletedSession(session);
   const pending = isPendingAnalysisSession(session);
   return (
@@ -58,18 +59,16 @@ export function NightReport({ session }: { session: Session }) {
           </View>
           <StageBreakdown stageMinutes={session.stageMinutes} />
 
+          <SleepAnalysis session={session} history={history} />
+
           <View style={styles.section}>
-            <Eyebrow>details</Eyebrow>
+            <Eyebrow>recording details</Eyebrow>
             <View style={styles.detailGrid}>
               <DetailTile value={fmtTime(session.startMs)} label="Went to bed" />
               <DetailTile value={fmtTime(session.endMs)} label="Woke up" />
               <DetailTile
-                value={session.sol != null ? `${Math.round(session.sol)} min` : '—'}
-                label="Asleep after"
-              />
-              <DetailTile
                 value={session.confidence != null ? `${Math.round(session.confidence * 100)}%` : '—'}
-                label="Confidence"
+                label="Stage confidence"
               />
             </View>
           </View>

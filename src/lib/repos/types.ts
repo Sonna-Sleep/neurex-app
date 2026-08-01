@@ -7,6 +7,49 @@ export type Epoch = {
   stage: SleepStage;
 };
 
+export type InsightPoint = {
+  /** Seconds from the start of the recording. */
+  offsetSec: number;
+  value: number;
+};
+
+export type SleepPosition = 'left' | 'right' | 'back' | 'stomach' | 'unknown';
+
+export type PositionSegment = {
+  startSec: number;
+  durationSec: number;
+  position: SleepPosition;
+  /** Optional 0..100 quality score produced by the analysis pipeline. */
+  quality?: number;
+};
+
+export type SleepInsights = {
+  schemaVersion: number;
+  motion?: {
+    turns?: number;
+    restlessMinutes?: number;
+    events?: { offsetSec: number; intensity: number }[];
+    positions?: PositionSegment[];
+  };
+  cardio?: {
+    heartRateBpm?: { average?: number; min?: number; max?: number; series?: InsightPoint[] };
+    hrvRmssdMs?: { average?: number; series?: InsightPoint[] };
+    respirationRate?: { average?: number; min?: number; max?: number; series?: InsightPoint[] };
+  };
+  eyeMovements?: {
+    events?: number;
+    eventsPerHour?: number;
+    remDensity?: number;
+    series?: InsightPoint[];
+  };
+  sound?: {
+    snoringMinutes?: number;
+    snoringEpisodes?: number;
+    possibleBreathingDisturbances?: number;
+    series?: InsightPoint[];
+  };
+};
+
 export type Session = {
   id: string;
   startMs: number;
@@ -37,6 +80,8 @@ export type Session = {
   storagePrefix: string | null;
   /** uploaded | processing | ready | failed — drives "analyzing…" vs results in the list. */
   status: string;
+  /** Optional derived PPG/IMU/EOG/audio metrics. Absent on legacy sessions. */
+  insights: SleepInsights | null;
 };
 
 export type Device = {

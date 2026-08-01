@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { PanResponder, StyleSheet, Text, View } from 'react-native';
 import Svg, { Line, Rect, Text as SvgText } from 'react-native-svg';
 
 import { colors, signalQualityColors, stageColors } from '../../../theme/tokens';
@@ -30,6 +30,7 @@ const NO_SIGNAL_LABEL_MIN_W = 74;
 
 export function Hypnogram({ epochs, startMs, endMs }: Props) {
   const [width, setWidth] = useState(0);
+  const [selectedRunIndex, setSelectedRunIndex] = useState<number | null>(null);
   const drawH = HEIGHT - PADDING_TOP - PADDING_BOTTOM;
   const chartEndMs = useMemo(() => stagedEndMs(epochs, startMs, endMs), [epochs, startMs, endMs]);
   const totalMs = Math.max(chartEndMs - startMs, 1);
@@ -52,12 +53,44 @@ export function Hypnogram({ epochs, startMs, endMs }: Props) {
   // Collapse epochs into contiguous runs, including no-signal gaps.
   const runs = useMemo(() => collapseHypnogramRuns(epochs), [epochs]);
   const ticks = useMemo(() => axisTicks(startMs, chartEndMs), [startMs, chartEndMs]);
+  const selectedRun = selectedRunIndex == null ? null : runs[selectedRunIndex] ?? null;
+  const selectAt = (locationX: number) => {
+    const ratio = Math.max(0, Math.min(1, (locationX - chartLeft) / chartW));
+    const offsetMs = ratio * totalMs;
+    const index = runs.findIndex(
+      (run) => offsetMs >= run.startMs && offsetMs <= run.startMs + run.durationMs,
+    );
+    if (index >= 0) setSelectedRunIndex(index);
+  };
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => false,
+        onMoveShouldSetPanResponder: (_, gesture) =>
+          Math.abs(gesture.dx) > 4 && Math.abs(gesture.dx) > Math.abs(gesture.dy),
+        onPanResponderGrant: (event) => selectAt(event.nativeEvent.locationX),
+        onPanResponderMove: (event) => selectAt(event.nativeEvent.locationX),
+      }),
+    // selectAt uses the current runs and measured chart width.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [chartW, runs, totalMs],
+  );
 
   return (
     <View style={styles.container}>
+      <View style={styles.scrubRow}>
+        <Text style={styles.scrubValue}>
+          {selectedRun ? `${runLabel(selectedRun.stage)} · ${fmt(startMs + selectedRun.startMs)}` : 'Overnight stages'}
+        </Text>
+        <Text style={styles.scrubHint}>{selectedRun ? formatRunDuration(selectedRun.durationMs) : 'Drag to explore'}</Text>
+      </View>
       <View
         style={styles.chart}
         onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
+        accessible
+        accessibilityRole="image"
+        accessibilityLabel={`Sleep stage hypnogram from ${fmt(startMs)} to ${fmt(chartEndMs)}`}
+        {...panResponder.panHandlers}
       >
       {width > 0 && (
         <Svg width={width} height={HEIGHT}>
@@ -151,6 +184,18 @@ export function Hypnogram({ epochs, startMs, endMs }: Props) {
             );
           })}
 
+          {selectedRun ? (
+            <Line
+              x1={xAt(startMs + selectedRun.startMs + selectedRun.durationMs / 2)}
+              x2={xAt(startMs + selectedRun.startMs + selectedRun.durationMs / 2)}
+              y1={PADDING_TOP}
+              y2={baselineY}
+              stroke={colors.textPrimary}
+              strokeWidth={1.5}
+              opacity={0.8}
+            />
+          ) : null}
+
           {/* Bottom time axis: staged EEG coverage at the edges, hours between. */}
           <SvgText
             x={chartLeft}
@@ -199,6 +244,16 @@ export function Hypnogram({ epochs, startMs, endMs }: Props) {
   );
 }
 
+function runLabel(stage: Epoch['stage']) {
+  if (stage === 'excluded') return 'No signal';
+  return LANE_LABEL[stage].slice(0, 1) + LANE_LABEL[stage].slice(1).toLowerCase();
+}
+
+function formatRunDuration(durationMs: number) {
+  const minutes = Math.max(1, Math.round(durationMs / 60_000));
+  return `${minutes} min`;
+}
+
 function stagedEndMs(epochs: Epoch[], startMs: number, fallbackEndMs: number) {
   if (!epochs.length) return fallbackEndMs;
   const lastOffsetMs = epochs.reduce(
@@ -239,5 +294,21 @@ const styles = StyleSheet.create({
   chart: {
     width: '100%',
     height: HEIGHT,
+  },
+  scrubRow: {
+    minHeight: 24,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 12,
+  },
+  scrubValue: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.textPrimary,
+  },
+  scrubHint: {
+    fontSize: 12,
+    color: colors.textTertiary,
   },
 });

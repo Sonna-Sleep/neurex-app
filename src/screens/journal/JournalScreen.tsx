@@ -246,7 +246,7 @@ export function JournalScreen({ navigation }: Props) {
         </ScrollView>
 
         {selected ? (
-          <NightReport session={selected} />
+          <NightReport session={selected} history={journalSessions} />
         ) : loadError && sessions.length === 0 ? (
           <View style={styles.empty}>
             <Secondary style={styles.emptyText}>Couldn’t load your sleep history.</Secondary>
