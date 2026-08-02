@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import Svg, { Circle, G, Line, Rect } from 'react-native-svg';
+import Svg, { Circle, G, Line, Path, Rect } from 'react-native-svg';
 
 import type { PositionSegment, Session, SleepPosition } from '../../../lib/repos';
 import { colors, radii, spacing, stageColors, systemFontFamily } from '../../../theme/tokens';
@@ -31,30 +31,32 @@ export function SleepAnalysis({ session, history }: Props) {
   );
 }
 
-const PREVIEW_FEATURES = [
-  'Heart & breathing',
-  'Movement & position',
-  'Eye activity',
-  'Snoring signals',
-  'Recovery balance',
-];
-
 /** Keeps the expanded journal discoverable before a completed night exists. */
 export function SleepAnalysisPreview() {
   return (
-    <InsightCard eyebrow="advanced sleep insights" title="Your overnight signals">
-      <View style={styles.previewGrid}>
-        {PREVIEW_FEATURES.map((feature) => (
-          <View key={feature} style={styles.previewPill}>
-            <View style={styles.previewDot} />
-            <Text style={styles.previewText}>{feature}</Text>
-          </View>
-        ))}
+    <View style={styles.stack}>
+      <View style={styles.previewHeader}>
+        <Eyebrow>advanced sleep insights</Eyebrow>
+        <Text style={styles.previewTitle}>Your overnight signals</Text>
+        <Secondary>These graphs populate automatically when a completed night and its sensor analysis are available.</Secondary>
       </View>
-      <Secondary style={styles.explanation}>
-        Select a completed night to explore these cards. Sensor-specific readings appear automatically as their analysis becomes available.
-      </Secondary>
-    </InsightCard>
+      <InsightCard eyebrow="overnight signals" title="Heart and breathing">
+        <SignalTabs />
+        <EmptyGraph label="Awaiting PPG data" color="#E08080" />
+      </InsightCard>
+      <InsightCard eyebrow="movement & position" title="Toss and turn map">
+        <EmptyPositionGraph />
+      </InsightCard>
+      <InsightCard eyebrow="sleep balance" title="Your recovery pattern">
+        <EmptyRatioGraph />
+      </InsightCard>
+      <InsightCard eyebrow="eye movement" title="Overnight eye activity">
+        <EmptyGraph label="Awaiting eye-movement data" color={stageColors.rem} />
+      </InsightCard>
+      <InsightCard eyebrow="breathing & sound" title="Snoring signals">
+        <EmptyGraph label="Awaiting sound data" color={colors.warning} />
+      </InsightCard>
+    </View>
   );
 }
 
@@ -94,6 +96,7 @@ function RecoveryCard({ session, history }: Props) {
   if (previous.length < 3 || session.tst == null) {
     return (
       <InsightCard eyebrow="sleep balance" title="Your recovery pattern">
+        <EmptyRatioGraph />
         <EmptyState
           title="Building your baseline"
           body="After four recorded nights, this compares sleep duration and stage ratios with your own recent pattern."
@@ -146,10 +149,14 @@ function CardioCard({ session }: { session: Session }) {
   return (
     <InsightCard eyebrow="overnight signals" title="Heart and breathing">
       {!selected || !metric ? (
-        <EmptyState
-          title="Waiting for PPG data"
-          body="Heart rate, HRV, and respiration trends will appear here when the analysis pipeline adds them to this night."
-        />
+        <>
+          <SignalTabs />
+          <EmptyGraph label="Awaiting PPG data" color="#E08080" />
+          <EmptyState
+            title="Waiting for PPG data"
+            body="Heart rate, HRV, and respiration trends will appear here when the analysis pipeline adds them to this night."
+          />
+        </>
       ) : (
         <>
           <View style={styles.segmented}>
@@ -180,7 +187,7 @@ function CardioCard({ session }: { session: Session }) {
               durationSec={session.tib * 60}
             />
           ) : (
-            <Secondary style={styles.explanation}>An average is available; the overnight time series has not been uploaded.</Secondary>
+            <EmptyGraph label="Time series not uploaded" color={selected.color} />
           )}
         </>
       )}
@@ -202,10 +209,13 @@ function MotionCard({ session }: { session: Session }) {
   return (
     <InsightCard eyebrow="movement & position" title="Toss and turn map">
       {!motion || (motion.turns == null && !motion.positions?.length && !motion.events?.length) ? (
-        <EmptyState
-          title="Waiting for IMU analysis"
-          body="Turns, restlessness, and position-dependent sleep quality will appear here from the mask motion sensor."
-        />
+        <>
+          <EmptyPositionGraph />
+          <EmptyState
+            title="Waiting for IMU analysis"
+            body="Turns, restlessness, and position-dependent sleep quality will appear here from the mask motion sensor."
+          />
+        </>
       ) : (
         <>
           <View style={styles.motionHero}>
@@ -216,6 +226,15 @@ function MotionCard({ session }: { session: Session }) {
               <Metric label="Restless" value={formatMinutes(motion.restlessMinutes)} />
             </View>
           </View>
+          {motion.events?.length ? (
+            <InteractiveLineChart
+              series={motion.events.map((event) => ({ offsetSec: event.offsetSec, value: event.intensity }))}
+              unit="movement"
+              color={colors.accent}
+              valueDigits={1}
+              durationSec={session.tib * 60}
+            />
+          ) : null}
           {motion.positions?.length ? (
             <>
               <PositionTimeline segments={motion.positions} />
@@ -258,10 +277,13 @@ function EyeMovementCard({ session }: { session: Session }) {
   return (
     <InsightCard eyebrow="eye movement" title="Overnight eye activity">
       {!eye || (eye.events == null && eye.eventsPerHour == null && eye.remDensity == null && !eye.series?.length) ? (
-        <EmptyState
-          title="Waiting for eye-movement analysis"
-          body="Quantified eye events and REM density will appear here when the EEG/EOG pipeline provides them."
-        />
+        <>
+          <EmptyGraph label="Awaiting eye-movement data" color={stageColors.rem} />
+          <EmptyState
+            title="Waiting for eye-movement analysis"
+            body="Quantified eye events and REM density will appear here when the EEG/EOG pipeline provides them."
+          />
+        </>
       ) : (
         <>
           <View style={styles.metricGrid}>
@@ -289,10 +311,13 @@ function SoundCard({ session }: { session: Session }) {
   return (
     <InsightCard eyebrow="breathing & sound" title="Snoring signals">
       {!sound || (sound.snoringMinutes == null && sound.snoringEpisodes == null && !sound.series?.length) ? (
-        <EmptyState
-          title="No sound analysis for this night"
-          body="Snoring patterns require an enabled microphone or another validated breathing signal."
-        />
+        <>
+          <EmptyGraph label="Awaiting sound data" color={colors.warning} />
+          <EmptyState
+            title="No sound analysis for this night"
+            body="Snoring patterns require an enabled microphone or another validated breathing signal."
+          />
+        </>
       ) : (
         <>
           <View style={styles.metricGrid}>
@@ -340,6 +365,84 @@ function EmptyState({ title, body }: { title: string; body: string }) {
         <Text style={styles.emptyTitle}>{title}</Text>
         <Secondary>{body}</Secondary>
       </View>
+    </View>
+  );
+}
+
+function SignalTabs() {
+  return (
+    <View style={styles.segmented} accessibilityLabel="Heart rate, HRV, and breathing graph options">
+      {['HR', 'HRV', 'Breathing'].map((label, index) => (
+        <View key={label} style={[styles.segment, index === 0 && styles.segmentSelected]}>
+          <Text style={[styles.segmentText, index === 0 && styles.segmentTextSelected]}>{label}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+function EmptyGraph({ label, color }: { label: string; color: string }) {
+  return (
+    <View style={styles.emptyGraph} accessible accessibilityRole="image" accessibilityLabel={`${label}; graph has no readings yet`}>
+      <Svg width="100%" height={126} viewBox="0 0 300 126" preserveAspectRatio="none">
+        {[28, 63, 98].map((y) => (
+          <Line key={y} x1={0} x2={300} y1={y} y2={y} stroke={colors.borderSubtle} strokeWidth={1} />
+        ))}
+        <Path
+          d="M0 78 C24 70 35 86 58 77 S94 58 118 73 S151 91 177 71 S213 52 237 68 S273 86 300 65"
+          fill="none"
+          stroke={color}
+          strokeWidth={2}
+          strokeDasharray="5 7"
+          opacity={0.28}
+        />
+      </Svg>
+      <View style={styles.emptyGraphLabel}>
+        <Text style={styles.emptyGraphText}>{label}</Text>
+      </View>
+      <View style={styles.emptyAxisRow} pointerEvents="none">
+        <Text style={styles.axisLabel}>Bedtime</Text>
+        <Text style={styles.axisLabel}>Wake</Text>
+      </View>
+    </View>
+  );
+}
+
+function EmptyPositionGraph() {
+  return (
+    <View style={styles.emptyPositionGraph}>
+      <View style={styles.motionHero}>
+        <PositionAvatar position="unknown" />
+        <View style={styles.motionStats}>
+          <Metric label="Position" value="—" />
+          <Metric label="Tosses and turns" value="—" />
+          <Metric label="Restless" value="—" />
+        </View>
+      </View>
+      <View style={styles.timeline} />
+      <View style={styles.timelineLabels}>
+        <Text style={styles.axisLabel}>Bedtime</Text>
+        <Text style={styles.axisLabel}>Wake</Text>
+      </View>
+      <Text style={styles.emptyGraphText}>Awaiting IMU data</Text>
+    </View>
+  );
+}
+
+function EmptyRatioGraph() {
+  return (
+    <View style={styles.emptyRatioGraph}>
+      {['Deep sleep', 'REM sleep', 'Total sleep'].map((label) => (
+        <View key={label} style={styles.ratioRow}>
+          <View style={styles.barLabels}>
+            <Text style={styles.barLabel}>{label}</Text>
+            <Text style={styles.barValue}>—</Text>
+          </View>
+          <View style={styles.comparisonTrack}>
+            <View style={[styles.baselineFill, styles.emptyRatioBaseline]} />
+          </View>
+        </View>
+      ))}
     </View>
   );
 }
@@ -555,18 +658,39 @@ const styles = StyleSheet.create({
   emptyGlyph: { width: 36, height: 36, borderRadius: 18, borderWidth: 1, borderColor: colors.borderDivider, backgroundColor: colors.bgElevated },
   emptyCopy: { flex: 1, gap: spacing.xs },
   emptyTitle: { fontFamily: systemFontFamily, fontSize: 14, fontWeight: '600', color: colors.textPrimary },
-  previewGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-  previewPill: {
-    minHeight: 38,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingHorizontal: 11,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    backgroundColor: colors.bgElevated,
+  previewHeader: { gap: spacing.xs, paddingTop: spacing.sm },
+  previewTitle: {
+    fontFamily: systemFontFamily,
+    fontSize: 25,
+    lineHeight: 31,
+    fontWeight: '600',
+    letterSpacing: -0.4,
+    color: colors.textPrimary,
   },
-  previewDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: colors.accent },
-  previewText: { fontFamily: systemFontFamily, fontSize: 12, fontWeight: '600', color: colors.textPrimary },
+  emptyGraph: { height: 152, overflow: 'hidden' },
+  emptyGraphLabel: {
+    position: 'absolute',
+    top: 48,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
+  emptyGraphText: {
+    fontFamily: systemFontFamily,
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.textTertiary,
+    textAlign: 'center',
+  },
+  emptyAxisRow: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  emptyPositionGraph: { gap: spacing.xs },
+  emptyRatioGraph: { gap: spacing.md },
+  emptyRatioBaseline: { width: '58%' },
 });

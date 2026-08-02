@@ -33,9 +33,11 @@ describe('SleepAnalysis', () => {
     await render(<SleepAnalysisPreview />);
 
     expect(screen.getByText('Your overnight signals')).toBeTruthy();
-    expect(screen.getByText('Heart & breathing')).toBeTruthy();
-    expect(screen.getByText('Movement & position')).toBeTruthy();
-    expect(screen.getByText('Eye activity')).toBeTruthy();
+    expect(screen.getByText('Heart and breathing')).toBeTruthy();
+    expect(screen.getByText('Toss and turn map')).toBeTruthy();
+    expect(screen.getByText('Overnight eye activity')).toBeTruthy();
+    expect(screen.getByLabelText('Awaiting PPG data; graph has no readings yet')).toBeTruthy();
+    expect(screen.getByLabelText('Awaiting sound data; graph has no readings yet')).toBeTruthy();
   });
 
   it('uses calculated staging metrics and honest sensor empty states', async () => {
