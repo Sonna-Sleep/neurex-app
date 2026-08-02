@@ -9,6 +9,7 @@ import { Eyebrow, Secondary } from '../../theme/typography';
 import { colors, radii, signalQualityColors, spacing, systemFontFamily } from '../../theme/tokens';
 import { ScoreRing } from '../../components/ScoreRing';
 import { StageBreakdown } from '../home/components/StageBreakdown';
+import { SleepAnalysisPreview } from './components/SleepAnalysis';
 
 const LANE_LABELS = ['WAKE', 'LIGHT', 'REM', 'DEEP'];
 const DETAILS = ['Went to bed', 'Woke up', 'Asleep after', 'Confidence'];
@@ -44,6 +45,8 @@ export function EmptyNightReport() {
 
       {/* Stage breakdown — empty data renders every stage at 0m / 0%. */}
       <StageBreakdown stageMinutes={{}} />
+
+      <SleepAnalysisPreview />
 
       {/* Details — all tiles blank. */}
       <View style={styles.section}>

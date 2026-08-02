@@ -31,6 +31,33 @@ export function SleepAnalysis({ session, history }: Props) {
   );
 }
 
+const PREVIEW_FEATURES = [
+  'Heart & breathing',
+  'Movement & position',
+  'Eye activity',
+  'Snoring signals',
+  'Recovery balance',
+];
+
+/** Keeps the expanded journal discoverable before a completed night exists. */
+export function SleepAnalysisPreview() {
+  return (
+    <InsightCard eyebrow="advanced sleep insights" title="Your overnight signals">
+      <View style={styles.previewGrid}>
+        {PREVIEW_FEATURES.map((feature) => (
+          <View key={feature} style={styles.previewPill}>
+            <View style={styles.previewDot} />
+            <Text style={styles.previewText}>{feature}</Text>
+          </View>
+        ))}
+      </View>
+      <Secondary style={styles.explanation}>
+        Select a completed night to explore these cards. Sensor-specific readings appear automatically as their analysis becomes available.
+      </Secondary>
+    </InsightCard>
+  );
+}
+
 function SleepAmountCard({ session }: { session: Session }) {
   const goodSleep = session.tst;
   const max = Math.max(session.tib, goodSleep ?? 0, 1);
@@ -528,4 +555,18 @@ const styles = StyleSheet.create({
   emptyGlyph: { width: 36, height: 36, borderRadius: 18, borderWidth: 1, borderColor: colors.borderDivider, backgroundColor: colors.bgElevated },
   emptyCopy: { flex: 1, gap: spacing.xs },
   emptyTitle: { fontFamily: systemFontFamily, fontSize: 14, fontWeight: '600', color: colors.textPrimary },
+  previewGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  previewPill: {
+    minHeight: 38,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: 11,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    backgroundColor: colors.bgElevated,
+  },
+  previewDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: colors.accent },
+  previewText: { fontFamily: systemFontFamily, fontSize: 12, fontWeight: '600', color: colors.textPrimary },
 });

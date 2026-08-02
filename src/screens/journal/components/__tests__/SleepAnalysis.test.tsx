@@ -2,7 +2,7 @@ import React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react-native';
 
 import type { Session } from '../../../../lib/repos';
-import { SleepAnalysis } from '../SleepAnalysis';
+import { SleepAnalysis, SleepAnalysisPreview } from '../SleepAnalysis';
 
 function session(overrides: Partial<Session> = {}): Session {
   return {
@@ -29,6 +29,15 @@ function session(overrides: Partial<Session> = {}): Session {
 }
 
 describe('SleepAnalysis', () => {
+  it('makes advanced features discoverable before a completed night exists', async () => {
+    await render(<SleepAnalysisPreview />);
+
+    expect(screen.getByText('Your overnight signals')).toBeTruthy();
+    expect(screen.getByText('Heart & breathing')).toBeTruthy();
+    expect(screen.getByText('Movement & position')).toBeTruthy();
+    expect(screen.getByText('Eye activity')).toBeTruthy();
+  });
+
   it('uses calculated staging metrics and honest sensor empty states', async () => {
     await render(<SleepAnalysis session={session()} history={[]} />);
 
