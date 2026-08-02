@@ -6,6 +6,7 @@ import type { PositionSegment, Session, SleepPosition } from '../../../lib/repos
 import { colors, radii, spacing, stageColors, systemFontFamily } from '../../../theme/tokens';
 import { Eyebrow, Secondary } from '../../../theme/typography';
 import { InteractiveLineChart } from './InteractiveLineChart';
+import { AdvancedSleepInsights, AdvancedSleepPreview } from './AdvancedSleepInsights';
 
 type Props = { session: Session; history: Session[] };
 
@@ -27,6 +28,7 @@ export function SleepAnalysis({ session, history }: Props) {
       <MotionCard session={session} />
       <EyeMovementCard session={session} />
       <SoundCard session={session} />
+      <AdvancedSleepInsights session={session} />
     </View>
   );
 }
@@ -56,6 +58,7 @@ export function SleepAnalysisPreview() {
       <InsightCard eyebrow="breathing & sound" title="Snoring signals">
         <EmptyGraph label="Awaiting sound data" color={colors.warning} />
       </InsightCard>
+      <AdvancedSleepPreview />
     </View>
   );
 }

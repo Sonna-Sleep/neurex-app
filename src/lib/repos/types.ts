@@ -23,6 +23,15 @@ export type PositionSegment = {
   quality?: number;
 };
 
+export type InsightSensor = 'eeg' | 'eog' | 'imu' | 'ppg' | 'audio' | 'environment';
+
+export type InsightMetric = {
+  average?: number;
+  min?: number;
+  max?: number;
+  series?: InsightPoint[];
+};
+
 export type SleepInsights = {
   schemaVersion: number;
   motion?: {
@@ -47,6 +56,53 @@ export type SleepInsights = {
     snoringEpisodes?: number;
     possibleBreathingDisturbances?: number;
     series?: InsightPoint[];
+  };
+  brain?: {
+    microArousals?: { count?: number; indexPerHour?: number; series?: InsightPoint[] };
+    spindles?: { count?: number; densityPerMinute?: number; series?: InsightPoint[] };
+    slowOscillations?: { count?: number; densityPerMinute?: number; series?: InsightPoint[] };
+    slowWaveActivity?: InsightMetric;
+  };
+  environment?: {
+    temperatureC?: InsightMetric;
+    co2Ppm?: InsightMetric;
+    humidityPercent?: InsightMetric;
+    correlations?: {
+      factor: string;
+      outcome: string;
+      coefficient: number;
+      sampleNights: number;
+    }[];
+  };
+  circadian?: {
+    /** Absolute Unix time for the estimated dim-light melatonin onset proxy. */
+    estimatedDlmoMs?: number;
+    uncertaintyMinutes?: number;
+    phaseOffsetMinutes?: number;
+    confidence?: number;
+    chronotype?: 'early' | 'intermediate' | 'late';
+    timingWindows?: {
+      kind: 'morningLight' | 'exercise' | 'lastMeal' | 'screensOff';
+      startMs: number;
+      endMs: number;
+      label?: string;
+    }[];
+  };
+  closedLoop?: {
+    deepSleepStimulations?: number;
+    acceptedStimulations?: number;
+    slowWaveDeltaPercent?: number;
+    events?: {
+      offsetSec: number;
+      kind: 'pinkNoise' | 'windDownAudio' | 'wakeLight' | 'other';
+      responseDeltaPercent?: number;
+    }[];
+  };
+  quality?: {
+    usableSignalPercent?: number;
+    artifactMinutes?: number;
+    modelVersion?: string;
+    sensorCoverage?: Partial<Record<InsightSensor, number>>;
   };
 };
 

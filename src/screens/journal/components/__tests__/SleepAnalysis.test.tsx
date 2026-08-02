@@ -38,6 +38,9 @@ describe('SleepAnalysis', () => {
     expect(screen.getByText('Overnight eye activity')).toBeTruthy();
     expect(screen.getByLabelText('Awaiting PPG data; graph has no readings yet')).toBeTruthy();
     expect(screen.getByLabelText('Awaiting sound data; graph has no readings yet')).toBeTruthy();
+    expect(screen.getByText('Brain, context, and closed-loop response')).toBeTruthy();
+    expect(screen.getByText('Arousals, spindles, and slow waves')).toBeTruthy();
+    expect(screen.getByText('Your estimated body clock')).toBeTruthy();
   });
 
   it('uses calculated staging metrics and honest sensor empty states', async () => {
@@ -64,6 +67,18 @@ describe('SleepAnalysis', () => {
             motion: { turns: 8, restlessMinutes: 12 },
             eyeMovements: { events: 105, eventsPerHour: 14.7, remDensity: 23 },
             sound: { snoringMinutes: 8, snoringEpisodes: 4 },
+            brain: {
+              microArousals: { count: 12, indexPerHour: 1.7 },
+              spindles: { count: 900, densityPerMinute: 2.8 },
+            },
+            environment: {
+              temperatureC: { average: 19.4 },
+              correlations: [
+                { factor: 'Room temperature', outcome: 'Deep sleep', coefficient: -0.31, sampleNights: 12 },
+              ],
+            },
+            closedLoop: { deepSleepStimulations: 18, acceptedStimulations: 14 },
+            quality: { usableSignalPercent: 94, modelVersion: 'neurex-staging-v3' },
           },
         })}
         history={[]}
@@ -73,6 +88,9 @@ describe('SleepAnalysis', () => {
     expect(screen.getByText('58')).toBeTruthy();
     expect(screen.getByText('105')).toBeTruthy();
     expect(screen.getByText('Tosses and turns')).toBeTruthy();
+    expect(screen.getByText('Did the intervention respond?')).toBeTruthy();
+    expect(screen.getByText('Room temperature')).toBeTruthy();
+    expect(screen.getByText('neurex-staging-v3')).toBeTruthy();
 
     await fireEvent.press(screen.getByText('Breathing'));
     expect(screen.getByText('13.8')).toBeTruthy();

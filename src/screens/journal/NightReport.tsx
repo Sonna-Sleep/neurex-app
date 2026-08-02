@@ -33,6 +33,13 @@ export function NightReport({ session, history = [] }: { session: Session; histo
   const pending = isPendingAnalysisSession(session);
   return (
     <View style={styles.report}>
+      <View style={styles.summaryIntro}>
+        <Eyebrow>here’s how you slept today</Eyebrow>
+        <Text style={styles.summaryTitle}>{nightSummary(session)}</Text>
+        <Secondary>
+          Start with the essentials, then explore brain, body, context, and model confidence below.
+        </Secondary>
+      </View>
       {/* Score ring + in-bed / asleep */}
       <View style={styles.scoreRow}>
         <ScoreRing score={session.score} size={150} showLabel={false} />
@@ -86,6 +93,14 @@ export function NightReport({ session, history = [] }: { session: Session; histo
   );
 }
 
+function nightSummary(session: Session) {
+  if (session.tst == null) return 'Your night is still being analyzed.';
+  const efficiency = session.efficiency == null ? null : `${Math.round(session.efficiency)}% efficiency`;
+  const latency = session.sol == null ? null : `${Math.round(session.sol)} min to fall asleep`;
+  const detail = [efficiency, latency].filter(Boolean).join(' · ');
+  return `${fmtDur(session.tst)} asleep${detail ? ` · ${detail}` : ''}`;
+}
+
 function Stat({ value, label }: { value: string; label: string }) {
   return (
     <View style={styles.stat}>
@@ -107,6 +122,17 @@ function DetailTile({ value, label }: { value: string; label: string }) {
 const styles = StyleSheet.create({
   report: {
     gap: spacing.xl,
+  },
+  summaryIntro: {
+    gap: spacing.xs,
+  },
+  summaryTitle: {
+    fontFamily: systemFontFamily,
+    fontSize: 25,
+    lineHeight: 31,
+    fontWeight: '600',
+    letterSpacing: -0.4,
+    color: colors.textPrimary,
   },
   scoreRow: {
     flexDirection: 'row',
